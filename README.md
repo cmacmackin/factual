@@ -7,7 +7,7 @@ pseudo-spectral approach and tracking field values at Chebyshev
 collocation points.
 
 ## License
-FIAT is licensed under the GNU Lesser General Public License (LGPL) v3.0 or
+FACTUAL is licensed under the GNU Lesser General Public License (LGPL) v3.0 or
 later. The terms are provided in the file `LICENSE`. The LGPL make reference
 to the GNU General Public License (GPL), which is provided in the file `GPL`.
 In brief, the LGPL allows this library to be linked to software under any
