@@ -34,11 +34,47 @@ module abstract_fields_mod
   ! *Scientific Software Design: The Object-Oriented Way*, Rouson, 
   ! Damian and Xia, Jim and Xu, Xiaofeng, 2011, ISBN 9780521888134, 
   ! Cambridge University Press, New York, NY, USA.
+  !
   use iso_fortran_env, only: r8 => real64
   implicit none
   private
   
-  type, abstract, public :: scalar_field
+  character(len=9), dimension(4), parameter, public :: &
+      boundary_conditions = ['Dirichlet', 'Neumann  ', 'Cauchy   ', 'Periodic ']
+      !! Code for each type of boundary condition is its index
+  
+  type, abstract, public :: abstract_field
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! An abstract data type representing a mathematical field. 
+    ! Inspiration is taken from the abstract calculus pattern described
+    ! by Rouson, Xia, and Xu (2011). This particular type is meant only
+    ! to provide whatever common, although largely non-mathematical,
+    ! properties are shared by fields of scalar and vector quantities.
+    !
+    !####Bibliography
+    ! *Scientific Software Design: The Object-Oriented Way*, Rouson, 
+    ! Damian and Xia, Jim and Xu, Xiaofeng, 2011, ISBN 9780521888134, 
+    ! Cambridge University Press, New York, NY, USA.
+    !
+  contains
+    procedure(f_ret_r), deferred :: domain
+      !! Provides array with upper and lower limits of field's domain
+    procedure(f_ret_i), deferred :: dimensions
+      !! Returns number of dimensions of the field
+    procedure(f_ret_i), deferred :: raw_size
+      !! Provides the number of pieces of data needed to represent the
+      !! field, i.e. the size of the array returned by `get_raw`.
+    procedure(f_raw), public, deferred :: get_raw
+      !! Returns array of data representing state of field. Can be
+      !! useful for passing to nonlinear solvers.
+    procedure(f_jacob), public, deferred :: d_dself
+      !! Returns Jacobian for desired x-derivative of each value in
+      !! field relative to all other values in field.
+  end type abstract_field
+  
+  type, extends(abstract_field), abstract, public :: scalar_field
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -130,7 +166,7 @@ module abstract_fields_mod
       !! \(\ ({\rm field})\)
     procedure(sf_ret_sf), deferred :: maxval
       !! \(\ ({\rm field})\)
-    procedure(sf_dx), public, deferred :: dx
+    procedure(sf_dx), public, deferred :: d_dx
       !! \(\frac{\partial^n}{\partial x_i^n}({\rm field})\)
     procedure(sf_ret_vf), deferred :: gradient
       !! \(\nabla {\rm field}\)
@@ -154,9 +190,11 @@ module abstract_fields_mod
     generic, public :: operator(.grad.) => gradient
     generic, public :: operator(.laplacian.) => laplacian
     generic, public :: assignment(=) => assign_field, assign_real
+    procedure(sf_bound), public, deferred :: set_boundaries
+      !! Set the type and value of boundary conditions
   end type scalar_field
   
-  type, abstract, public :: vector_field
+  type, extends(abstract_field), abstract, public :: vector_field
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -201,7 +239,7 @@ module abstract_fields_mod
     procedure(vf_comp), public, deferred :: component
       !! Returns a scalar field containing the specified component of 
       !! the vector field
-    procedure(vf_dx), public, deferred :: dx
+    procedure(vf_dx), public, deferred :: d_dx
       !! \(\frac{\partial^n}{\partial x_i^n}({\rm \vec{field}})\)
     procedure(vf_ret_sf), deferred :: divergence
       !! \(\nabla\cdot {\rm \vec{field}}\)
@@ -230,10 +268,29 @@ module abstract_fields_mod
     generic, public :: operator(.dot.) => dot_prod
     generic, public :: operator(.cross.) => cross_prod
     generic, public :: assignment(=) => assign_field, assign_real
+    procedure(vf_bound), public, deferred :: set_boundaries
+      !! Set the type and value of boundary conditions
   end type vector_field
 
 
   abstract interface
+    function f_ret_r(this)
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(in) :: this
+      real(r8), dimension(:,:), allocatable :: f_ret_r
+        !* A 2D array of shape \(n \times 2\), where n is the number of
+        !  dimensions of the field. Each row contains the lower and the
+        !  upper extent of the fields domain in the corresponding 
+        !  dimension
+    end function f_ret_r
+
+    pure function f_ret_i(this)
+      import :: abstract_field
+      class(abstract_field), intent(in) :: this
+      integer :: f_ret_i
+    end function f_ret_i
+
     function sf_sf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm field}\)
       import :: scalar_field
@@ -389,14 +446,14 @@ module abstract_fields_mod
       integer, optional, intent(in) :: order !! Order of the derivative, default = 1
       class(vector_field), allocatable :: vf_dx !! The derivative
     end function vf_dx
-    
+
     pure subroutine vf_eq_vf(this,rhs)
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
       import :: vector_field
       class(vector_field), intent(inout) :: this
       class(vector_field), intent(in) :: rhs
     end subroutine vf_eq_vf
-    
+
     pure subroutine vf_eq_vr(this,rhs)
       !! \({\rm \vec{field}} = {\rm \vec{real}}\)
       import :: vector_field
@@ -413,7 +470,7 @@ module abstract_fields_mod
       class(vector_field), intent(in) :: rhs
       class(vector_field), allocatable :: vr_vf !! The result of this operation
     end function vr_vf
-  
+
     function vf_vr(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{real}}\)
       import :: vector_field
@@ -422,7 +479,7 @@ module abstract_fields_mod
       real(r8), dimension(:), intent(in) :: rhs
       class(vector_field), allocatable :: vf_vr !! The result of this operation
     end function vf_vr
-    
+
     function vf_comp(this,comp)
       !! Scalar field containing specified component of the vector field
       import :: scalar_field
@@ -431,6 +488,93 @@ module abstract_fields_mod
       integer, intent(in) :: comp !! The index of the component
       class(scalar_field), allocatable :: vf_comp !! Component number `comp`
     end function vf_comp
+
+    pure subroutine sf_bound(this,bound_type,boundary,lower,value1,value2)
+      !* Sets boundary conditions and values. Boundary conditions 
+      !  (numbered with their corresponding integer code) are:
+      !
+      ! 1. Dirichlet
+      ! 2. Neumann
+      ! 3. Cauchy
+      ! 4. Periodic
+      !
+      ! If set to 0 then is a free boundary.
+      !
+      import :: scalar_field
+      import :: r8
+      class(scalar_field), intent(inout) :: this
+      integer, intent(in) :: bound_type
+        !! Integer code for the type of boundary
+      integer, intent(in) :: boundary
+        !! The number corresponding to the dimension whose boundary
+        !! condition is to be set
+      logical, optional, intent(in) :: lower
+        !! Sets lower boundary if true (default), upper if false
+      real(r8), optional, intent(in) :: value1
+        !! Value of the boundary condition for Dirichlet, Neumann, and
+        !! Cauchy conditions. In the lattermost case, it is the value of
+        !! the field itself at the boundary (not the derivative). Default
+        !! is 0.
+      real(r8), optional, intent(in) :: value2
+        !! Value of the first derivative of the field, when specifying
+        !! Cauchy boundary conditions. Default is 0.
+    end subroutine sf_bound
+
+    pure subroutine vf_bound(this,bound_type,boundary,lower,value1,value2)
+      !* Sets boundary conditions and values. Boundary conditions 
+      !  (numbered with their corresponding integer code) are:
+      !
+      ! 1. Dirichlet
+      ! 2. Neumann
+      ! 3. Cauchy
+      ! 4. Periodic
+      !
+      ! If set to 0 then is a free boundary.
+      !
+      import :: vector_field
+      import :: r8
+      class(vector_field), intent(inout) :: this
+      integer, intent(in) :: bound_type
+        !! Integer code for the type of boundary
+      integer, intent(in) :: boundary
+        !! The number corresponding to the dimension whose boundary
+        !! condition is to be set
+      logical, optional, intent(in) :: lower
+        !! Sets lower boundary if true (default), upper if false
+      real(r8), dimension(:), optional, intent(in) :: value1
+        !! Value of the boundary condition for Dirichlet, Neumann, and
+        !! Cauchy conditions. In the lattermost case, it is the value of
+        !! the field itself at the boundary (not the derivative). Default
+        !! is 0.
+      real(r8), dimension(:), optional, intent(in) :: value2
+        !! Value of the first derivative of the field, when specifying
+        !! Cauchy boundary conditions. Default is 0.
+    end subroutine vf_bound
+    
+    function f_raw(this)
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(in) :: this
+      real(r8), dimension(this%raw_size()) :: f_raw
+        !! Array containing data needed to describe field
+    end function f_raw
+    
+    function f_jacob(this,order)
+      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
+      ! where \(\vec{y}\) is the field represented as a 1D array of 
+      ! values (i.e. the output of [[abstract_field:get_raw]]) and
+      ! \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \). Here,
+      ! \(n\) is the `order` of the derivative to be taken, with 0
+      ! corresponding to not taking any derivative.
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(in) :: this
+      integer, intent(in), optional :: order
+        !! The order of the derivative of the field whose Jacobian is
+        !! to be returned. Default is 0 (no differentiation)
+      real(r8), dimension(this%raw_size(),this%raw_size()) :: f_jacob
+        !! The resulting Jacobian matrix
+    end function f_jacob
   end interface
 
   interface sin
@@ -513,7 +657,7 @@ module abstract_fields_mod
             acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
 contains
-
+  
   function scalar_field_sin(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
