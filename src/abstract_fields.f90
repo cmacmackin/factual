@@ -50,8 +50,10 @@ module abstract_fields_mod
     ! An abstract data type representing a mathematical field. 
     ! Inspiration is taken from the abstract calculus pattern described
     ! by Rouson, Xia, and Xu (2011). This particular type is meant only
-    ! to provide whatever common, although largely non-mathematical,
-    ! properties are shared by fields of scalar and vector quantities.
+    ! to provide whatever common properties are shared by fields of 
+    ! scalar and vector quantities. These are type-bound procedures 
+    ! which work with intrinsic types, either to provide information
+    ! about the field or to provide the field data in a raw form.
     !
     !####Bibliography
     ! *Scientific Software Design: The Object-Oriented Way*, Rouson, 
@@ -66,12 +68,22 @@ module abstract_fields_mod
     procedure(f_ret_i), deferred :: raw_size
       !! Provides the number of pieces of data needed to represent the
       !! field, i.e. the size of the array returned by `get_raw`.
-    procedure(f_raw), public, deferred :: get_raw
+    procedure(f_raw), deferred :: raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
-    procedure(f_jacob), public, deferred :: d_dself
+    procedure(f_jacob), deferred :: d_dself
       !! Returns Jacobian for desired x-derivative of each value in
       !! field relative to all other values in field.
+    procedure(f_res), deferred :: resolution
+      !! Returns array containing number of datapoints in each dimension.
+    procedure(f_eq_raw), private, deferred :: assign_raw
+      !! Assigns raw data, such as that produced by 
+      !! [[abstract_field:raw]], to the field
+    procedure, private :: field_multiply_jacobian
+      !! Handles the case where a field needs to be multiplied by a 
+      !! Jacobian matrix, which consists of a 2D array of reals.
+    generic :: assignment(=) => assign_raw
+    generic :: operator(*) => field_multiply_jacobian
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -124,7 +136,7 @@ module abstract_fields_mod
       !! \({\rm field} - {\rm real}\)
     procedure(sf_r), deferred :: field_pow_real
       !! \({\rm field}^{\rm real}\)
-    procedure(sf_r), deferred :: field_pow_real4
+    procedure(sf_r4), deferred :: field_pow_real4
       !! \({\rm field}^{\rm real}\)
     procedure(sf_i), deferred :: field_pow_int
       !! \({\rm field}^{\rm int}\)
@@ -174,8 +186,6 @@ module abstract_fields_mod
       !! \(\nabla^2 {\rm field}\)
     procedure(sf_eq_sf), deferred :: assign_field
       !! \({\rm field} = {\rm field}\)
-    procedure(sf_eq_r), deferred :: assign_real
-      !! \({\rm field} = {\rm real}\)
     generic, public :: operator(*) => field_multiply_field, &
         field_multiply_vecfield, real_multiply_field, &
         field_multiply_real
@@ -189,7 +199,7 @@ module abstract_fields_mod
         field_pow_real4
     generic, public :: operator(.grad.) => gradient
     generic, public :: operator(.laplacian.) => laplacian
-    generic, public :: assignment(=) => assign_field, assign_real
+    generic, public :: assignment(=) => assign_field
     procedure(sf_bound), public, deferred :: set_boundaries
       !! Set the type and value of boundary conditions
   end type scalar_field
@@ -253,8 +263,6 @@ module abstract_fields_mod
       !! \({\rm\vec{field}} \times {\rm\vec{field}}\)
     procedure(vf_eq_vf), deferred :: assign_field
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
-    procedure(vf_eq_vr), deferred :: assign_real
-      !! \({\rm \vec{field}} = {\rm \vec{real}}\)
     generic, public :: operator(*) => field_multiply_field, &
         real_multiply_field, field_multiply_real
     generic, public :: operator(/) => field_divide_field, field_divide_real
@@ -267,14 +275,14 @@ module abstract_fields_mod
     generic, public :: operator(.laplacian.) => laplacian
     generic, public :: operator(.dot.) => dot_prod
     generic, public :: operator(.cross.) => cross_prod
-    generic, public :: assignment(=) => assign_field, assign_real
+    generic, public :: assignment(=) => assign_field
     procedure(vf_bound), public, deferred :: set_boundaries
       !! Set the type and value of boundary conditions
   end type vector_field
 
 
   abstract interface
-    function f_ret_r(this)
+    pure function f_ret_r(this)
       import :: abstract_field
       import :: r8
       class(abstract_field), intent(in) :: this
@@ -290,7 +298,59 @@ module abstract_fields_mod
       class(abstract_field), intent(in) :: this
       integer :: f_ret_i
     end function f_ret_i
+    
+    pure function f_raw(this)
+      !* @BUG The returned value has length `this%raw_size()`, but
+      !  a bug in gfortran 4.8 (fixed by version 5) caused the compiler
+      !  to segfault if it was declared as such. As a workaround, it is
+      !  allocatable isntead.
+      !
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(in) :: this
+      real(r8), dimension(:), allocatable :: f_raw
+        !! Array containing data needed to describe field
+    end function f_raw
+    
+    pure function f_jacob(this,order)
+      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
+      ! is returned, where \(\vec{y}\) is the field represented as a 1D
+      ! array of values (i.e. the output of [[abstract_field:raw]])
+      ! and \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \).
+      ! Here, \(n\) is the `order` of the derivative to be taken, with 0
+      ! corresponding to not taking any derivative.
+      !
+      ! @BUG The returned value has shape `(this%raw_size(),
+      ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
+      ! 5) caused the compiler to segfault if it was declared as such.
+      ! As a workaround, it is allocatable isntead.
+      !
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(in) :: this
+      integer, intent(in), optional :: order
+        !! The order of the derivative of the field whose Jacobian is
+        !! to be returned. Default is 0 (no differentiation)
+      real(r8), dimension(:,:), allocatable :: f_jacob
+        !! The resulting Jacobian matrix
+    end function f_jacob
 
+    pure function f_res(this)
+      import :: abstract_field
+      class(abstract_field), intent(in) :: this
+      integer, dimension(:), allocatable :: f_res
+        !! Array specifying the number of data points in each dimension.
+    end function f_res
+
+    subroutine f_eq_raw(this,rhs)
+      !! Assigns raw data, such as that produced by 
+      !! [[abstract_field:raw]], to the field
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(inout) :: this
+      real(r8), dimension(:), intent(in) :: rhs
+    end subroutine f_eq_raw
+    
     function sf_sf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm field}\)
       import :: scalar_field
@@ -302,7 +362,6 @@ module abstract_fields_mod
       !! \({\rm field} [{\rm operator}] {\rm \vec{field}}\)
       import :: scalar_field
       import :: vector_field
-      import :: r8
       class(scalar_field), intent(in) :: this
       class(vector_field), intent(in) :: rhs
       class(vector_field), allocatable :: sf_vf !! The result of this operation
@@ -342,14 +401,14 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: sf_i !! The result of this operation
     end function sf_i
   
-    function sf_ret_sf(this)
+    pure function sf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
       class(scalar_field), allocatable :: sf_ret_sf !! The result of this operation
     end function sf_ret_sf
     
-    function sf_ret_vf(this)
+    pure function sf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: vector_field
@@ -363,14 +422,6 @@ module abstract_fields_mod
       class(scalar_field), intent(inout) :: this
       class(scalar_field), intent(in) :: rhs
     end subroutine sf_eq_sf
-    
-    pure subroutine sf_eq_r(this,rhs)
-      !! \({\rm field} = {\rm real}\)
-      import :: scalar_field
-      import :: r8      
-      class(scalar_field), intent(inout) :: this
-      real(r8), intent(in) :: rhs
-    end subroutine sf_eq_r
     
     function vf_sf(this,rhs)
       !! \({\rm \vec{field} [{\rm operator}] {\rm field}\)
@@ -406,7 +457,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_r !! The result of this operation
     end function vf_r
     
-    function vf_ret_sf(this)
+    pure function vf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: vector_field
@@ -414,7 +465,7 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_ret_sf !! The result of this operation
     end function vf_ret_sf
     
-    function vf_ret_vf(this)
+    pure function vf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: vector_field
       class(vector_field), intent(in) :: this
@@ -454,14 +505,6 @@ module abstract_fields_mod
       class(vector_field), intent(in) :: rhs
     end subroutine vf_eq_vf
 
-    pure subroutine vf_eq_vr(this,rhs)
-      !! \({\rm \vec{field}} = {\rm \vec{real}}\)
-      import :: vector_field
-      import :: r8
-      class(vector_field), intent(inout) :: this
-      real(r8), dimension(:), intent(in) :: rhs
-    end subroutine vf_eq_vr
-
     function vr_vf(lhs,rhs)
       !! \({\rm \vec{real}} [{\rm operator}] {\rm field}\)
       import :: vector_field
@@ -489,7 +532,7 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_comp !! Component number `comp`
     end function vf_comp
 
-    pure subroutine sf_bound(this,bound_type,boundary,lower,value1,value2)
+    subroutine sf_bound(this,bound_type,boundary,lower,value1,value2)
       !* Sets boundary conditions and values. Boundary conditions 
       !  (numbered with their corresponding integer code) are:
       !
@@ -520,7 +563,7 @@ module abstract_fields_mod
         !! Cauchy boundary conditions. Default is 0.
     end subroutine sf_bound
 
-    pure subroutine vf_bound(this,bound_type,boundary,lower,value1,value2)
+    subroutine vf_bound(this,bound_type,boundary,lower,value1,value2)
       !* Sets boundary conditions and values. Boundary conditions 
       !  (numbered with their corresponding integer code) are:
       !
@@ -550,31 +593,6 @@ module abstract_fields_mod
         !! Value of the first derivative of the field, when specifying
         !! Cauchy boundary conditions. Default is 0.
     end subroutine vf_bound
-    
-    function f_raw(this)
-      import :: abstract_field
-      import :: r8
-      class(abstract_field), intent(in) :: this
-      real(r8), dimension(this%raw_size()) :: f_raw
-        !! Array containing data needed to describe field
-    end function f_raw
-    
-    function f_jacob(this,order)
-      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
-      ! where \(\vec{y}\) is the field represented as a 1D array of 
-      ! values (i.e. the output of [[abstract_field:get_raw]]) and
-      ! \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \). Here,
-      ! \(n\) is the `order` of the derivative to be taken, with 0
-      ! corresponding to not taking any derivative.
-      import :: abstract_field
-      import :: r8
-      class(abstract_field), intent(in) :: this
-      integer, intent(in), optional :: order
-        !! The order of the derivative of the field whose Jacobian is
-        !! to be returned. Default is 0 (no differentiation)
-      real(r8), dimension(this%raw_size(),this%raw_size()) :: f_jacob
-        !! The resulting Jacobian matrix
-    end function f_jacob
   end interface
 
   interface sin
@@ -658,7 +676,26 @@ module abstract_fields_mod
 
 contains
   
-  function scalar_field_sin(field) result(res)
+  pure function field_multiply_jacobian(this,jac) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! Returns the raw product of a field times a Jacobian matrix.
+    !
+    class(abstract_field), intent(in) :: this
+    real(r8), dimension(:,:), intent(in) :: jac !! A jacobian matrix
+    real(r8), dimension(size(jac,1),size(jac,2)) :: res
+      !! The product, in raw form, of the field times the Jacobian
+      !! matrix.
+    real(r8), dimension(this%raw_size()) :: raw
+    integer :: i
+    raw = this%raw()
+    ! Iterate through the larger of raw and jac, so that a segfault will
+    ! occur if they are not equal and this routine can remain pure.
+    forall (i = 1:max(size(raw),size(jac,1))) res(i,:) = raw(i) * res(i,:)
+  end function field_multiply_jacobian
+  
+  pure function scalar_field_sin(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -672,7 +709,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_sin
 
-  function scalar_field_cos(field) result(res)
+  pure function scalar_field_cos(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -686,7 +723,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_cos
 
-  function scalar_field_tan(field) result(res)
+  pure function scalar_field_tan(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -700,7 +737,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_tan
 
-  function scalar_field_asin(field) result(res)
+  pure function scalar_field_asin(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -715,7 +752,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_asin
 
-  function scalar_field_acos(field) result(res)
+  pure function scalar_field_acos(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -730,7 +767,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_acos
 
-  function scalar_field_atan(field) result(res)
+  pure function scalar_field_atan(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -745,7 +782,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_atan
 
-  function scalar_field_sinh(field) result(res)
+  pure function scalar_field_sinh(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -760,7 +797,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_sinh
 
-  function scalar_field_cosh(field) result(res)
+  pure function scalar_field_cosh(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -775,7 +812,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_cosh
 
-  function scalar_field_tanh(field) result(res)
+  pure function scalar_field_tanh(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -790,7 +827,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_tanh
 
-  function scalar_field_asinh(field) result(res)
+  pure function scalar_field_asinh(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -805,7 +842,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_asinh
 
-  function scalar_field_acosh(field) result(res)
+  pure function scalar_field_acosh(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -820,7 +857,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_acosh
 
-  function scalar_field_atanh(field) result(res)
+  pure function scalar_field_atanh(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -835,7 +872,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_atanh
 
-  function scalar_field_log(field) result(res)
+  pure function scalar_field_log(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -850,7 +887,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_log
 
-  function scalar_field_log10(field) result(res)
+  pure function scalar_field_log10(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -865,7 +902,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_log10
 
-  function scalar_field_exp(field) result(res)
+  pure function scalar_field_exp(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -880,7 +917,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_exp
 
-  function scalar_field_abs(field) result(res)
+  pure function scalar_field_abs(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -895,7 +932,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_abs
 
-  function scalar_field_sqrt(field) result(res)
+  pure function scalar_field_sqrt(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -910,7 +947,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_sqrt
 
-  function scalar_field_minval(field) result(res)
+  pure function scalar_field_minval(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -924,7 +961,7 @@ contains
     call move_alloc(tmp, res)
   end function scalar_field_minval
 
-  function scalar_field_maxval(field) result(res)
+  pure function scalar_field_maxval(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
