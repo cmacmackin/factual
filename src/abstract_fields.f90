@@ -39,9 +39,8 @@ module abstract_fields_mod
   implicit none
   private
   
-  character(len=9), dimension(4), parameter, public :: &
-      boundary_conditions = ['Dirichlet', 'Neumann  ', 'Cauchy   ', 'Periodic ']
-      !! Code for each type of boundary condition is its index
+  real(r8) :: tolerance = 1e-10_r8
+  public :: set_tol, get_tol
   
   type, abstract, public :: abstract_field
     !* Author: Chris MacMackin
@@ -71,19 +70,19 @@ module abstract_fields_mod
     procedure(f_raw), deferred :: raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
-    procedure(f_jacob), deferred :: d_dself
-      !! Returns Jacobian for desired x-derivative of each value in
-      !! field relative to all other values in field.
+!~     procedure(f_jacob), deferred :: d_dself
+!~       !! Returns Jacobian for desired x-derivative of each value in
+!~       !! field relative to all other values in field.
     procedure(f_res), deferred :: resolution
       !! Returns array containing number of datapoints in each dimension.
     procedure(f_eq_raw), private, deferred :: assign_raw
       !! Assigns raw data, such as that produced by 
       !! [[abstract_field:raw]], to the field
-    procedure, private :: field_multiply_jacobian
-      !! Handles the case where a field needs to be multiplied by a 
-      !! Jacobian matrix, which consists of a 2D array of reals.
+!~     procedure, private :: field_multiply_jacobian
+!~       !! Handles the case where a field needs to be multiplied by a 
+!~       !! Jacobian matrix, which consists of a 2D array of reals.
     generic :: assignment(=) => assign_raw
-    generic :: operator(*) => field_multiply_jacobian
+!~     generic :: operator(*) => field_multiply_jacobian
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -174,9 +173,9 @@ module abstract_fields_mod
       !! \(\ ({\rm field})\)
     procedure(sf_ret_sf), deferred :: sqrt
       !! \(\ ({\rm field})\)
-    procedure(sf_ret_sf), deferred :: minval
+    procedure(sf_ret_r), deferred :: minval
       !! \(\ ({\rm field})\)
-    procedure(sf_ret_sf), deferred :: maxval
+    procedure(sf_ret_r), deferred :: maxval
       !! \(\ ({\rm field})\)
     procedure(sf_dx), public, deferred :: d_dx
       !! \(\frac{\partial^n}{\partial x_i^n}({\rm field})\)
@@ -202,6 +201,12 @@ module abstract_fields_mod
     generic, public :: assignment(=) => assign_field
     procedure(sf_bound), public, deferred :: set_boundaries
       !! Set the type and value of boundary conditions
+    procedure :: is_equal => scalar_is_equal
+      !! Checks fields are equal within a tolerance
+    generic, public :: operator(==) => is_equal
+    procedure(sf_same_bounds), deferred, public :: has_same_bounds_as
+      !! Returns true if the boundary conditions for two fields agree
+      !! within tolerance 
   end type scalar_field
   
   type, extends(abstract_field), abstract, public :: vector_field
@@ -244,7 +249,7 @@ module abstract_fields_mod
       !! \({\rm \vec{real}} - {\rm \vec{field}}\)
     procedure(vf_vr), deferred :: field_sub_real
       !! \({\rm \vec{field}} - {\rm \vec{real}}\)
-    procedure(vf_ret_vf), public, deferred :: norm
+    procedure(vf_ret_sf), public, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
       !! Returns a scalar field containing the specified component of 
@@ -278,6 +283,12 @@ module abstract_fields_mod
     generic, public :: assignment(=) => assign_field
     procedure(vf_bound), public, deferred :: set_boundaries
       !! Set the type and value of boundary conditions
+    procedure :: is_equal => vector_is_equal
+      !! Checks fields are equal within a tolerance
+    generic, public :: operator(==) => is_equal
+    procedure(vf_same_bounds), deferred, public :: has_same_bounds_as
+      !! Returns true if the boundary conditions for two fields agree
+      !! within tolerance 
   end type vector_field
 
 
@@ -293,7 +304,7 @@ module abstract_fields_mod
         !  dimension
     end function f_ret_r
 
-    pure function f_ret_i(this)
+    elemental function f_ret_i(this)
       import :: abstract_field
       class(abstract_field), intent(in) :: this
       integer :: f_ret_i
@@ -407,6 +418,14 @@ module abstract_fields_mod
       class(scalar_field), intent(in) :: this
       class(scalar_field), allocatable :: sf_ret_sf !! The result of this operation
     end function sf_ret_sf
+  
+    pure function sf_ret_r(this)
+      !! \([{\rm operator}] {\rm field}\)
+      import :: scalar_field
+      import :: r8
+      class(scalar_field), intent(in) :: this
+      real(r8) :: sf_ret_r !! The result of this operation
+    end function sf_ret_r
     
     pure function sf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
@@ -416,7 +435,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: sf_ret_vf !! The result of this operation
     end function sf_ret_vf
     
-    pure subroutine sf_eq_sf(this,rhs)
+    elemental subroutine sf_eq_sf(this,rhs)
       !! \({\rm field} = {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(inout) :: this
@@ -498,7 +517,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_dx !! The derivative
     end function vf_dx
 
-    pure subroutine vf_eq_vf(this,rhs)
+    elemental subroutine vf_eq_vf(this,rhs)
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
       import :: vector_field
       class(vector_field), intent(inout) :: this
@@ -532,67 +551,75 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_comp !! Component number `comp`
     end function vf_comp
 
-    subroutine sf_bound(this,bound_type,boundary,lower,value1,value2)
-      !* Sets boundary conditions and values. Boundary conditions 
-      !  (numbered with their corresponding integer code) are:
-      !
-      ! 1. Dirichlet
-      ! 2. Neumann
-      ! 3. Cauchy
-      ! 4. Periodic
-      !
-      ! If set to 0 then is a free boundary.
+    subroutine sf_bound(this,direction,lower,free_bound,bound_val, &
+                        bound_deriv)
+      !* Sets boundary conditions and values. If a boundary is not
+      !  explicitly set by calling this subroutine then it defaults to
+      !  being free.
       !
       import :: scalar_field
       import :: r8
       class(scalar_field), intent(inout) :: this
-      integer, intent(in) :: bound_type
-        !! Integer code for the type of boundary
-      integer, intent(in) :: boundary
-        !! The number corresponding to the dimension whose boundary
-        !! condition is to be set
+      integer, intent(in) :: direction
+        !! The number corresponding to the direction/dimension whose
+        !! boundary condition is to be set
       logical, optional, intent(in) :: lower
         !! Sets lower boundary if true (default), upper if false
-      real(r8), optional, intent(in) :: value1
-        !! Value of the boundary condition for Dirichlet, Neumann, and
-        !! Cauchy conditions. In the lattermost case, it is the value of
-        !! the field itself at the boundary (not the derivative). Default
-        !! is 0.
-      real(r8), optional, intent(in) :: value2
-        !! Value of the first derivative of the field, when specifying
-        !! Cauchy boundary conditions. Default is 0.
+      logical, optional, intent(in) :: free_bound
+        !! If true, makes this a free boundary. Any boundary values 
+        !! passed will be ignored. Default is `.false.`.
+      real(r8), optional, intent(in) :: bound_val
+        !! Value of the field at the boundary. Default is 0.
+      real(r8), optional, intent(in) :: bound_deriv
+        !! Value of the first derivative of the field at the boundary.
+        !! Default is 0.
     end subroutine sf_bound
 
-    subroutine vf_bound(this,bound_type,boundary,lower,value1,value2)
-      !* Sets boundary conditions and values. Boundary conditions 
-      !  (numbered with their corresponding integer code) are:
-      !
-      ! 1. Dirichlet
-      ! 2. Neumann
-      ! 3. Cauchy
-      ! 4. Periodic
-      !
-      ! If set to 0 then is a free boundary.
+    subroutine vf_bound(this,direction,lower,free_bound,bound_val, &
+                        bound_deriv)
+      !* Sets boundary conditions and values. If a boundary is not
+      !  explicitly set by calling this subroutine then it defaults to
+      !  being free.
       !
       import :: vector_field
       import :: r8
       class(vector_field), intent(inout) :: this
-      integer, intent(in) :: bound_type
-        !! Integer code for the type of boundary
-      integer, intent(in) :: boundary
-        !! The number corresponding to the dimension whose boundary
-        !! condition is to be set
+      integer, intent(in) :: direction
+        !! The number corresponding to the direction/dimension whose
+        !! boundary condition is to be set
       logical, optional, intent(in) :: lower
         !! Sets lower boundary if true (default), upper if false
-      real(r8), dimension(:), optional, intent(in) :: value1
-        !! Value of the boundary condition for Dirichlet, Neumann, and
-        !! Cauchy conditions. In the lattermost case, it is the value of
-        !! the field itself at the boundary (not the derivative). Default
-        !! is 0.
-      real(r8), dimension(:), optional, intent(in) :: value2
-        !! Value of the first derivative of the field, when specifying
-        !! Cauchy boundary conditions. Default is 0.
+      logical, optional, intent(in) :: free_bound
+        !! If true, makes this a free boundary. Any boundary values 
+        !! passed will be ignored. Default is `.false.`.
+      real(r8), dimension(:), optional, intent(in) :: bound_val
+        !! Value of the field at the boundary. Default is 0.
+      real(r8), dimension(:), optional, intent(in) :: bound_deriv
+        !! Value of the first derivative of the field at the boundary.
+        !! Default is 0.
     end subroutine vf_bound
+    
+    function sf_same_bounds(this,other)
+      import :: scalar_field
+      class(scalar_field), intent(in) :: this
+      class(scalar_field), intent(in) :: other
+        !! The fields whose boundary conditions are being compared to
+        !! those of this one
+      logical :: sf_same_bounds
+        !! `.true.` if boundary conditions agree within tolerance,
+        !! `.false.` otherwise
+    end function sf_same_bounds
+    
+    function vf_same_bounds(this,other)
+      import :: vector_field
+      class(vector_field), intent(in) :: this
+      class(vector_field), intent(in) :: other
+        !! The fields whose boundary conditions are being compared to
+        !! those of this one
+      logical :: vf_same_bounds
+        !! `.true.` if boundary conditions agree within tolerance,
+        !! `.false.` otherwise
+    end function vf_same_bounds
   end interface
 
   interface sin
@@ -676,24 +703,24 @@ module abstract_fields_mod
 
 contains
   
-  pure function field_multiply_jacobian(this,jac) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Returns the raw product of a field times a Jacobian matrix.
-    !
-    class(abstract_field), intent(in) :: this
-    real(r8), dimension(:,:), intent(in) :: jac !! A jacobian matrix
-    real(r8), dimension(size(jac,1),size(jac,2)) :: res
-      !! The product, in raw form, of the field times the Jacobian
-      !! matrix.
-    real(r8), dimension(this%raw_size()) :: raw
-    integer :: i
-    raw = this%raw()
-    ! Iterate through the larger of raw and jac, so that a segfault will
-    ! occur if they are not equal and this routine can remain pure.
-    forall (i = 1:max(size(raw),size(jac,1))) res(i,:) = raw(i) * res(i,:)
-  end function field_multiply_jacobian
+!~   pure function field_multiply_jacobian(this,jac) result(res)
+!~     !* Author: Chris MacMackin
+!~     !  Date: March 2016
+!~     !
+!~     ! Returns the raw product of a field times a Jacobian matrix.
+!~     !
+!~     class(abstract_field), intent(in) :: this
+!~     real(r8), dimension(:,:), intent(in) :: jac !! A jacobian matrix
+!~     real(r8), dimension(size(jac,1),size(jac,2)) :: res
+!~       !! The product, in raw form, of the field times the Jacobian
+!~       !! matrix.
+!~     real(r8), dimension(this%raw_size()) :: raw
+!~     integer :: i
+!~     raw = this%raw()
+!~     ! Iterate through the larger of raw and jac, so that a segfault will
+!~     ! occur if they are not equal and this routine can remain pure.
+!~     forall (i = 1:max(size(raw),size(jac,1))) res(i,:) = raw(i) * res(i,:)
+!~   end function field_multiply_jacobian
   
   pure function scalar_field_sin(field) result(res)
     !* Author: Chris MacMackin
@@ -954,11 +981,8 @@ contains
     ! Computes and returns the minimum of the values in a scalar field.
     !
     class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%minval()
-    call move_alloc(tmp, res)
+    real(r8) :: res
+    res = field%minval()
   end function scalar_field_minval
 
   pure function scalar_field_maxval(field) result(res)
@@ -968,11 +992,64 @@ contains
     ! Computes and returns the maximum of the values in a scalar field.
     !
     class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%maxval()
-    call move_alloc(tmp, res)
+    real(r8) :: res
+    res = field%maxval()
   end function scalar_field_maxval
+
+  logical function scalar_is_equal(this,rhs) result(iseq)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Evaluates whether two scalar fields are equal within a tolerance,
+    ! specified by [[set_tol]].
+    !
+    class(scalar_field), intent(in) :: this
+    class(scalar_field), intent(in) :: rhs
+    if (this%has_same_bounds_as(rhs)) then
+      iseq = .false.
+      return
+    end if
+    iseq = (minval(abs(this-rhs)) < tolerance)
+  end function scalar_is_equal
+
+  logical function vector_is_equal(this,rhs) result(iseq)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Evaluates whether two vector fields are equal within a tolerance,
+    ! specified by [[set_tol]].
+    !
+    class(vector_field), intent(in) :: this
+    class(vector_field), intent(in) :: rhs
+    class(vector_field), allocatable :: tmp
+    allocate(tmp, mold=rhs)
+    if (this%has_same_bounds_as(rhs)) then
+      iseq = .false.
+      return
+    end if
+    tmp = this - rhs
+    iseq = (minval(abs(tmp%norm())) < tolerance)
+  end function vector_is_equal
+  
+  subroutine set_tol(tol)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Sets the tolerance within which two fields must agree to be 
+    ! considered equal.
+    !
+    real(r8), intent(in) :: tol
+    tolerance = tol
+  end subroutine set_tol
+  
+  real(r8) function get_tol()
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Returns the tolerance within which two fields must agree to be
+    ! considered equal.
+    !
+    get_tol = tolerance
+  end function get_tol
 
 end module abstract_fields_mod

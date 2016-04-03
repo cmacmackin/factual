@@ -34,32 +34,39 @@ module cheb1d_fields_mod
   !
   use iso_fortran_env, only: r8 => real64
   use abstract_fields_mod
+  use chebyshev_mod
   implicit none
   private
+
+  public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
+            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
   type, extends(scalar_field), public :: cheb1d_scalar_field
     private
     integer :: numpoints
       !! The number of datapoints used
-    real(r8), dimension(1,2) :: extent = reshape([0.0_r8, 0.0_r8],[1,2])
+    real(r8), dimension(1,2) :: extent = reshape([-1.0_r8, 1.0_r8],[1,2])
       !! The start and end values of the domain
+    real(r8), dimension(:), allocatable :: colloc_points
+      !! The location of the data-points
     real(r8), dimension(:), allocatable :: field_data
+      !! The value of the scalar field at the data-points
     integer :: lower_boundary
       !! The boundary-value code for the boundary at the start of the domain
-    real(r8) :: lower_boundar_value1
+    real(r8) :: lower_boundary_val
       !! Value of the lower boundary condition for Dirichlet, Neumann,
       !! and Cauchy conditions. In the lattermost case, it is the value
       !! of the field itself at the boundary (not the derivative).
-    real(r8) :: lower_boundar_value2
+    real(r8) :: lower_boundary_deriv
       !! Lower boundary value of the first derivative of the field, when
       !! specifying Cauchy boundary conditions. Default is 0.
     integer :: upper_boundary
       !! The boundary-value code for the boundary at the end of the domain
-    real(r8) :: upper_boundar_value1
+    real(r8) :: upper_boundary_val
       !! Value of the upper boundary condition for Dirichlet, Neumann,
       !! and Cauchy conditions. In the lattermost case, it is the value
       !! of the field itself at the boundary (not the derivative).
-    real(r8) :: upper_boundar_value2
+    real(r8) :: upper_boundary_deriv
       !! Upper boundary value of the first derivative of the field, when
       !! specifying Cauchy boundary conditions. Default is 0.
   contains
@@ -74,9 +81,9 @@ module cheb1d_fields_mod
     procedure, public :: raw => cheb1d_scalar_raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
-    procedure, public :: d_dself => cheb1d_scalar_d_dshelf
-      !! Returns Jacobian for desired x-derivative of each value in
-      !! field relative to all other values in field.
+!~     procedure, public :: d_dself => cheb1d_scalar_d_dshelf
+!~       !! Returns Jacobian for desired x-derivative of each value in
+!~       !! field relative to all other values in field.
     procedure, public :: resolution => cheb1d_scalar_resolution
       !! Returns array containing number of datapoints in each dimension.
     procedure :: assign_raw => cheb1d_scalar_assign_raw
@@ -162,9 +169,57 @@ module cheb1d_fields_mod
       !! \({\rm field} = {\rm field}\)
     procedure, public :: set_boundaries => cheb1d_scalar_set_boundaries
       !! Set the type and value of boundary conditions    
+    procedure, public :: has_same_bounds_as => cheb1d_scalar_same_bound
+      !! Returns true if the boundary conditions for two fields agree
+      !! within tolerance
   end type
+  
+  interface cheb1d_scalar_field
+    module procedure scalar_constructor
+  end interface
 
 contains
+
+  function scalar_constructor(nodes,initializer,lower_bound, &
+                              upper_bound) result(field)
+    integer, intent(in) :: nodes
+      !! The number of collocation nodes to use when modelling this
+      !! field. This corresponds to resolution.
+    procedure(scalar_init), optional :: initializer
+      !! An elemental procedure taking which takes the position in the
+      !! fields domain (an 8-byte real) as an argument and returns the
+      !! fields value at that position. Default is for field to be zero
+      !! everywhere.
+    real(r8), intent(in), optional :: lower_bound
+      !! The position of the lower bound of the field's domain. Default is -1.0.
+    real(r8), intent(in), optional :: upper_bound
+      !! The position of the upper bound of the field's domain. Default is 1.0.
+    type(cheb1d_scalar_field) :: field
+    integer :: i
+    field%numpoints = nodes
+    if (present(lower_bound)) field%extent(1,1) = lower_bound
+    if (present(upper_bound)) field%extent(1,2) = upper_bound
+    field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
+    if (present(initializer)) then
+      forall (i=1:nodes+1) field%field_data(i) = initializer(field%colloc_points(i))
+    else
+      forall (i=1:nodes+1) field%field_data(i) = scalar_init(field%colloc_points(i))
+    end if
+  end function scalar_constructor
+
+  pure function scalar_init(x) result(scalar)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Default function used to specify value held by a field at location
+    ! `x`. It sets the field to be uniform zeros.
+    !
+    real(r8), intent(in) :: x 
+      !! The position at which this function is evaluated
+    real(r8) :: scalar !! The value of the field at this location
+    scalar = 0.0_r8
+  end function scalar_init
+
 
   pure function cheb1d_scalar_domain(this) result(res)
     !* Author: Chris MacMackin
@@ -181,7 +236,7 @@ contains
     res = this%extent
   end function cheb1d_scalar_domain
 
-  pure function cheb1d_scalar_dimensions(this) result(res)
+  elemental function cheb1d_scalar_dimensions(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -192,7 +247,7 @@ contains
     res = 1
   end function cheb1d_scalar_dimensions
 
-  pure function cheb1d_scalar_raw_size(this) result(res)
+  elemental function cheb1d_scalar_raw_size(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -633,7 +688,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \(\log({\rm field})\)
+    ! \(\ln({\rm field})\)
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), allocatable :: res !! The result of this operation
@@ -647,7 +702,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \(\log10({\rm field})\)
+    ! \(\log({\rm field})\)
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), allocatable :: res !! The result of this operation
@@ -706,11 +761,12 @@ contains
     ! \(\min({\rm field})\)
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(cheb1d_scalar_field), allocatable :: tmp
-    allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = minval(this%field_data)
-    call move_alloc(tmp, res)
+    real(r8) :: res !! The result of this operation
+    if (allocated(this%field_data)) then
+      res = minval(this%field_data)
+    else
+      res = 0.0_r8
+    end if
   end function cheb1d_scalar_minval
 
   pure function cheb1d_scalar_maxval(this) result(res)
@@ -720,11 +776,12 @@ contains
     ! \(\max({\rm field})\)
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(cheb1d_scalar_field), allocatable :: tmp
-    allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = maxval(this%field_data)
-    call move_alloc(tmp, res)
+    real(r8) :: res !! The result of this operation
+    if (allocated(this%field_data)) then
+      res = maxval(this%field_data)
+    else
+      res = 0.0_r8
+    end if
   end function cheb1d_scalar_maxval
   
   pure function cheb1d_scalar_laplacian(this) result(res)
@@ -747,7 +804,7 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
   end function cheb1d_scalar_gradient
   
-  pure subroutine cheb1d_scalar_assign(this,rhs)
+  elemental subroutine cheb1d_scalar_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -757,37 +814,27 @@ contains
     class(scalar_field), intent(in) :: rhs
   end subroutine cheb1d_scalar_assign
 
-  subroutine cheb1d_scalar_set_boundaries(this,bound_type,boundary, &
-                                          lower,value1,value2)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Sets boundary conditions and values. Boundary conditions 
-    ! (numbered with their corresponding integer code) are:
-    !
-    ! 1. Dirichlet
-    ! 2. Neumann
-    ! 3. Cauchy
-    ! 4. Periodic
-    !
-    ! If set to 0 then is a free boundary.
-    !
+  subroutine cheb1d_scalar_set_boundaries(this,direction,lower, &
+                                          free_bound,bound_val, &
+                                          bound_deriv)
+      !* Sets boundary conditions and values. If a boundary is not
+      !  explicitly set then it defaults to being free.
+      !
+
     class(cheb1d_scalar_field), intent(inout) :: this
-    integer, intent(in) :: bound_type
-      !! Integer code for the type of boundary
-    integer, intent(in) :: boundary
-      !! The number corresponding to the dimension whose boundary
-      !! condition is to be set
-    logical, optional, intent(in) :: lower
-      !! Sets lower boundary if true (default), upper if false
-    real(r8), optional, intent(in) :: value1
-      !! Value of the boundary condition for Dirichlet, Neumann, and
-      !! Cauchy conditions. In the lattermost case, it is the value of
-      !! the field itself at the boundary (not the derivative). Default
-      !! is 0.
-    real(r8), optional, intent(in) :: value2
-      !! Value of the first derivative of the field, when specifying
-      !! Cauchy boundary conditions. Default is 0.
+      integer, intent(in) :: direction
+        !! The number corresponding to the direction/dimension whose
+        !! boundary condition is to be set
+      logical, optional, intent(in) :: lower
+        !! Sets lower boundary if true (default), upper if false
+      logical, optional, intent(in) :: free_bound
+        !! If true, makes this a free boundary. Any boundary values 
+        !! passed will be ignored. Default is `.false.`.
+      real(r8), optional, intent(in) :: bound_val
+        !! Value of the field at the boundary. Default is 0.
+      real(r8), optional, intent(in) :: bound_deriv
+        !! Value of the first derivative of the field at the boundary.
+        !! Default is 0.
   end subroutine cheb1d_scalar_set_boundaries
 
   function cheb1d_scalar_d_dx(this, dir, order) result(res)
@@ -801,5 +848,17 @@ contains
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(scalar_field), allocatable :: res
   end function cheb1d_scalar_d_dx
+
+  logical function cheb1d_scalar_same_bound(this,other) result(res)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Checks wither the boundary conditions for other field agree with
+    ! those for this one, within tolerance.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    class(scalar_field), intent(in) :: other
+    res = .true.
+  end function cheb1d_scalar_same_bound
 
 end module cheb1d_fields_mod
