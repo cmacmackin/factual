@@ -9,3 +9,5 @@ doc/
 *.gcov
 *.mod
 *.smod
+a.out
+*.x
