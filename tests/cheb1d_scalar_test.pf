@@ -23,6 +23,7 @@
 module cheb1d_scalar_test
   use iso_fortran_env, only: r8 => real64
   use pfunit_mod
+  use chebyshev_mod
   use cheb1d_fields_mod
   implicit none
   
@@ -32,7 +33,7 @@ module cheb1d_scalar_test
   type, extends(testcase) :: test_field
     type(cheb1d_scalar_field) :: field1, field2
     integer :: nodes = length
-    real(r8) :: lower1 = -1.0_r8, upper1 = -1.0_r8
+    real(r8) :: lower1 = -1.0_r8, upper1 = 1.0_r8
     real(r8) :: lower2 = 0.0_r8, upper2 = 10._r8
   contains
     procedure :: setup
@@ -99,40 +100,49 @@ contains
 @Test
   subroutine test_raw_size(this)
     class(test_field), intent(inout) :: this
-    integer :: raw_size
-    call this%field1%set_boundaries(1,.true.,bound_val=1.0_r8,bound_deriv=1.0_r8)
-    call this%field1%set_boundaries(1,.false.,bound_val=1.0_r8)
     @assertEqual(this%nodes+1,this%field1%raw_size(),message='Wrong raw size returned.')
-    call this%field2%set_boundaries(1,.true.,bound_deriv=1.0_r8)
-    call this%field1%set_boundaries(1,.false.,bound_val=1.0_r8)
-    @assertEqual(this%nodes,this%field1%raw_size(),message='Wrong raw size returned.')
-    call this%field1%set_boundaries(1,.true.,.true.)
-    call this%field1%set_boundaries(1,.false.,bound_val=1.0_r8)
-    @assertEqual(this%nodes-1,this%field1%raw_size(),message='Wrong raw size returned.')
-    call this%field2%set_boundaries(1,.true.,bound_val=1.0_r8)
-    call this%field1%set_boundaries(1,.false.,bound_val=1.0_r8)
-    @assertEqual(this%nodes-2,this%field1%raw_size(),message='Wrong raw size returned.')
+    @assertEqual(this%nodes,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
   end subroutine test_raw_size
 
 @Test
-  subroutine test_same_bounds(this)
+  subroutine test_raw(this)
     class(test_field), intent(inout) :: this
-    @assertTrue(this%field1%has_same_bounds_as(this%field2), message='has_same_bounds_as() returns wrong result')
-    call this%field1%set_boundaries(1,.true.,bound_val=1.0_r8,bound_deriv=1.0_r8)
-    call this%field1%set_boundaries(1,.false.,bound_val=1.0_r8)
-    @assertFalse(this%field1%has_same_bounds_as(this%field2), message='has_same_bounds_as() returns wrong result')
-    call this%field2%set_boundaries(1,.true.,bound_val=1.0_r8,bound_deriv=1.0_r8)
-    call this%field2%set_boundaries(1,.false.,bound_val=1.0_r8)
-    @assertTrue(this%field1%has_same_bounds_as(this%field2), message='has_same_bounds_as() returns wrong result')
-  end subroutine
+    real(r8), allocatable, dimension(:) :: raw, expected
+    integer :: i
+    raw = this%field1%raw()
+    expected = collocation_points(this%nodes,this%lower1,this%upper1)
+    forall (i = 1:this%nodes+1) expected(i) = f2(expected(i))
+    @assertEqual(expected,raw,message='Wrong raw contents returned')
+    raw = this%field1%raw([.false.])
+    @assertEqual(expected(:this%nodes),raw,message='Wrong raw contents returned')
+    raw = this%field1%raw([.true.],[.false.])
+    @assertEqual(expected(2:),raw,message='Wrong raw contents returned')
+    raw = this%field1%raw([.false.],[.false.])
+    @assertEqual(expected(2:this%nodes),raw,message='Wrong raw contents returned')
+  end subroutine test_raw
 
 @Test
-  subroutine test_bounds(this)
+  subroutine test_assign_raw(this)
     class(test_field), intent(inout) :: this
-    real(r8), dimension(:), allocatable :: raw
-    !TODO: implement me
-  end subroutine test_bounds
-  
+    real(r8), dimension(this%nodes+1) :: raw, xvals
+    integer :: i
+    xvals = collocation_points(this%nodes,this%lower1,this%upper1)
+    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
+    call this%field1%set_from_raw(raw)
+    @assertEqual(raw,this%field2%raw(),message='Error setting field from raw.')
+    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
+    @assertEqual(raw(2:),this%field2%raw([.false.],[.true.]))
+    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
+    call this%field2%set_from_raw(raw(:this%nodes),[.true.],[.false.])
+    @assertEqual(raw(:this%nodes),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
+    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field2%set_from_raw(raw(2:this%nodes),[.true.],[.true.])
+    @assertEqual(raw(2:this%nodes),this%field2%raw([.true.],[.true.]),message='Error setting field from raw.')
+  end subroutine test_assign_raw
+
 @Test
   subroutine test_resolution(this)
     class(test_field), intent(inout) :: this
@@ -140,13 +150,6 @@ contains
     res = this%field1%resolution()
     @assertEqual(this%nodes,res(1),message='Incorrect resolution returned')
   end subroutine test_resolution
-
-@Test
-  subroutine test_assign_raw(this)
-    class(test_field), intent(inout) :: this
-    real(r8), dimension(:), allocatable :: raw
-    !TODO: implement me
-  end subroutine test_assign_raw
 
 @Test
   subroutine test_fmf(this)
@@ -161,11 +164,11 @@ contains
     end function func
   end subroutine test_fmf
   
-@Test
-  subroutine test_fmvf(this)
-    class(test_field), intent(inout) :: this
-    ! TODO: write implementation
-  end subroutine test_fmvf
+!~ @Test
+!~   subroutine test_fmvf(this)
+!~     class(test_field), intent(inout) :: this
+!~     ! TODO: write implementation
+!~   end subroutine test_fmvf
   
 @Test
   subroutine test_rmf(this)
@@ -614,17 +617,17 @@ contains
     end function zeros
   end subroutine test_d_dx
   
-@Test
-  subroutine test_grad(this)
-    class(test_field), intent(inout) :: this
-    ! TODO: write implementation
-    @assertTrue(this%field2==this%field1,message='Error calculating gradient of field')
-  contains
-    real(r8) pure function func(x)
-      real(r8), intent(in) :: x
-      func = df2(x)
-    end function func
-  end subroutine test_grad
+!~ @Test
+!~   subroutine test_grad(this)
+!~     class(test_field), intent(inout) :: this
+!~     ! TODO: write implementation
+!~     @assertTrue(this%field2==this%field1,message='Error calculating gradient of field')
+!~   contains
+!~     real(r8) pure function func(x)
+!~       real(r8), intent(in) :: x
+!~       func = df2(x)
+!~     end function func
+!~   end subroutine test_grad
   
 @Test
   subroutine test_lap(this)

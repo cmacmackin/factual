@@ -64,25 +64,17 @@ module abstract_fields_mod
       !! Provides array with upper and lower limits of field's domain
     procedure(f_ret_i), deferred :: dimensions
       !! Returns number of dimensions of the field
-    procedure(f_ret_i), deferred :: raw_size
+    procedure(f_rawsize), deferred :: raw_size
       !! Provides the number of pieces of data needed to represent the
       !! field, i.e. the size of the array returned by `get_raw`.
     procedure(f_raw), deferred :: raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
-!~     procedure(f_jacob), deferred :: d_dself
-!~       !! Returns Jacobian for desired x-derivative of each value in
-!~       !! field relative to all other values in field.
     procedure(f_res), deferred :: resolution
       !! Returns array containing number of datapoints in each dimension.
-    procedure(f_eq_raw), private, deferred :: assign_raw
-      !! Assigns raw data, such as that produced by 
-      !! [[abstract_field:raw]], to the field
-!~     procedure, private :: field_multiply_jacobian
-!~       !! Handles the case where a field needs to be multiplied by a 
-!~       !! Jacobian matrix, which consists of a 2D array of reals.
-    generic :: assignment(=) => assign_raw
-!~     generic :: operator(*) => field_multiply_jacobian
+    procedure(f_eq_raw), deferred :: set_from_raw
+      !! Set the field's values from raw data, such as that produced by 
+      !! [[abstract_field:raw]]
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -199,14 +191,9 @@ module abstract_fields_mod
     generic, public :: operator(.grad.) => gradient
     generic, public :: operator(.laplacian.) => laplacian
     generic, public :: assignment(=) => assign_field
-    procedure(sf_bound), public, deferred :: set_boundaries
-      !! Set the type and value of boundary conditions
     procedure :: is_equal => scalar_is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
-    procedure(sf_same_bounds), deferred, public :: has_same_bounds_as
-      !! Returns true if the boundary conditions for two fields agree
-      !! within tolerance 
   end type scalar_field
   
   type, extends(abstract_field), abstract, public :: vector_field
@@ -281,14 +268,9 @@ module abstract_fields_mod
     generic, public :: operator(.dot.) => dot_prod
     generic, public :: operator(.cross.) => cross_prod
     generic, public :: assignment(=) => assign_field
-    procedure(vf_bound), public, deferred :: set_boundaries
-      !! Set the type and value of boundary conditions
     procedure :: is_equal => vector_is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
-    procedure(vf_same_bounds), deferred, public :: has_same_bounds_as
-      !! Returns true if the boundary conditions for two fields agree
-      !! within tolerance 
   end type vector_field
 
 
@@ -309,8 +291,25 @@ module abstract_fields_mod
       class(abstract_field), intent(in) :: this
       integer :: f_ret_i
     end function f_ret_i
+
+    pure function f_rawsize(this,return_lower_bound,return_upper_bound)
+      import :: abstract_field
+      class(abstract_field), intent(in) :: this
+      logical, dimension(:), optional, intent(in) :: return_lower_bound
+        !! Specifies whether to return the values at the lower boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      logical, dimension(:), optional, intent(in) :: return_upper_bound
+        !! Specifies whether to return the values at the upper boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer :: f_rawsize
+        !! The number of elements in the array returned by `this%raw()`
+        !! when given these values of `return_lower_bound` and 
+        !! `return_upper_bound`.
+    end function f_rawsize
     
-    pure function f_raw(this)
+    pure function f_raw(this,return_lower_bound,return_upper_bound)
       !* @BUG The returned value has length `this%raw_size()`, but
       !  a bug in gfortran 4.8 (fixed by version 5) caused the compiler
       !  to segfault if it was declared as such. As a workaround, it is
@@ -319,6 +318,14 @@ module abstract_fields_mod
       import :: abstract_field
       import :: r8
       class(abstract_field), intent(in) :: this
+      logical, dimension(:), optional, intent(in) :: return_lower_bound
+        !! Specifies whether to return the values at the lower boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      logical, dimension(:), optional, intent(in) :: return_upper_bound
+        !! Specifies whether to return the values at the upper boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
       real(r8), dimension(:), allocatable :: f_raw
         !! Array containing data needed to describe field
     end function f_raw
@@ -353,13 +360,22 @@ module abstract_fields_mod
         !! Array specifying the number of data points in each dimension.
     end function f_res
 
-    subroutine f_eq_raw(this,rhs)
+    subroutine f_eq_raw(this,raw,provide_lower_bound,provide_upper_bound)
       !! Assigns raw data, such as that produced by 
       !! [[abstract_field:raw]], to the field
       import :: abstract_field
       import :: r8
       class(abstract_field), intent(inout) :: this
-      real(r8), dimension(:), intent(in) :: rhs
+      real(r8), dimension(:), intent(in) :: raw
+        !! The raw data to be stored in this array.
+      logical, dimension(:), optional, intent(in) :: provide_lower_bound
+        !! Specifies whether raw data contains values at the lower
+        !! boundary, for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      logical, dimension(:), optional, intent(in) :: provide_upper_bound
+        !! Specifies whether raw data contains values at the upper
+        !! boundary, for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
     end subroutine f_eq_raw
     
     function sf_sf(this,rhs)
@@ -953,10 +969,8 @@ contains
     !
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%abs()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%abs()
   end function scalar_field_abs
 
   pure function scalar_field_sqrt(field) result(res)
@@ -1005,10 +1019,6 @@ contains
     !
     class(scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    if (this%has_same_bounds_as(rhs)) then
-      iseq = .false.
-      return
-    end if
     iseq = (minval(abs(this-rhs)) < tolerance)
   end function scalar_is_equal
 
@@ -1023,10 +1033,6 @@ contains
     class(vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: tmp
     allocate(tmp, mold=rhs)
-    if (this%has_same_bounds_as(rhs)) then
-      iseq = .false.
-      return
-    end if
     tmp = this - rhs
     iseq = (minval(abs(tmp%norm())) < tolerance)
   end function vector_is_equal
