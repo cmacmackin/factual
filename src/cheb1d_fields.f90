@@ -439,6 +439,7 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
+    allocate(cheb1d_scalar_field :: res)
   end function cheb1d_scalar_sf_s_sf
 
   function cheb1d_scalar_r_s_sf(lhs,rhs) result(res)

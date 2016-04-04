@@ -15,6 +15,7 @@ display: public
 	 private
 graph: true
 source: true
+page_dir: pages
 
 This library provides abstract types to represent mathematical fields
 in Fortran. These are both scalar and vector fields. It also contains
