@@ -9,7 +9,7 @@ email: cmacmackin@gmail.com
 summary: Field Abstract Calculus Type Usable and Aesthetic Library: 
 	 implementations of mathematical fields on which mathematical operations
 	 can be performed.
-project_github: https://github.com/Fortran-FOSS-Programmers/FIAT
+project_github: https://github.com/cmacmackin/factual
 display: public
          protected
 	 private
