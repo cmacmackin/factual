@@ -210,7 +210,7 @@ module abstract_fields_mod
     ! allowing for a very natural syntax to be used when manipulating
     ! fields. Support is also given for calculus operations.
     !
-    ! ####Bibliography
+    !####Bibliography
     ! *Scientific Software Design: The Object-Oriented Way*, Rouson, 
     ! Damian and Xia, Jim and Xu, Xiaofeng, 2011, ISBN 9780521888134, 
     ! Cambridge University Press, New York, NY, USA.
@@ -223,7 +223,7 @@ module abstract_fields_mod
       !! \({\rm real}  \times {\rm \vec{field}}\)
     procedure(vf_r), deferred :: field_multiply_real
       !! \({\rm \vec{field}} \times {\rm real}\)
-    procedure(vf_vf), deferred :: field_divide_field
+    procedure(vf_sf), deferred :: field_divide_field
       !! \(\frac{\rm \vec{field}}{\rm field}\)
     procedure(vf_r), deferred :: field_divide_real
       !! \(\frac{\rm \vec{field}}{\rm real}\)
@@ -730,25 +730,6 @@ module abstract_fields_mod
 
 contains
   
-!~   pure function field_multiply_jacobian(this,jac) result(res)
-!~     !* Author: Chris MacMackin
-!~     !  Date: March 2016
-!~     !
-!~     ! Returns the raw product of a field times a Jacobian matrix.
-!~     !
-!~     class(abstract_field), intent(in) :: this
-!~     real(r8), dimension(:,:), intent(in) :: jac !! A jacobian matrix
-!~     real(r8), dimension(size(jac,1),size(jac,2)) :: res
-!~       !! The product, in raw form, of the field times the Jacobian
-!~       !! matrix.
-!~     real(r8), dimension(this%raw_size()) :: raw
-!~     integer :: i
-!~     raw = this%raw()
-!~     ! Iterate through the larger of raw and jac, so that a segfault will
-!~     ! occur if they are not equal and this routine can remain pure.
-!~     forall (i = 1:max(size(raw),size(jac,1))) res(i,:) = raw(i) * res(i,:)
-!~   end function field_multiply_jacobian
-  
   pure function scalar_field_sin(field) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1030,7 +1011,7 @@ contains
     !
     class(scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    iseq = (minval(abs(this-rhs)) < tolerance)
+    iseq = (maxval(abs((this-rhs)/this)) < tolerance)
   end function scalar_is_equal
 
   logical function vector_is_equal(this,rhs) result(iseq)
@@ -1044,8 +1025,8 @@ contains
     class(vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: tmp
     allocate(tmp, mold=rhs)
-    tmp = this - rhs
-    iseq = (minval(abs(tmp%norm())) < tolerance)
+    tmp = (this - rhs)/this%norm()
+    iseq = (maxval(abs(tmp%norm())) < tolerance)
   end function vector_is_equal
   
   subroutine set_tol(tol)
