@@ -34,7 +34,7 @@ module cheb1d_scalar_test
     type(cheb1d_scalar_field) :: field1, field2
     integer :: nodes = length
     real(r8) :: lower1 = -1.0_r8, upper1 = 1.0_r8
-    real(r8) :: lower2 = 0.0_r8, upper2 = 10._r8
+    real(r8) :: lower2 = -1.0_r8, upper2 = 1.0_r8
   contains
     procedure :: setup
   end type test_field
@@ -44,7 +44,7 @@ contains
   subroutine setup(this)
     class(test_field), intent(inout) :: this
     this%field1 = cheb1d_scalar_field(this%nodes,f1)
-    this%field2 = cheb1d_scalar_field(this%nodes,f2,this%lower1,this%lower2)
+    this%field2 = cheb1d_scalar_field(this%nodes,f2,this%lower2,this%upper2)
   end subroutine setup
 
   pure real(r8) function f1(x)
@@ -97,6 +97,15 @@ contains
  & 87) )
   if (anyExceptions()) return
 #line 88 "cheb1d_scalar_test.pf"
+    this%field1 = cheb1d_scalar_field(this%nodes,f1,-20._r8,1.5_r8)
+    dom = pack(this%field1%domain(),.true.)
+#line 90 "cheb1d_scalar_test.pf"
+  call assertEqual([-20._r8,1.5_r8],dom,message='Incorrect domain returned.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 90) )
+  if (anyExceptions()) return
+#line 91 "cheb1d_scalar_test.pf"
   end subroutine test_domain
   
 !@Test
@@ -104,54 +113,54 @@ contains
     class(test_field), intent(inout) :: this
     integer, dimension(1) :: dims
     dims = this%field1%dimensions()
-#line 95 "cheb1d_scalar_test.pf"
-  call assertEqual(1,dims(1),message='Incorrect number of dimensions returned.', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 95) )
-  if (anyExceptions()) return
-#line 96 "cheb1d_scalar_test.pf"
-    dims = this%field2%dimensions()
-#line 97 "cheb1d_scalar_test.pf"
-  call assertEqual(1,dims(1),message='Incorrect number of dimensions returned.', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 97) )
-  if (anyExceptions()) return
 #line 98 "cheb1d_scalar_test.pf"
+  call assertEqual(1,dims(1),message='Incorrect number of dimensions returned.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 98) )
+  if (anyExceptions()) return
+#line 99 "cheb1d_scalar_test.pf"
+    dims = this%field2%dimensions()
+#line 100 "cheb1d_scalar_test.pf"
+  call assertEqual(1,dims(1),message='Incorrect number of dimensions returned.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 100) )
+  if (anyExceptions()) return
+#line 101 "cheb1d_scalar_test.pf"
   end subroutine test_dimensions
 
 !@Test
   subroutine test_raw_size(this)
     class(test_field), intent(inout) :: this
-#line 103 "cheb1d_scalar_test.pf"
+#line 106 "cheb1d_scalar_test.pf"
   call assertEqual(this%nodes+1,this%field1%raw_size(),message='Wrong raw size returned.', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 103) )
-  if (anyExceptions()) return
-#line 104 "cheb1d_scalar_test.pf"
-#line 104 "cheb1d_scalar_test.pf"
-  call assertEqual(this%nodes,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 104) )
-  if (anyExceptions()) return
-#line 105 "cheb1d_scalar_test.pf"
-#line 105 "cheb1d_scalar_test.pf"
-  call assertEqual(this%nodes,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 105) )
-  if (anyExceptions()) return
-#line 106 "cheb1d_scalar_test.pf"
-#line 106 "cheb1d_scalar_test.pf"
-  call assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
  & 106) )
   if (anyExceptions()) return
 #line 107 "cheb1d_scalar_test.pf"
+#line 107 "cheb1d_scalar_test.pf"
+  call assertEqual(this%nodes,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 107) )
+  if (anyExceptions()) return
+#line 108 "cheb1d_scalar_test.pf"
+#line 108 "cheb1d_scalar_test.pf"
+  call assertEqual(this%nodes,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 108) )
+  if (anyExceptions()) return
+#line 109 "cheb1d_scalar_test.pf"
+#line 109 "cheb1d_scalar_test.pf"
+  call assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 109) )
+  if (anyExceptions()) return
+#line 110 "cheb1d_scalar_test.pf"
   end subroutine test_raw_size
 
 !@Test
@@ -161,38 +170,38 @@ contains
     integer :: i
     raw = this%field1%raw()
     expected = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) expected(i) = f2(expected(i))
-#line 117 "cheb1d_scalar_test.pf"
+    forall (i = 1:this%nodes+1) expected(i) = f1(expected(i))
+#line 120 "cheb1d_scalar_test.pf"
   call assertEqual(expected,raw,message='Wrong raw contents returned', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 117) )
+ & 120) )
   if (anyExceptions()) return
-#line 118 "cheb1d_scalar_test.pf"
+#line 121 "cheb1d_scalar_test.pf"
     raw = this%field1%raw([.false.])
-#line 119 "cheb1d_scalar_test.pf"
+#line 122 "cheb1d_scalar_test.pf"
   call assertEqual(expected(:this%nodes),raw,message='Wrong raw contents returned', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 119) )
+ & 122) )
   if (anyExceptions()) return
-#line 120 "cheb1d_scalar_test.pf"
+#line 123 "cheb1d_scalar_test.pf"
     raw = this%field1%raw([.true.],[.false.])
-#line 121 "cheb1d_scalar_test.pf"
+#line 124 "cheb1d_scalar_test.pf"
   call assertEqual(expected(2:),raw,message='Wrong raw contents returned', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 121) )
+ & 124) )
   if (anyExceptions()) return
-#line 122 "cheb1d_scalar_test.pf"
+#line 125 "cheb1d_scalar_test.pf"
     raw = this%field1%raw([.false.],[.false.])
-#line 123 "cheb1d_scalar_test.pf"
+#line 126 "cheb1d_scalar_test.pf"
   call assertEqual(expected(2:this%nodes),raw,message='Wrong raw contents returned', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 123) )
+ & 126) )
   if (anyExceptions()) return
-#line 124 "cheb1d_scalar_test.pf"
+#line 127 "cheb1d_scalar_test.pf"
   end subroutine test_raw
 
 !@Test
@@ -203,40 +212,49 @@ contains
     xvals = collocation_points(this%nodes,this%lower1,this%upper1)
     forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
     call this%field1%set_from_raw(raw)
-#line 134 "cheb1d_scalar_test.pf"
-  call assertEqual(raw,this%field2%raw(),message='Error setting field from raw.', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 134) )
-  if (anyExceptions()) return
-#line 135 "cheb1d_scalar_test.pf"
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
-    call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
 #line 137 "cheb1d_scalar_test.pf"
-  call assertEqual(raw(2:),this%field2%raw([.false.],[.true.]), &
+  call assertEqual(raw,this%field2%raw(),message='Error setting field from raw.', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
  & 137) )
   if (anyExceptions()) return
 #line 138 "cheb1d_scalar_test.pf"
-    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
-    call this%field2%set_from_raw(raw(:this%nodes),[.true.],[.false.])
+    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
 #line 140 "cheb1d_scalar_test.pf"
-  call assertEqual(raw(:this%nodes),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.', &
+  call assertEqual(raw(2:),this%field2%raw([.false.],[.true.]), &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
  & 140) )
   if (anyExceptions()) return
 #line 141 "cheb1d_scalar_test.pf"
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
-    call this%field2%set_from_raw(raw(2:this%nodes),[.true.],[.true.])
+    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
+    call this%field2%set_from_raw(raw(:this%nodes),[.true.],[.false.])
 #line 143 "cheb1d_scalar_test.pf"
-  call assertEqual(raw(2:this%nodes),this%field2%raw([.true.],[.true.]),message='Error setting field from raw.', &
+  call assertEqual(raw(:this%nodes),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
  & 143) )
   if (anyExceptions()) return
 #line 144 "cheb1d_scalar_test.pf"
+    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field2%set_from_raw(raw(2:this%nodes),[.false.],[.false.])
+#line 146 "cheb1d_scalar_test.pf"
+  call assertEqual(raw(2:this%nodes),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 146) )
+  if (anyExceptions()) return
+#line 147 "cheb1d_scalar_test.pf"
+    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field2%set_from_raw(raw)
+#line 149 "cheb1d_scalar_test.pf"
+  call assertEqual(raw,this%field2%raw(),message='Error setting field from raw', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 149) )
+  if (anyExceptions()) return
+#line 150 "cheb1d_scalar_test.pf"
   end subroutine test_assign_raw
 
 !@Test
@@ -244,20 +262,20 @@ contains
     class(test_field), intent(inout) :: this
     integer, dimension(1) :: res
     res = this%field1%resolution()
-#line 151 "cheb1d_scalar_test.pf"
+#line 157 "cheb1d_scalar_test.pf"
   call assertEqual(1,size(res),message='Resolution vector has incorrect size', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 151) )
+ & 157) )
   if (anyExceptions()) return
-#line 152 "cheb1d_scalar_test.pf"
-#line 152 "cheb1d_scalar_test.pf"
+#line 158 "cheb1d_scalar_test.pf"
+#line 158 "cheb1d_scalar_test.pf"
   call assertEqual(this%nodes,res(1),message='Incorrect resolution returned', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 152) )
+ & 158) )
   if (anyExceptions()) return
-#line 153 "cheb1d_scalar_test.pf"
+#line 159 "cheb1d_scalar_test.pf"
   end subroutine test_resolution
 
 !@Test
@@ -265,13 +283,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 * this%field2
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 160 "cheb1d_scalar_test.pf"
+#line 166 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field*field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 160) )
+ & 166) )
   if (anyExceptions()) return
-#line 161 "cheb1d_scalar_test.pf"
+#line 167 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -290,13 +308,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = 2.0_r8 * this%field1
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 179 "cheb1d_scalar_test.pf"
+#line 185 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating real*field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 179) )
+ & 185) )
   if (anyExceptions()) return
-#line 180 "cheb1d_scalar_test.pf"
+#line 186 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -309,13 +327,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 * 2._r8
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 192 "cheb1d_scalar_test.pf"
+#line 198 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field*real', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 192) )
+ & 198) )
   if (anyExceptions()) return
-#line 193 "cheb1d_scalar_test.pf"
+#line 199 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -328,13 +346,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 / this%field2
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 205 "cheb1d_scalar_test.pf"
+#line 211 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field/field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 205) )
+ & 211) )
   if (anyExceptions()) return
-#line 206 "cheb1d_scalar_test.pf"
+#line 212 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -347,13 +365,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = 5.0_r8 / this%field2
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 218 "cheb1d_scalar_test.pf"
+#line 224 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating real/field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 218) )
+ & 224) )
   if (anyExceptions()) return
-#line 219 "cheb1d_scalar_test.pf"
+#line 225 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -366,13 +384,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 / 5.0_r8
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 231 "cheb1d_scalar_test.pf"
+#line 237 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field/real', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 231) )
+ & 237) )
   if (anyExceptions()) return
-#line 232 "cheb1d_scalar_test.pf"
+#line 238 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -385,13 +403,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 + this%field2
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 244 "cheb1d_scalar_test.pf"
+#line 250 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field+field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 244) )
+ & 250) )
   if (anyExceptions()) return
-#line 245 "cheb1d_scalar_test.pf"
+#line 251 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -404,32 +422,32 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = 1.0e3_r8 + this%field1
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 257 "cheb1d_scalar_test.pf"
+#line 263 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating real+field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 257) )
+ & 263) )
   if (anyExceptions()) return
-#line 258 "cheb1d_scalar_test.pf"
+#line 264 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
       func = f1(x) + 1.0e3_r8
     end function func
- end subroutine test_raf
+  end subroutine test_raf
   
 !@Test
   subroutine test_far(this)
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 + 1.0e3_r8
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 270 "cheb1d_scalar_test.pf"
+#line 276 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field+real', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 270) )
+ & 276) )
   if (anyExceptions()) return
-#line 271 "cheb1d_scalar_test.pf"
+#line 277 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -442,13 +460,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 - this%field2
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 283 "cheb1d_scalar_test.pf"
+#line 289 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field-field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 283) )
+ & 289) )
   if (anyExceptions()) return
-#line 284 "cheb1d_scalar_test.pf"
+#line 290 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -461,13 +479,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1 - 4.323_r8
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 296 "cheb1d_scalar_test.pf"
+#line 302 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field-real', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 296) )
+ & 302) )
   if (anyExceptions()) return
-#line 297 "cheb1d_scalar_test.pf"
+#line 303 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -480,13 +498,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = 10.2_r8 - this%field1
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 309 "cheb1d_scalar_test.pf"
+#line 315 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating real-field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 309) )
+ & 315) )
   if (anyExceptions()) return
-#line 310 "cheb1d_scalar_test.pf"
+#line 316 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -499,13 +517,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1**5.2_r8
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 322 "cheb1d_scalar_test.pf"
+#line 328 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field**real', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 322) )
+ & 328) )
   if (anyExceptions()) return
-#line 323 "cheb1d_scalar_test.pf"
+#line 329 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -518,13 +536,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1**3.5
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 335 "cheb1d_scalar_test.pf"
+#line 341 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field**real', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 335) )
+ & 341) )
   if (anyExceptions()) return
-#line 336 "cheb1d_scalar_test.pf"
+#line 342 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -537,13 +555,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = this%field1**3
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 348 "cheb1d_scalar_test.pf"
+#line 354 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating field**int', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 348) )
+ & 354) )
   if (anyExceptions()) return
-#line 349 "cheb1d_scalar_test.pf"
+#line 355 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -556,13 +574,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = sin(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 361 "cheb1d_scalar_test.pf"
+#line 367 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating sin(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 361) )
+ & 367) )
   if (anyExceptions()) return
-#line 362 "cheb1d_scalar_test.pf"
+#line 368 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -575,13 +593,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = cos(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 374 "cheb1d_scalar_test.pf"
+#line 380 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating cos(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 374) )
+ & 380) )
   if (anyExceptions()) return
-#line 375 "cheb1d_scalar_test.pf"
+#line 381 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -594,13 +612,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = tan(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 387 "cheb1d_scalar_test.pf"
+#line 393 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating tan(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 387) )
+ & 393) )
   if (anyExceptions()) return
-#line 388 "cheb1d_scalar_test.pf"
+#line 394 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -613,13 +631,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = asin(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 400 "cheb1d_scalar_test.pf"
+#line 406 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating asin(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 400) )
+ & 406) )
   if (anyExceptions()) return
-#line 401 "cheb1d_scalar_test.pf"
+#line 407 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -632,13 +650,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = acos(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 413 "cheb1d_scalar_test.pf"
+#line 419 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating acos(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 413) )
+ & 419) )
   if (anyExceptions()) return
-#line 414 "cheb1d_scalar_test.pf"
+#line 420 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -651,13 +669,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = atan(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 426 "cheb1d_scalar_test.pf"
+#line 432 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating atan(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 426) )
+ & 432) )
   if (anyExceptions()) return
-#line 427 "cheb1d_scalar_test.pf"
+#line 433 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -670,13 +688,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = sinh(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 439 "cheb1d_scalar_test.pf"
+#line 445 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating sinh(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 439) )
+ & 445) )
   if (anyExceptions()) return
-#line 440 "cheb1d_scalar_test.pf"
+#line 446 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -689,13 +707,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = cosh(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 452 "cheb1d_scalar_test.pf"
+#line 458 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating cosh(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 452) )
+ & 458) )
   if (anyExceptions()) return
-#line 453 "cheb1d_scalar_test.pf"
+#line 459 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -708,13 +726,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = tanh(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 465 "cheb1d_scalar_test.pf"
+#line 471 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating tanh(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 465) )
+ & 471) )
   if (anyExceptions()) return
-#line 466 "cheb1d_scalar_test.pf"
+#line 472 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -727,13 +745,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = asinh(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 478 "cheb1d_scalar_test.pf"
+#line 484 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating asinh(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 478) )
+ & 484) )
   if (anyExceptions()) return
-#line 479 "cheb1d_scalar_test.pf"
+#line 485 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -744,19 +762,19 @@ contains
 !@Test
   subroutine test_acosh(this)
     class(test_field), intent(inout) :: this
-    this%field1 = acosh(this%field1)
+    this%field1 = acosh(this%field2)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 491 "cheb1d_scalar_test.pf"
+#line 497 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating acosh(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 491) )
+ & 497) )
   if (anyExceptions()) return
-#line 492 "cheb1d_scalar_test.pf"
+#line 498 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = acosh(f1(x))
+      func = acosh(f2(x))
     end function func
   end subroutine test_acosh
   
@@ -765,13 +783,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = atanh(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 504 "cheb1d_scalar_test.pf"
+#line 510 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating atanh(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 504) )
+ & 510) )
   if (anyExceptions()) return
-#line 505 "cheb1d_scalar_test.pf"
+#line 511 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -784,13 +802,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = log(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 517 "cheb1d_scalar_test.pf"
+#line 523 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating log(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 517) )
+ & 523) )
   if (anyExceptions()) return
-#line 518 "cheb1d_scalar_test.pf"
+#line 524 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -803,13 +821,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = log10(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 530 "cheb1d_scalar_test.pf"
+#line 536 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating log10(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 530) )
+ & 536) )
   if (anyExceptions()) return
-#line 531 "cheb1d_scalar_test.pf"
+#line 537 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -822,13 +840,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = exp(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 543 "cheb1d_scalar_test.pf"
+#line 549 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating exp(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 543) )
+ & 549) )
   if (anyExceptions()) return
-#line 544 "cheb1d_scalar_test.pf"
+#line 550 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -841,13 +859,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = abs(this%field1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 556 "cheb1d_scalar_test.pf"
+#line 562 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating abs(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 556) )
+ & 562) )
   if (anyExceptions()) return
-#line 557 "cheb1d_scalar_test.pf"
+#line 563 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -860,13 +878,13 @@ contains
     class(test_field), intent(inout) :: this
     this%field1 = sqrt(this%field2)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 569 "cheb1d_scalar_test.pf"
+#line 575 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating sqrt(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 569) )
+ & 575) )
   if (anyExceptions()) return
-#line 570 "cheb1d_scalar_test.pf"
+#line 576 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
@@ -877,39 +895,39 @@ contains
 !@Test
   subroutine test_minval(this)
     class(test_field), intent(inout) :: this
-#line 580 "cheb1d_scalar_test.pf"
+#line 586 "cheb1d_scalar_test.pf"
   call assertEqual(f1(this%lower1),minval(this%field1),message='Error calculating minval(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 580) )
+ & 586) )
   if (anyExceptions()) return
-#line 581 "cheb1d_scalar_test.pf"
-#line 581 "cheb1d_scalar_test.pf"
-  call assertEqual(f2(this%lower1),minval(this%field2),message='Error calculating minval(field)', &
- & location=SourceLocation( &
- & 'cheb1d_scalar_test.pf', &
- & 581) )
-  if (anyExceptions()) return
-#line 582 "cheb1d_scalar_test.pf"
-  end subroutine test_minval
-  
-!@Test
-  subroutine test_maxval(this)
-    class(test_field), intent(inout) :: this
 #line 587 "cheb1d_scalar_test.pf"
-  call assertEqual(f1(this%upper1),maxval(this%field1),message='Error calculating maxval(field)', &
+#line 587 "cheb1d_scalar_test.pf"
+  call assertEqual(f2(this%lower2),minval(this%field2),message='Error calculating minval(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
  & 587) )
   if (anyExceptions()) return
 #line 588 "cheb1d_scalar_test.pf"
-#line 588 "cheb1d_scalar_test.pf"
+  end subroutine test_minval
+  
+!@Test
+  subroutine test_maxval(this)
+    class(test_field), intent(inout) :: this
+#line 593 "cheb1d_scalar_test.pf"
+  call assertEqual(f1(this%upper1),maxval(this%field1),message='Error calculating maxval(field)', &
+ & location=SourceLocation( &
+ & 'cheb1d_scalar_test.pf', &
+ & 593) )
+  if (anyExceptions()) return
+#line 594 "cheb1d_scalar_test.pf"
+#line 594 "cheb1d_scalar_test.pf"
   call assertEqual(f2(this%upper2),maxval(this%field2),message='Error calculating maxval(field)', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 588) )
+ & 594) )
   if (anyExceptions()) return
-#line 589 "cheb1d_scalar_test.pf"
+#line 595 "cheb1d_scalar_test.pf"
   end subroutine test_maxval
   
 !@Test
@@ -918,32 +936,32 @@ contains
     integer :: i
     this%field1 = this%field2%d_dx(1)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 597 "cheb1d_scalar_test.pf"
+#line 603 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 597) )
+ & 603) )
   if (anyExceptions()) return
-#line 598 "cheb1d_scalar_test.pf"
+#line 604 "cheb1d_scalar_test.pf"
     this%field1 = this%field2%d_dx(1,2)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 600 "cheb1d_scalar_test.pf"
+#line 606 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 600) )
+ & 606) )
   if (anyExceptions()) return
-#line 601 "cheb1d_scalar_test.pf"
+#line 607 "cheb1d_scalar_test.pf"
     do i = 2,4
       this%field1 = this%field2%d_dx(i)
       this%field2 = cheb1d_scalar_field(this%nodes,zeros)
-#line 604 "cheb1d_scalar_test.pf"
+#line 610 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 604) )
+ & 610) )
   if (anyExceptions()) return
-#line 605 "cheb1d_scalar_test.pf"
+#line 611 "cheb1d_scalar_test.pf"
     end do
   contains
     real(r8) pure function func(x)
@@ -978,13 +996,13 @@ contains
     integer :: i
     this%field1 = .laplacian. this%field1
     this%field2 = cheb1d_scalar_field(this%nodes,func)
-#line 639 "cheb1d_scalar_test.pf"
+#line 645 "cheb1d_scalar_test.pf"
   call assertTrue(this%field2==this%field1,message='Error calculating laplacian of field', &
  & location=SourceLocation( &
  & 'cheb1d_scalar_test.pf', &
- & 639) )
+ & 645) )
   if (anyExceptions()) return
-#line 640 "cheb1d_scalar_test.pf"
+#line 646 "cheb1d_scalar_test.pf"
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x

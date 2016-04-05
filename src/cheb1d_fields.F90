@@ -264,7 +264,13 @@ contains
       !! for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
     integer :: res
-    res = this%numpoints ! Will need to adjust this based on boundary conditions
+    res = this%numpoints + 1
+    if (present(return_lower_bound)) then
+      if (.not. return_lower_bound(1)) res = res - 1
+    end if
+    if (present(return_upper_bound)) then
+      if (.not. return_upper_bound(1)) res = res - 1
+    end if
   end function cheb1d_scalar_raw_size
   
   pure function cheb1d_scalar_raw(this,return_lower_bound, &
@@ -292,44 +298,23 @@ contains
       !! Specifies whether to return the values at the upper boundary
       !! for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
-    integer :: i
-    i = max(1,this%raw_size())
+    integer :: lower, upper
+    lower = 1
+    upper = this%numpoints + 1
+    ! Recall that Chebyshev points are in reverse order...
+    if (present(return_lower_bound)) then
+      if (.not. return_lower_bound(1)) upper = upper - 1
+    end if
+    if (present(return_upper_bound)) then
+      if (.not. return_upper_bound(1)) lower = lower + 1
+    end if
     if (allocated(this%field_data)) then
-      res = this%field_data(1:i) ! Will need to adjust this based on boundary conditions
+      res = this%field_data(lower:upper)
     else
       res = [0.0_r8]
     end if
   end function cheb1d_scalar_raw
   
-  pure function cheb1d_scalar_d_dshelf(this,order) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
-    ! is returned, where \(\vec{y}\) is the field represented as a 1D
-    ! array of values (i.e. the output of [[cheb1d_scalar_field:raw]])
-    ! and \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \).
-    ! Here, \(n\) is the `order` of the derivative to be taken, with 0
-    ! corresponding to not taking any derivative.
-    !
-    ! @BUG The returned value has shape `(this%raw_size(),
-    ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
-    ! 5) caused the compiler to segfault if it was declared as such.
-    ! As a workaround, it is allocatable isntead.
-    !
-    class(cheb1d_scalar_field), intent(in) :: this
-    integer, intent(in), optional :: order
-      !! The order of the derivative of the field whose Jacobian is
-      !! to be returned. Default is 0 (no differentiation)
-    real(r8), dimension(:,:), allocatable :: res
-      !! The resulting Jacobian matrix
-    integer :: i, j
-    i = max(1,this%raw_size())
-    allocate(res(i,i))
-    res = 0.0_r8
-    forall (j = 1:i) res(j,j) = 1.0_r8 ! This only works for no derivative and if nothing going on at boundaries. Will need to adjust it
-  end function cheb1d_scalar_d_dshelf
-
   pure function cheb1d_scalar_resolution(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -365,6 +350,31 @@ contains
       !! Specifies whether raw data contains values at the upper
       !! boundary, for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
+    integer :: lower, upper
+#ifdef DEBUG
+    integer :: expected
+    expected = this%raw_size(provide_lower_bound,provide_upper_bound)
+    if (expected /= size(raw)) then
+      write(stderr,*) 'cheb1d_scalar_field: Error, setting from raw array of wrong size'
+      write(stderr,"('    Needed: ',i,', Actual: ',i)") expected, size(raw)
+#ifdef __GFORTRAN__
+      call backtrace
+#endif
+      error stop
+    end if
+#endif
+    lower = 1
+    upper = this%numpoints + 1
+    ! Recall that Chebyshev points are in reverse order...
+    if (present(provide_lower_bound)) then
+      if (.not. provide_lower_bound(1)) upper = upper - 1
+    end if
+    if (present(provide_upper_bound)) then
+      if (.not. provide_upper_bound(1)) lower = lower + 1
+    end if
+    if (.not. allocated(this%field_data)) &
+      allocate(this%field_data(this%numpoints + 1))
+    this%field_data(lower:upper) = raw
   end subroutine cheb1d_scalar_set_from_raw
   
   function cheb1d_scalar_sf_m_sf(this,rhs) result(res)
@@ -378,13 +388,13 @@ contains
     class(scalar_field), allocatable :: res !! The restult of this operation
     type(cheb1d_scalar_field), allocatable :: local
 #ifdef DEBUG
-    call check_compatible(rhs)
+    call check_compatible(this, rhs)
 #endif
     allocate(local)
     call local%assign_meta_data(this)
     select type(rhs)
     class is(cheb1d_scalar_field)
-      allocate(local%field_data(size(this%field_data)))
+      allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
       local%field_data = this%field_data * rhs%field_data
     end select
     call move_alloc(local,res)
@@ -410,6 +420,11 @@ contains
     real(r8), intent(in) :: lhs
     class(cheb1d_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(rhs%field_data))) !Needed due to compiler bug
+    local%field_data = lhs * rhs%field_data
+    call move_alloc(local,res)
   end function cheb1d_scalar_r_m_sf
 
   function cheb1d_scalar_sf_m_r(this,rhs) result(res)
@@ -421,6 +436,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data * rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_m_r
   
   function cheb1d_scalar_sf_d_sf(this,rhs) result(res)
@@ -432,6 +452,18 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+#ifdef DEBUG
+    call check_compatible(this, rhs)
+#endif
+    allocate(local)
+    call local%assign_meta_data(this)
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+      local%field_data = this%field_data / rhs%field_data
+    end select
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_d_sf
 
   function cheb1d_scalar_r_d_sf(lhs,rhs) result(res)
@@ -443,6 +475,11 @@ contains
     real(r8), intent(in) :: lhs
     class(cheb1d_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(rhs%field_data))) !Needed due to compiler bug
+    local%field_data = lhs / rhs%field_data
+    call move_alloc(local,res)
   end function cheb1d_scalar_r_d_sf
 
   function cheb1d_scalar_sf_d_r(this,rhs) result(res)
@@ -454,6 +491,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data / rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_d_r
   
   function cheb1d_scalar_sf_s_sf(this,rhs) result(res)
@@ -465,7 +507,18 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
-    allocate(cheb1d_scalar_field :: res)
+    type(cheb1d_scalar_field), allocatable :: local
+#ifdef DEBUG
+    call check_compatible(this, rhs)
+#endif
+    allocate(local)
+    call local%assign_meta_data(this)
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+      local%field_data = this%field_data - rhs%field_data
+    end select
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_s_sf
 
   function cheb1d_scalar_r_s_sf(lhs,rhs) result(res)
@@ -477,6 +530,11 @@ contains
     real(r8), intent(in) :: lhs
     class(cheb1d_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(rhs%field_data))) !Needed due to compiler bug
+    local%field_data = lhs - rhs%field_data
+    call move_alloc(local,res)
   end function cheb1d_scalar_r_s_sf
 
   function cheb1d_scalar_sf_s_r(this,rhs) result(res)
@@ -488,6 +546,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data - rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_s_r
   
   function cheb1d_scalar_sf_a_sf(this,rhs) result(res)
@@ -499,6 +562,18 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+#ifdef DEBUG
+    call check_compatible(this, rhs)
+#endif
+    allocate(local)
+    call local%assign_meta_data(this)
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+      local%field_data = this%field_data + rhs%field_data
+    end select
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_a_sf
 
   function cheb1d_scalar_r_a_sf(lhs,rhs) result(res)
@@ -510,6 +585,11 @@ contains
     real(r8), intent(in) :: lhs
     class(cheb1d_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(rhs%field_data))) !Needed due to compiler bug
+    local%field_data = lhs + rhs%field_data
+    call move_alloc(local,res)
   end function cheb1d_scalar_r_a_sf
 
   function cheb1d_scalar_sf_a_r(this,rhs) result(res)
@@ -521,6 +601,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data + rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_a_r
 
   function cheb1d_scalar_sf_p_r(this,rhs) result(res)
@@ -532,6 +617,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data ** rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_p_r
 
   function cheb1d_scalar_sf_p_r4(this,rhs) result(res)
@@ -543,6 +633,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     real, intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data * rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_p_r4
 
   function cheb1d_scalar_sf_p_i(this,rhs) result(res)
@@ -554,6 +649,11 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     integer, intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(size(this%field_data))) !Needed due to compiler bug
+    local%field_data = this%field_data * rhs
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_p_i
 
   pure function cheb1d_scalar_sin(this) result(res)
@@ -566,7 +666,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = sin(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = sin(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_sin
 
@@ -580,7 +683,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = cos(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = cos(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_cos
 
@@ -594,7 +700,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = tan(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = tan(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_tan
 
@@ -608,7 +717,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = asin(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = asin(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_asin
 
@@ -622,7 +734,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = acos(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = acos(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_acos
 
@@ -636,7 +751,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = atan(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = atan(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_atan
 
@@ -650,7 +768,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = sinh(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = sinh(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_sinh
 
@@ -664,7 +785,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = cosh(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = cosh(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_cosh
 
@@ -678,7 +802,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = tanh(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = tanh(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_tanh
 
@@ -692,7 +819,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = asinh(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = asinh(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_asinh
 
@@ -706,7 +836,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = acosh(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = acosh(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_acosh
 
@@ -720,7 +853,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = atanh(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = atanh(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_atanh
 
@@ -734,7 +870,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = log(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = log(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_log
 
@@ -748,7 +887,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = log10(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = log10(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_log10
 
@@ -762,7 +904,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = exp(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = exp(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_exp
 
@@ -776,7 +921,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = abs(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = abs(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_abs
 
@@ -790,7 +938,10 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: tmp
     allocate(tmp)
-    if (allocated(this%field_data)) tmp%field_data = sqrt(this%field_data)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+      tmp%field_data = sqrt(this%field_data)
+    end if
     call move_alloc(tmp, res)
   end function cheb1d_scalar_sqrt
 
@@ -832,6 +983,12 @@ contains
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field), allocatable :: tmp
+    allocate(tmp)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+    end if
+    call move_alloc(tmp, res)
   end function cheb1d_scalar_laplacian
   
   pure function cheb1d_scalar_gradient(this) result(res)
@@ -869,31 +1026,31 @@ contains
     end select
   end subroutine cheb1d_scalar_assign
 
-  subroutine cheb1d_scalar_set_boundaries(this,direction,lower, &
-                                          free_bound,bound_val, &
-                                          bound_deriv)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Sets boundary conditions and values. If a boundary is not
-    ! explicitly set then it defaults to being free.
-    !
-
-    class(cheb1d_scalar_field), intent(inout) :: this
-      integer, intent(in) :: direction
-        !! The number corresponding to the direction/dimension whose
-        !! boundary condition is to be set
-      logical, optional, intent(in) :: lower
-        !! Sets lower boundary if true (default), upper if false
-      logical, optional, intent(in) :: free_bound
-        !! If true, makes this a free boundary. Any boundary values 
-        !! passed will be ignored. Default is `.false.`.
-      real(r8), optional, intent(in) :: bound_val
-        !! Value of the field at the boundary. Default is 0.
-      real(r8), optional, intent(in) :: bound_deriv
-        !! Value of the first derivative of the field at the boundary.
-        !! Default is 0.
-  end subroutine cheb1d_scalar_set_boundaries
+!~   subroutine cheb1d_scalar_set_boundaries(this,direction,lower, &
+!~                                           free_bound,bound_val, &
+!~                                           bound_deriv)
+!~     !* Author: Chris MacMackin
+!~     !  Date: March 2016
+!~     !
+!~     ! Sets boundary conditions and values. If a boundary is not
+!~     ! explicitly set then it defaults to being free.
+!~     !
+!~ 
+!~     class(cheb1d_scalar_field), intent(inout) :: this
+!~       integer, intent(in) :: direction
+!~         !! The number corresponding to the direction/dimension whose
+!~         !! boundary condition is to be set
+!~       logical, optional, intent(in) :: lower
+!~         !! Sets lower boundary if true (default), upper if false
+!~       logical, optional, intent(in) :: free_bound
+!~         !! If true, makes this a free boundary. Any boundary values 
+!~         !! passed will be ignored. Default is `.false.`.
+!~       real(r8), optional, intent(in) :: bound_val
+!~         !! Value of the field at the boundary. Default is 0.
+!~       real(r8), optional, intent(in) :: bound_deriv
+!~         !! Value of the first derivative of the field at the boundary.
+!~         !! Default is 0.
+!~   end subroutine cheb1d_scalar_set_boundaries
 
   function cheb1d_scalar_d_dx(this, dir, order) result(res)
     !* Author: Chris MacMackin
@@ -905,6 +1062,12 @@ contains
     integer, intent(in) :: dir !! Direction in which to differentiate
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(scalar_field), allocatable :: res
+    type(cheb1d_scalar_field), allocatable :: tmp
+    allocate(tmp)
+    if (allocated(this%field_data)) then
+      allocate(tmp%field_data(size(this%field_data)))
+    end if
+    call move_alloc(tmp, res)
   end function cheb1d_scalar_d_dx
 
   logical function cheb1d_scalar_same_bound(this,other) result(res)
@@ -1028,6 +1191,8 @@ contains
       this%numpoints = rhs%numpoints
       this%extent = rhs%extent
       if (allocated(rhs%colloc_points)) then
+        if (.not. allocated(this%colloc_points)) &
+          allocate(this%colloc_points(this%numpoints + 1))
         this%colloc_points = rhs%colloc_points
       else if (allocated(this%colloc_points)) then
         deallocate(this%colloc_points)
