@@ -75,6 +75,9 @@ module abstract_fields_mod
     procedure(f_eq_raw), deferred :: set_from_raw
       !! Set the field's values from raw data, such as that produced by 
       !! [[abstract_field:raw]]
+    procedure(f_eq_meta), deferred :: assign_meta_data
+      !! Copies all data other than values stored in field from another
+      !! field object to this one.
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -377,6 +380,14 @@ module abstract_fields_mod
         !! boundary, for each dimension, with the index of the element
         !! corresponding to the dimension. Defaults to all `.true.`.
     end subroutine f_eq_raw
+    
+    pure subroutine f_eq_meta(this, rhs)
+      import :: abstract_field
+      class(abstract_field), intent(inout) :: this
+      class(abstract_field), intent(in) :: rhs
+        !! The field whose metadata (domain, resolution, etc) is to be
+        !! copied
+    end subroutine f_eq_meta
     
     function sf_sf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm field}\)

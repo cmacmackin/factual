@@ -148,6 +148,7 @@ contains
     class(test_field), intent(inout) :: this
     integer, dimension(1) :: res
     res = this%field1%resolution()
+    @assertEqual(1,size(res),message='Resolution vector has incorrect size')
     @assertEqual(this%nodes,res(1),message='Incorrect resolution returned')
   end subroutine test_resolution
 

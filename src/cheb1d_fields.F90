@@ -31,7 +31,7 @@ module cheb1d_fields_mod
   ! collocation nodes and uses a pseudospectral approach to 
   ! differentiate.
   !
-  use iso_fortran_env, only: r8 => real64
+  use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use abstract_fields_mod
   use chebyshev_mod
   implicit none
@@ -40,18 +40,29 @@ module cheb1d_fields_mod
   public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
             acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
+  interface check_compatible
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! Checks that the other field can be used in an operation with
+    ! this one, stopping with an error message if not.
+    !
+    module procedure check_compatible_scalar
+    module procedure check_compatible_vector
+  end interface
+  
   type, extends(scalar_field), public :: cheb1d_scalar_field
-  !* Author: Chris MacMackin
-  !  Date: March 2016
-  !  License: LGPLv3
-  !
-  ! A concrete implementations of the [[scalar_field]] for 1D fields
-  ! (with 3D vectors) only. It tracks the values of the fields at 
-  ! Chebyshev collocation nodes and uses a pseudospectral approach to 
-  ! differentiate. In addition to the type-bound procedures, all of the
-  ! intrinsic mathematical procedures, with the exception of Bessel
-  ! functions
-  !
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !  License: LGPLv3
+    !
+    ! A concrete implementations of the [[scalar_field]] for 1D fields
+    ! (with 3D vectors) only. It tracks the values of the fields at 
+    ! Chebyshev collocation nodes and uses a pseudospectral approach to 
+    ! differentiate. In addition to the type-bound procedures, all of
+    ! the intrinsic mathematical procedures, with the exception of 
+    ! Bessel functions and error functions.
+    !
     private
     integer :: numpoints
       !! The number of datapoints used
@@ -156,6 +167,9 @@ module cheb1d_fields_mod
       !! \(\nabla^2 {\rm field}\)
     procedure :: assign_field => cheb1d_scalar_assign
       !! \({\rm field} = {\rm field}\)
+    procedure, public :: assign_meta_data => cheb1d_assign_meta_data
+      !! Copies all data other than values stored in field from another
+      !! field object to this one.
   end type
   
   interface cheb1d_scalar_field
@@ -188,7 +202,7 @@ contains
     if (present(initializer)) then
       forall (i=1:nodes+1) field%field_data(i) = initializer(field%colloc_points(i))
     else
-      forall (i=1:nodes+1) field%field_data(i) = scalar_init(field%colloc_points(i))
+      field%field_data = 0.0_r8
     end if
   end function scalar_constructor
 
@@ -362,6 +376,18 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
+    type(cheb1d_scalar_field), allocatable :: local
+#ifdef DEBUG
+    call check_compatible(rhs)
+#endif
+    allocate(local)
+    call local%assign_meta_data(this)
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      allocate(local%field_data(size(this%field_data)))
+      local%field_data = this%field_data * rhs%field_data
+    end select
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_m_sf
 
   function cheb1d_scalar_sf_m_vf(this,rhs) result(res)
@@ -826,6 +852,21 @@ contains
     !
     class(cheb1d_scalar_field), intent(inout) :: this
     class(scalar_field), intent(in) :: rhs
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      this%numpoints = rhs%numpoints
+      this%extent = rhs%extent
+      if (allocated(rhs%colloc_points)) then
+        this%colloc_points = rhs%colloc_points
+      else if (allocated(this%colloc_points)) then
+        deallocate(this%colloc_points)
+      end if
+      if (allocated(rhs%field_data)) then
+        this%field_data = rhs%field_data
+      else if (allocated(this%field_data)) then
+        deallocate(this%field_data)
+      end if
+    end select
   end subroutine cheb1d_scalar_assign
 
   subroutine cheb1d_scalar_set_boundaries(this,direction,lower, &
@@ -877,5 +918,125 @@ contains
     class(scalar_field), intent(in) :: other
     res = .true.
   end function cheb1d_scalar_same_bound
+
+  subroutine check_compatible_scalar(this,other)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Checks whether a field has the same type, boundaries, and
+    ! resolution as this one, making it compatible for binary 
+    ! operations. If incompatible, stops program with an error message.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    class(scalar_field), intent(in) :: other
+      !! The field being checked against this one
+    character(:), allocatable :: err_message
+    logical :: type_err, domain_err, res_err, has_message
+    has_message = .false.
+    select type(other)
+    class is(cheb1d_scalar_field)
+      type_err = .false.
+      domain_err = any(this%extent /= other%extent)
+      res_err = this%numpoints /= other%numpoints
+    class default
+      type_err = .true.
+      domain_err = .false.
+      res_err = .false.
+    end select
+    if (type_err) then
+      err_message = 'incompatible types'
+      has_message = .true.
+    end if
+    if (domain_err) then
+      if (has_message) err_message = err_message//', '
+      err_message = err_message//'different domains'
+      has_message = .true.
+    end if
+    if (res_err) then
+      if (has_message) err_message = err_message//', '
+      err_message = 'different resolutions'
+      has_message = .true.
+    end if
+    if (has_message) then
+      write(stderr,*) 'cheb1d_scalar_field: Error, operation with incompatible fields'
+      write(stderr,*) '    Following inconsistencies: '//err_message
+#ifdef __GFORTRAN__
+      call backtrace
+#endif
+      error stop
+    end if
+  end subroutine check_compatible_scalar
+
+  subroutine check_compatible_vector(this,other)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Checks whether a vector field has the same boundaries, and
+    ! resolution as this one and is implemented using the same numerics,
+    ! making it compatible for binary operations. If incompatible, stops
+    ! program with an error message.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    class(vector_field), intent(in) :: other
+      !! The field being checked against this one
+    character(len=:), allocatable :: err_message
+    logical :: type_err, domain_err, res_err, has_message
+!~     has_message = .false.
+!~     select type(other)
+!~     case type is(cheb1d_vector_field)
+!~       type_error = .true.
+!~     case default
+!~       type_error = .false.
+!~     end select
+!~     domain_err = (this%domain() \= other%domain())
+!~     res_err = (this%resolution() \= other%resolution())
+!~     if (type_err) then
+!~       err_message = 'incompatible types'
+!~       has_message = .true.
+!~     end if
+!~     if (domain_err) then
+!~       if (has_message) err_message = err_message//', '
+!~       err_message = err_message//'different domains'
+!~       has_message = .true.
+!~     end if
+!~     if (res_err) then
+!~       if (has_message) err_message = err_message//', '
+!~       err_message = 'different resolutions'
+!~       has_message = .true.
+!~     end if
+!~     if (has_message) then
+!~       write(stderr,*) 'cheb1d_scalar_field: Error, operation with incompatible field'
+!~       write(stderr,*) '    Following inconsistencies: '//err_message
+!~ #ifdef __GFORTRAN__
+!~       call backtrace
+!~ #endif
+!~       error stop
+!~     end if
+  end subroutine check_compatible_vector
+  
+  pure subroutine cheb1d_assign_meta_data(this, rhs)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Assigns all data in `rhs` to `this` except for the actual values
+    ! of the field.
+    !
+    class(cheb1d_scalar_field), intent(inout) :: this
+    class(abstract_field), intent(in) :: rhs
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      this%numpoints = rhs%numpoints
+      this%extent = rhs%extent
+      if (allocated(rhs%colloc_points)) then
+        this%colloc_points = rhs%colloc_points
+      else if (allocated(this%colloc_points)) then
+        deallocate(this%colloc_points)
+      end if
+!~     class is(cheb1d_vector_field)
+!~       this%numpoints = rhs%numpoints
+!~       this%extent = rhs%extent
+!~       this%colloc_points = rhs%colloc_points
+    end select
+  end subroutine cheb1d_assign_meta_data
 
 end module cheb1d_fields_mod

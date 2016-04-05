@@ -15,7 +15,7 @@ lib: init $(ARCHIVE)
 $(ARCHIVE): $(OBJS)
 	ar rcs $@ $^
 
-cheb1d_fields.o: cheb1d_fields.f90 abstract_fields.o chebyshev.o
+cheb1d_fields.o: cheb1d_fields.F90 abstract_fields.o chebyshev.o
 
 gcov:
 	gcov *.gcno -pb
