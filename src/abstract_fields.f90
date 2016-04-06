@@ -174,9 +174,9 @@ module abstract_fields_mod
       !! \(\ ({\rm field})\)
     procedure(sf_dx), public, deferred :: d_dx
       !! \(\frac{\partial^n}{\partial x_i^n}({\rm field})\)
-    procedure(sf_ret_vf), deferred :: gradient
+    procedure(sf_grad), deferred :: gradient
       !! \(\nabla {\rm field}\)
-    procedure(sf_ret_sf), deferred :: laplacian
+    procedure(sf_laplace), deferred :: laplacian
       !! \(\nabla^2 {\rm field}\)
     procedure(sf_eq_sf), deferred :: assign_field
       !! \({\rm field} = {\rm field}\)
@@ -381,12 +381,14 @@ module abstract_fields_mod
         !! corresponding to the dimension. Defaults to all `.true.`.
     end subroutine f_eq_raw
     
-    pure subroutine f_eq_meta(this, rhs)
+    pure subroutine f_eq_meta(this, rhs, alloc)
       import :: abstract_field
       class(abstract_field), intent(inout) :: this
       class(abstract_field), intent(in) :: rhs
         !! The field whose metadata (domain, resolution, etc) is to be
         !! copied
+      logical, optional, intent(in) :: alloc
+        !! If present and false, do not allocate the array of `this`.
     end subroutine f_eq_meta
     
     function sf_sf(this,rhs)
@@ -445,7 +447,7 @@ module abstract_fields_mod
       class(scalar_field), intent(in) :: this
       class(scalar_field), allocatable :: sf_ret_sf !! The result of this operation
     end function sf_ret_sf
-  
+
     pure function sf_ret_r(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
@@ -454,13 +456,20 @@ module abstract_fields_mod
       real(r8) :: sf_ret_r !! The result of this operation
     end function sf_ret_r
     
-    pure function sf_ret_vf(this)
+    function sf_grad(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: vector_field
       class(scalar_field), intent(in) :: this
-      class(vector_field), allocatable :: sf_ret_vf !! The result of this operation
-    end function sf_ret_vf
+      class(vector_field), allocatable :: sf_grad !! The result of this operation
+    end function sf_grad
+  
+    function sf_laplace(this)
+      !! \([{\rm operator}] {\rm field}\)
+      import :: scalar_field
+      class(scalar_field), intent(in) :: this
+      class(scalar_field), allocatable :: sf_laplace !! The result of this operation
+    end function sf_laplace
     
     elemental subroutine sf_eq_sf(this,rhs)
       !! \({\rm field} = {\rm field}\)
@@ -503,7 +512,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_r !! The result of this operation
     end function vf_r
     
-    pure function vf_ret_sf(this)
+    function vf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: vector_field
@@ -511,7 +520,7 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_ret_sf !! The result of this operation
     end function vf_ret_sf
     
-    pure function vf_ret_vf(this)
+    function vf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: vector_field
       class(vector_field), intent(in) :: this

@@ -19,3 +19,10 @@
 !  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 !  MA 02110-1301, USA.
 !  
+
+module factual_mod
+  use abstract_fields_mod
+  use cheb1d_fields_mod, only: cheb1d_scalar_field, cheb1d_vector_field
+  implicit none
+  public
+end module factual_mod

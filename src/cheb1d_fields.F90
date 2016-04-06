@@ -158,10 +158,7 @@ module cheb1d_fields_mod
     procedure, public :: assign_meta_data => cheb1d_scalar_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
-    procedure :: check_compatible_scalar_scalar
-    procedure :: check_compatible_scalar_vector
-    generic :: check_compatible => check_compatible_scalar_scalar, &
-                                   check_compatible_scalar_vector
+    procedure :: check_compatible => cheb1d_scalar_check_compatible
   end type
   
   interface cheb1d_scalar_field
@@ -246,15 +243,12 @@ module cheb1d_fields_mod
       !! \({\rm \vec{field}} \cdot {\rm \vec{field}}\)
     procedure :: cross_prod => cheb1d_vector_cross_prod
       !! \({\rm\vec{field}} \times {\rm\vec{field}}\)
-    procedure :: assign_field => cheb1d_vector_vector_assign
+    procedure :: assign_field => cheb1d_vector_assign
       !! \({\rm field} = {\rm field}\)
-    procedure, public :: assign_meta_data => cheb1d_assign_meta_data
+    procedure, public :: assign_meta_data => cheb1d_vector_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
-    procedure :: check_compatible_vector_scalar
-    procedure :: check_compatible_vector_vector
-    generic :: check_compatible => check_compatible_vector_scalar, &
-                                   check_compatible_vector_vector
+    procedure :: check_compatible => cheb1d_vector_check_compatible
   end type
   
   interface cheb1d_vector_field
@@ -265,6 +259,7 @@ module cheb1d_fields_mod
     pure function scalar_init(x) result(scalar)
       !! Function used to specify value held by a scalar field at
       !! location `x`.
+      import :: r8
       real(r8), intent(in) :: x 
         !! The position at which this function is evaluated
       real(r8) :: scalar
@@ -274,6 +269,7 @@ module cheb1d_fields_mod
     pure function vector_init(x) result(vector)
       !! Function used to specify value held by a vector field at
       !! location `x`.
+      import :: r8
       real(r8), intent(in) :: x 
         !! The position at which this function is evaluated
       real(r8), dimension(:), allocatable :: vector
@@ -452,7 +448,7 @@ contains
     expected = this%raw_size(provide_lower_bound,provide_upper_bound)
     if (expected /= size(raw)) then
       write(stderr,*) 'cheb1d_scalar_field: Error, setting from raw array of wrong size'
-      write(stderr,"('    Needed: ',i,', Actual: ',i)") expected, size(raw)
+      write(stderr,"('    Needed: ',i0,', Actual: ',i0)") expected, size(raw)
 #ifdef __GFORTRAN__
       call backtrace
 #endif
@@ -504,6 +500,19 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
+    type(cheb1d_vector_field), allocatable :: local
+    integer :: i
+#ifdef DEBUG
+    call this%check_compatible(rhs)
+#endif
+    allocate(local)
+    call local%assign_meta_data(rhs)
+    select type(rhs)
+    class is(cheb1d_vector_field)
+      forall(i=1:this%numpoints+1) &
+        local%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
+    end select
+    call move_alloc(local,res)
   end function cheb1d_scalar_sf_m_vf
 
   function cheb1d_scalar_r_m_sf(lhs,rhs) result(res)
@@ -517,7 +526,7 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
-    call local%assign_meta_data(this)
+    call local%assign_meta_data(rhs)
     local%field_data = lhs * rhs%field_data
     call move_alloc(local,res)
   end function cheb1d_scalar_r_m_sf
@@ -571,7 +580,7 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
-    call local%assign_meta_data(this)
+    call local%assign_meta_data(rhs)
     local%field_data = lhs / rhs%field_data
     call move_alloc(local,res)
   end function cheb1d_scalar_r_d_sf
@@ -586,6 +595,7 @@ contains
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: local
+    allocate(local)
     call local%assign_meta_data(this)
     local%field_data = this%field_data / rhs
     call move_alloc(local,res)
@@ -624,7 +634,7 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
-    allocate(local%field_data(size(rhs%field_data))) !Needed due to compiler bug
+    call local%assign_meta_data(rhs)
     local%field_data = lhs - rhs%field_data
     call move_alloc(local,res)
   end function cheb1d_scalar_r_s_sf
@@ -678,7 +688,7 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
-    call local%assign_meta_data(this)
+    call local%assign_meta_data(rhs)
     local%field_data = lhs + rhs%field_data
     call move_alloc(local,res)
   end function cheb1d_scalar_r_a_sf
@@ -1066,7 +1076,7 @@ contains
     end if
   end function cheb1d_scalar_maxval
   
-  pure function cheb1d_scalar_laplacian(this) result(res)
+  function cheb1d_scalar_laplacian(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1077,10 +1087,11 @@ contains
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
     call local%assign_meta_data(this)
+    local = this%d_dx(1,2)
     call move_alloc(local, res)
   end function cheb1d_scalar_laplacian
   
-  pure function cheb1d_scalar_gradient(this) result(res)
+  function cheb1d_scalar_gradient(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1088,6 +1099,14 @@ contains
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(vector_field), allocatable :: res !! The result of this operation
+    type(cheb1d_scalar_field) :: local_scalar
+    type(cheb1d_vector_field), allocatable :: local_vector
+    allocate(local_vector)
+    local_scalar = this%d_dx(1,1)
+    call local_vector%assign_meta_data(this)
+    local_vector%field_data(:,1) = local_scalar%field_data
+    deallocate(local_scalar%field_data)
+    call move_alloc(local_vector,res)
   end function cheb1d_scalar_gradient
   
   elemental subroutine cheb1d_scalar_assign(this,rhs)
@@ -1100,7 +1119,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     select type(rhs)
     class is(cheb1d_scalar_field)
-      call local%assign_meta_data(this)
+      call this%assign_meta_data(rhs)
       if (allocated(rhs%field_data)) this%field_data = rhs%field_data
     end select
   end subroutine cheb1d_scalar_assign
@@ -1121,7 +1140,7 @@ contains
     call move_alloc(local, res)
   end function cheb1d_scalar_d_dx
 
-  subroutine check_compatible_scalar_scalar(this,other)
+  subroutine cheb1d_scalar_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1130,96 +1149,59 @@ contains
     ! operations. If incompatible, stops program with an error message.
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    class(scalar_field), intent(in) :: other
+    class(abstract_field), intent(in) :: other
       !! The field being checked against this one
-    character(:), allocatable :: err_message
-    logical :: type_err, domain_err, res_err, has_message
+    character(len=128) :: err_message
+    logical :: type_err, domain_err, res_err, alloc_err, has_message
     has_message = .false.
     select type(other)
     class is(cheb1d_scalar_field)
       type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) < 1.e-15_r8)
+      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
       res_err = this%numpoints /= other%numpoints
+      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
+    class is(cheb1d_vector_field)
+      type_err = .false.
+      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
+      res_err = this%numpoints /= other%numpoints
+      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
     class default
       type_err = .true.
       domain_err = .false.
       res_err = .false.
+      alloc_err = .false.
     end select
+    err_message = ''
     if (type_err) then
-      err_message = 'incompatible types'
+      err_message = ' incompatible types'
       has_message = .true.
     end if
     if (domain_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = err_message//'different domains'
+      if (has_message) err_message = trim(err_message)//','
+      err_message = trim(err_message)//' different domains'
       has_message = .true.
     end if
     if (res_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = err_message//'different resolutions'
+      if (has_message) err_message = trim(err_message)//','
+      err_message = trim(err_message)//' different resolutions'
+      has_message = .true.
+    end if
+    if (alloc_err) then
+      if (has_message) err_message = trim(err_message)//','
+      err_message = trim(err_message)//' uninitialized field'
       has_message = .true.
     end if
     if (has_message) then
       write(stderr,*) 'cheb1d_scalar_field: Error, operation with incompatible fields'
-      write(stderr,*) '    Following inconsistencies: '//err_message
+      write(stderr,*) '    Following inconsistencies:'//trim(err_message)
 #ifdef __GFORTRAN__
       call backtrace
 #endif
       error stop
     end if
-  end subroutine check_compatible_scalar_scalar
+  end subroutine cheb1d_scalar_check_compatible
 
-  subroutine check_compatible_scalar_vector(this,other)
-    !* Author: Chris MacMackin
-    !  Date: April 2016
-    !
-    ! Checks whether a vector field has the same boundaries, and
-    ! resolution as this one and is implemented using the same numerics,
-    ! making it compatible for binary operations. If incompatible, stops
-    ! program with an error message.
-    !
-    class(cheb1d_scalar_field), intent(in) :: this
-    class(vector_field), intent(in) :: other
-      !! The field being checked against this one
-    character(len=:), allocatable :: err_message
-    logical :: type_err, domain_err, res_err, has_message
-    has_message = .false.
-    select type(other)
-    case type is(cheb1d_vector_field)
-      type_error = .true.
-      type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) < 1.e-15_r8)
-      res_err = this%numpoints /= other%numpoints
-    class default
-      type_err = .true.
-      domain_err = .false.
-      res_err = .false.
-    end select
-    if (type_err) then
-      err_message = 'incompatible types'
-      has_message = .true.
-    end if
-    if (domain_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = err_message//'different domains'
-      has_message = .true.
-    end if
-    if (res_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = 'different resolutions'
-      has_message = .true.
-    end if
-    if (has_message) then
-      write(stderr,*) 'cheb1d_scalar_field: Error, operation with incompatible field'
-      write(stderr,*) '    Following inconsistencies: '//err_message
-#ifdef __GFORTRAN__
-      call backtrace
-#endif
-      error stop
-    end if
-  end subroutine check_compatible_scalar_vector
-  
-  pure subroutine cheb1d_scalar_assign_meta_data(this, rhs)
+  pure subroutine cheb1d_scalar_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1228,6 +1210,8 @@ contains
     !
     class(cheb1d_scalar_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array of `this`.
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%numpoints = rhs%numpoints
@@ -1240,8 +1224,12 @@ contains
         deallocate(this%colloc_points)
       end if
       if (allocated(this%field_data)) deallocate(this%field_data)
-      if (allocated(rhs%field_data)) then
+      if (present(alloc)) then
+        if (allocated(rhs%field_data) .and. alloc) &
+          allocate(this%field_data(size(rhs%field_data))) !Needed due to compiler bug
+      else
         allocate(this%field_data(size(rhs%field_data))) !Needed due to compiler bug
+      end if
     class is(cheb1d_vector_field)
       this%numpoints = rhs%numpoints
       this%extent = rhs%extent
@@ -1253,8 +1241,12 @@ contains
         deallocate(this%colloc_points)
       end if
       if (allocated(this%field_data)) deallocate(this%field_data)
-      if (allocated(rhs%field_data)) then
+      if (present(alloc)) then
+        if (allocated(rhs%field_data) .and. alloc) &
+          allocate(this%field_data(size(rhs%field_data,1))) !Needed due to compiler bug
+      else
         allocate(this%field_data(size(rhs%field_data,1))) !Needed due to compiler bug
+      end if
     end select
   end subroutine cheb1d_scalar_assign_meta_data
 
@@ -1286,7 +1278,7 @@ contains
     if (present(extra_dims)) then
       if (extra_dims > 0) then
         dims = dims + extra_dims
-        this%extra_dims = extra_dims
+        field%extra_dims = extra_dims
       end if
     end if
     field%numpoints = nodes
@@ -1439,7 +1431,7 @@ contains
     expected = this%raw_size(provide_lower_bound,provide_upper_bound)
     if (expected /= size(raw)) then
       write(stderr,*) 'cheb1d_vector_field: Error, setting from raw array of wrong size'
-      write(stderr,"('    Needed: ',i,', Actual: ',i)") expected, size(raw)
+      write(stderr,"('    Needed: ',i0,', Actual: ',i0)") expected, size(raw)
 #ifdef __GFORTRAN__
       call backtrace
 #endif
@@ -1457,7 +1449,7 @@ contains
     end if
     if (.not. allocated(this%field_data)) &
       allocate(this%field_data(this%numpoints + 1,this%extra_dims + 1))
-    this%field_data(lower:upper) = reshape(raw,[this%numpoints + 1,this%extra_dims + 1])
+    this%field_data(lower:upper,:) = reshape(raw,[this%numpoints + 1,this%extra_dims + 1])
   end subroutine cheb1d_vector_set_from_raw
   
   function cheb1d_vector_vf_m_sf(this,rhs) result(res)
@@ -1477,7 +1469,7 @@ contains
     allocate(local)
     call local%assign_meta_data(this)
     select type(rhs)
-    class is(cheb1d_vector_field)
+    class is(cheb1d_scalar_field)
       forall (i=1:this%extra_dims+1) &
         local%field_data(:,i) = this%field_data(:,i) * rhs%field_data
     end select
@@ -1496,7 +1488,7 @@ contains
     type(cheb1d_vector_field), allocatable :: local
     allocate(local)
     call local%assign_meta_data(rhs)
-    allocate(local%field_data(size(rhs%field_data))) !Needed due to compiler bug
+!~     allocate(local%field_data(local%numpoints,)) !Needed due to compiler bug
     local%field_data = lhs * rhs%field_data
     call move_alloc(local,res)
   end function cheb1d_vector_r_m_vf
@@ -1534,7 +1526,7 @@ contains
     allocate(local)
     call local%assign_meta_data(this)
     select type(rhs)
-    class is(cheb1d_vector_field)
+    class is(cheb1d_scalar_field)
       forall (i=1:this%extra_dims+1) &
         local%field_data(:,i) = this%field_data(:,i) / rhs%field_data
     end select
@@ -1598,13 +1590,24 @@ contains
     !
     ! \(\vec{\rm real} - \vec{\rm field}\)
     !
-    real(r8), intent(in) :: lhs
+    real(r8), dimension(:), intent(in) :: lhs
     class(cheb1d_vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     type(cheb1d_vector_field), allocatable :: local
+    integer :: min_dims, max_dims, i
     allocate(local)
-    call local%assign_meta_data(rhs)
-    local%field_data = lhs - rhs%field_data
+    call local%assign_meta_data(rhs,.false.)
+    min_dims = min(rhs%extra_dims + 1, size(lhs))
+    max_dims = max(rhs%extra_dims + 1, size(lhs))
+    allocate(local%field_data(local%numpoints + 1, max_dims))
+    forall(i=1:local%numpoints+1) &
+      local%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
+    if (rhs%extra_dims+1 > size(lhs)) then
+      local%field_data(:,min_dims+1:) = -rhs%field_data(:,min_dims+1:)
+    else
+      forall(i=1:local%numpoints+1) &
+        local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+    end if
     call move_alloc(local,res)
   end function cheb1d_vector_r_s_vf
 
@@ -1615,12 +1618,23 @@ contains
     ! \(\vec{\rm field} - \vec{\rm real}\)
     !
     class(cheb1d_vector_field), intent(in) :: this
-    real(r8), intent(in) :: rhs
+    real(r8), dimension(:), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     type(cheb1d_vector_field), allocatable :: local
+    integer :: min_dims, max_dims, i
     allocate(local)
-    call local%assign_meta_data(this)
-    local%field_data = this%field_data - rhs
+    call local%assign_meta_data(this,.false.)
+    min_dims = min(this%extra_dims + 1, size(rhs))
+    max_dims = max(this%extra_dims + 1, size(rhs))
+    allocate(local%field_data(local%numpoints + 1, max_dims))
+    forall(i=1:local%numpoints+1) &
+      local%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
+    if (this%extra_dims+1 > size(rhs)) then
+      local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
+    else
+      forall(i=1:local%numpoints+1) &
+        local%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
+    end if
     call move_alloc(local,res)
   end function cheb1d_vector_vf_s_r
   
@@ -1634,6 +1648,7 @@ contains
     class(vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The restult of this operation
     type(cheb1d_vector_field), allocatable :: local
+    integer :: max_dims, min_dims
 #ifdef DEBUG
     call this%check_compatible(rhs)
 #endif
@@ -1664,13 +1679,25 @@ contains
     !
     ! \(\vec{\rm real} - \vec{\rm field}\)
     !
-    real(r8), intent(in) :: lhs
+    real(r8), dimension(:), intent(in) :: lhs
     class(cheb1d_vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     type(cheb1d_vector_field), allocatable :: local
+    integer :: min_dims, max_dims, i
     allocate(local)
-    call local%assign_meta_data(rhs)
-    local%field_data = lhs + rhs%field_data
+    call local%assign_meta_data(rhs,.false.)
+    min_dims = min(rhs%extra_dims + 1, size(lhs))
+    max_dims = max(rhs%extra_dims + 1, size(lhs))
+    allocate(local%field_data(local%numpoints + 1, max_dims))
+    forall(i=1:local%numpoints+1) &
+      local%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
+    if (rhs%extra_dims+1 > size(lhs)) then
+      local%field_data(:,min_dims+1:) = rhs%field_data(:,min_dims+1:)
+    else
+      forall(i=1:local%numpoints+1) &
+        local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+    end if
+    call move_alloc(local,res)
     call move_alloc(local,res)
   end function cheb1d_vector_r_a_vf
 
@@ -1681,12 +1708,23 @@ contains
     ! \(\vec{\rm field} - \vec{\rm real}\)
     !
     class(cheb1d_vector_field), intent(in) :: this
-    real(r8), intent(in) :: rhs
+    real(r8), dimension(:), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     type(cheb1d_vector_field), allocatable :: local
+    integer :: min_dims, max_dims, i
     allocate(local)
-    call local%assign_meta_data(this)
-    local%field_data = this%field_data + rhs
+    call local%assign_meta_data(this,.false.)
+    min_dims = min(this%extra_dims + 1, size(rhs))
+    max_dims = max(this%extra_dims + 1, size(rhs))
+    allocate(local%field_data(local%numpoints + 1, max_dims))
+    forall(i=1:local%numpoints+1) &
+      local%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
+    if (this%extra_dims+1 > size(rhs)) then
+      local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
+    else
+      forall(i=1:local%numpoints+1) &
+        local%field_data(i,min_dims+1:) = rhs(min_dims+1:)
+    end if
     call move_alloc(local,res)
   end function cheb1d_vector_vf_a_r
 
@@ -1698,7 +1736,7 @@ contains
     !
     class(cheb1d_vector_field), intent(inout) :: this
     class(vector_field), intent(in) :: rhs
-    call local%assign_meta_data(this)
+    call this%assign_meta_data(rhs)
     select type(rhs)
     class is(cheb1d_vector_field)
       if (allocated(rhs%field_data)) this%field_data = rhs%field_data
@@ -1720,6 +1758,7 @@ contains
     class is(cheb1d_vector_field)
       local%field_data = sqrt(sum(this%field_data**2,2))
     end select
+    call move_alloc(local,res)
   end function cheb1d_vector_norm
 
   function cheb1d_vector_component(this,comp) result(res)
@@ -1760,7 +1799,7 @@ contains
     call move_alloc(local, res)
   end function cheb1d_vector_d_dx
 
-  pure function cheb1d_vector_laplacian(this) result(res)
+  function cheb1d_vector_laplacian(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1774,7 +1813,7 @@ contains
     call move_alloc(local, res)
   end function cheb1d_vector_laplacian
   
-  pure function cheb1d_vector_divergence(this) result(res)
+  function cheb1d_vector_divergence(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1788,7 +1827,7 @@ contains
     call move_alloc(local, res)
   end function cheb1d_vector_divergence
   
-  pure function cheb1d_vector_curl(this) result(res)
+  function cheb1d_vector_curl(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1839,14 +1878,14 @@ contains
     allocate(local)
     select type(rhs)
     class is(cheb1d_vector_field)
-      min_dibs = min(this%extra_dims,rhs%extra_dims) + 1
+      min_dims = min(this%extra_dims,rhs%extra_dims) + 1
       local%field_data = &
         sum(this%field_data(:,1:min_dims)*rhs%field_data(:,1:min_dims),2)
     end select
     call move_alloc(local,res)
   end function cheb1d_vector_dot_prod
 
-  subroutine check_compatible_vector_scalar(this,other)
+  subroutine cheb1d_vector_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1855,33 +1894,46 @@ contains
     ! operations. If incompatible, stops program with an error message.
     !
     class(cheb1d_vector_field), intent(in) :: this
-    class(scalar_field), intent(in) :: other
+    class(abstract_field), intent(in) :: other
       !! The field being checked against this one
-    character(:), allocatable :: err_message
-    logical :: type_err, domain_err, res_err, has_message
+    character(len=128) :: err_message
+    logical :: type_err, domain_err, res_err, alloc_err, has_message
     has_message = .false.
     select type(other)
     class is(cheb1d_scalar_field)
       type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) < 1.e-15_r8)
+      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
       res_err = this%numpoints /= other%numpoints
+      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
+    class is(cheb1d_vector_field)
+      type_err = .false.
+      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
+      res_err = this%numpoints /= other%numpoints
+      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
     class default
       type_err = .true.
       domain_err = .false.
       res_err = .false.
+      alloc_err = .false.
     end select
+    err_message = ''
     if (type_err) then
-      err_message = 'incompatible types'
+      err_message = ' incompatible types'
       has_message = .true.
     end if
     if (domain_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = err_message//'different domains'
+      if (has_message) err_message = trim(err_message)//','
+      err_message = trim(err_message)//' different domains'
       has_message = .true.
     end if
     if (res_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = err_message//'different resolutions'
+      if (has_message) err_message = trim(err_message)//','
+      err_message = trim(err_message)//' different resolutions'
+      has_message = .true.
+    end if
+    if (alloc_err) then
+      if (has_message) err_message = trim(err_message)//','
+      err_message = trim(err_message)//' uninitialized field'
       has_message = .true.
     end if
     if (has_message) then
@@ -1892,58 +1944,9 @@ contains
 #endif
       error stop
     end if
-  end subroutine check_compatible_vector_scalar
+  end subroutine cheb1d_vector_check_compatible
 
-  subroutine check_compatible_vector_vector(this,other)
-    !* Author: Chris MacMackin
-    !  Date: April 2016
-    !
-    ! Checks whether a vector field has the same boundaries, and
-    ! resolution as this one and is implemented using the same numerics,
-    ! making it compatible for binary operations. If incompatible, stops
-    ! program with an error message.
-    !
-    class(cheb1d_vector_field), intent(in) :: this
-    class(vector_field), intent(in) :: other
-      !! The field being checked against this one
-    character(len=:), allocatable :: err_message
-    logical :: type_err, domain_err, res_err, has_message
-    has_message = .false.
-    select type(other)
-    case type is(cheb1d_vector_field)
-      type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) < 1.e-15_r8)
-      res_err = this%numpoints /= other%numpoints
-    class default
-      type_err = .true.
-      domain_err = .false.
-      res_err = .false.
-    end select
-    if (type_err) then
-      err_message = 'incompatible types'
-      has_message = .true.
-    end if
-    if (domain_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = err_message//'different domains'
-      has_message = .true.
-    end if
-    if (res_err) then
-      if (has_message) err_message = err_message//', '
-      err_message = 'different resolutions'
-      has_message = .true.
-    end if
-    if (has_message) then
-      write(stderr,*) 'cheb1d_vector_field: Error, operation with incompatible field'
-      write(stderr,*) '    Following inconsistencies: '//err_message
-#ifdef __GFORTRAN__
-      call backtrace
-#endif
-      error stop
-    end if
-  end subroutine check_compatible_vector_vector
-  
-  pure subroutine cheb1d_vector_assign_meta_data(this, rhs)
+  pure subroutine cheb1d_vector_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1952,7 +1955,9 @@ contains
     !
     class(cheb1d_vector_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
-    select type(rhs)
+     logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array of `this`.
+   select type(rhs)
     class is(cheb1d_scalar_field)
       this%numpoints = rhs%numpoints
       this%extent = rhs%extent
@@ -1965,8 +1970,13 @@ contains
         deallocate(this%colloc_points)
       end if
       if (allocated(this%field_data)) deallocate(this%field_data)
+      if (present(alloc)) then
       !Needed due to compiler bug:
-      if (allocated(rhs%field_data)) allocate(this%field_data(size(rhs%field_data),1))
+        if (allocated(rhs%field_data) .and. alloc) &
+          allocate(this%field_data(size(rhs%field_data),1))
+      else
+        allocate(this%field_data(size(rhs%field_data),1))
+      end if
     class is(cheb1d_vector_field)
       this%numpoints = rhs%numpoints
       this%extent = rhs%extent
@@ -1979,9 +1989,13 @@ contains
         deallocate(this%colloc_points)
       end if
       if (allocated(this%field_data)) deallocate(this%field_data)
-      !Needed due to compiler bug:
-      if (allocated(rhs%field_data)) &
+      if (present(alloc)) then
+        !Needed due to compiler bug:
+        if (allocated(rhs%field_data) .and. alloc) &
+          allocate(this%field_data(size(rhs%field_data,1),size(rhs%field_data,2)))
+      else
         allocate(this%field_data(size(rhs%field_data,1),size(rhs%field_data,2)))
+      end if
     end select
   end subroutine cheb1d_vector_assign_meta_data
 
