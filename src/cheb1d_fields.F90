@@ -38,8 +38,7 @@ module cheb1d_fields_mod
   private
 
   public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
-            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval, &
-            norm2
+            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
   type, extends(scalar_field), public :: cheb1d_scalar_field
     !* Author: Chris MacMackin
@@ -154,6 +153,8 @@ module cheb1d_fields_mod
       !! \(\nabla {\rm field}\)
     procedure :: laplacian => cheb1d_scalar_laplacian
       !! \(\nabla^2 {\rm field}\)
+    procedure :: is_equal => cheb1d_scalar_is_equal
+      !! Checks fields are equal within a tolerance
     procedure :: assign_field => cheb1d_scalar_assign
       !! \({\rm field} = {\rm field}\)
     procedure, public :: assign_meta_data => cheb1d_scalar_assign_meta_data
@@ -227,7 +228,7 @@ module cheb1d_fields_mod
       !! \({\rm real} - {\rm field}\)
     procedure :: field_sub_real => cheb1d_vector_vf_s_r
       !! \({\rm field} - {\rm real}\)
-    procedure, private :: norm => cheb1d_vector_norm
+    procedure, public :: norm => cheb1d_vector_norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure, public :: component => cheb1d_vector_component
       !! Returns a scalar field containing the specified component of 
@@ -246,6 +247,8 @@ module cheb1d_fields_mod
       !! \({\rm\vec{field}} \times {\rm\vec{field}}\)
     procedure :: assign_field => cheb1d_vector_assign
       !! \({\rm field} = {\rm field}\)
+    procedure :: is_equal => cheb1d_vector_is_equal
+      !! Checks fields are equal within a tolerance
     procedure, public :: assign_meta_data => cheb1d_vector_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
@@ -1141,6 +1144,37 @@ contains
     call move_alloc(local, res)
   end function cheb1d_scalar_d_dx
 
+  logical function cheb1d_scalar_is_equal(this,rhs) result(iseq)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Evaluates whether two scalar fields are equal within a tolerance,
+    ! specified by [[set_tol]].
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    class(scalar_field), intent(in) :: rhs
+    integer :: i
+    real(r8) :: normalization
+    iseq = .true.
+    select type(rhs)
+    class is(cheb1d_scalar_field)
+      if (this%numpoints /= rhs%numpoints) then
+        iseq = .false.
+        return
+      end if
+      do i=1,this%numpoints+1
+        normalization = abs(this%field_data(i))
+        if (normalization < tiny(normalization)) normalization = 1.0_r8
+        iseq = iseq .and. ( ((this%field_data(i)-rhs%field_data(i))/normalization < &
+                             get_tol()) .or. &
+                            (isnan(this%field_data(i)).and.isnan(rhs%field_data(i))) )
+        if (.not. iseq) return
+      end do
+    class default
+      iseq = .false.
+    end select
+  end function cheb1d_scalar_is_equal
+
   subroutine cheb1d_scalar_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
@@ -1274,7 +1308,8 @@ contains
       !! to the spatial directions represented in the grid. Ignored if 
       !! less than 0.
     type(cheb1d_vector_field) :: field
-    integer :: i, dims
+    real(r8), dimension(:), allocatable :: tmp
+    integer :: i, j, dims, initializer_dims
     dims = 1
     if (present(extra_dims)) then
       if (extra_dims > 0) then
@@ -1283,12 +1318,26 @@ contains
       end if
     end if
     field%numpoints = nodes
-    allocate(field%field_data(nodes+1,dims))
     if (present(lower_bound)) field%extent(1,1) = lower_bound
     if (present(upper_bound)) field%extent(1,2) = upper_bound
     field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
+    allocate(field%field_data(nodes+1,dims))
     if (present(initializer)) then
-      forall (i=1:nodes+1) field%field_data(i,:) = initializer(field%colloc_points(i))
+      initializer_dims = size(initializer(field%extent(1,1)))
+      if (initializer_dims < dims) then
+        tmp = [(0.0, i=1,(1+dims-initializer_dims))]
+        forall (i=1:nodes+1) &
+          field%field_data(i,:) = [initializer(field%colloc_points(i)),&
+                                   tmp]
+      else if (initializer_dims > dims) then
+        do i=1,nodes+1
+          tmp = initializer(field%colloc_points(i))
+          field%field_data(i,:) = tmp(1:dims)
+        end do
+      else
+        forall (i=1:nodes+1) &
+          field%field_data(i,:) = initializer(field%colloc_points(i))
+      end if
     else
       field%field_data = 0.0_r8
     end if
@@ -1450,7 +1499,7 @@ contains
     end if
     if (.not. allocated(this%field_data)) &
       allocate(this%field_data(this%numpoints + 1,this%extra_dims + 1))
-    this%field_data(lower:upper,:) = reshape(raw,[this%numpoints + 1,this%extra_dims + 1])
+    this%field_data(lower:upper,:) = reshape(raw,[upper-lower+1,this%extra_dims + 1])
   end subroutine cheb1d_vector_set_from_raw
   
   function cheb1d_vector_vf_m_sf(this,rhs) result(res)
@@ -1605,6 +1654,7 @@ contains
     if (rhs%extra_dims+1 > size(lhs)) then
       local%field_data(:,min_dims+1:) = -rhs%field_data(:,min_dims+1:)
     else
+      local%extra_dims = size(lhs) - 1
       forall(i=1:local%numpoints+1) &
         local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
     end if
@@ -1632,6 +1682,7 @@ contains
     if (this%extra_dims+1 > size(rhs)) then
       local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
     else
+      local%extra_dims = size(rhs) - 1
       forall(i=1:local%numpoints+1) &
         local%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
     end if
@@ -1694,10 +1745,10 @@ contains
     if (rhs%extra_dims+1 > size(lhs)) then
       local%field_data(:,min_dims+1:) = rhs%field_data(:,min_dims+1:)
     else
+      local%extra_dims = size(lhs) - 1
       forall(i=1:local%numpoints+1) &
         local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
     end if
-    call move_alloc(local,res)
     call move_alloc(local,res)
   end function cheb1d_vector_r_a_vf
 
@@ -1722,6 +1773,7 @@ contains
     if (this%extra_dims+1 > size(rhs)) then
       local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
     else
+      local%extra_dims = size(rhs) - 1
       forall(i=1:local%numpoints+1) &
         local%field_data(i,min_dims+1:) = rhs(min_dims+1:)
     end if
@@ -1781,6 +1833,7 @@ contains
         local%field_data = 0.0_r8
       end if
     end select
+    call move_alloc(local,res)
   end function cheb1d_vector_component
 
   function cheb1d_vector_d_dx(this, dir, order) result(res)
@@ -1847,16 +1900,35 @@ contains
     !
     ! \(\vec{\rm field} \times \vec{\rm field}\)
     !
+    ! The returned vector will always consist of three components,
+    ! regardless of the number of components in the arguments.
+    !
     class(cheb1d_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The restult of this operation
+    real(r8), dimension(3) :: vec1, vec2
+    integer :: i, dims1, dims2
     type(cheb1d_vector_field), allocatable :: local
 #ifdef DEBUG
     call this%check_compatible(rhs)
 #endif
     allocate(local)
+    call local%assign_meta_data(this,.false.)
+    local%extra_dims = 2
+    allocate(local%field_data(this%numpoints+1,3))
+    vec1 = 0
+    vec2 = 0
     select type(rhs)
     class is(cheb1d_vector_field)
+      dims1 = min(3,this%dimensions()+this%extra_dims)
+      dims2 = min(3,rhs%dimensions()+rhs%extra_dims)
+      do i=1,this%numpoints+1
+        vec1(:dims1) = this%field_data(i,:dims1)
+        vec2(:dims2) = rhs%field_data(i,:dims2)
+        local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                 vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                 vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+      end do
     end select
     call move_alloc(local,res)
   end function cheb1d_vector_cross_prod
@@ -1876,6 +1948,7 @@ contains
     call this%check_compatible(rhs)
 #endif
     allocate(local)
+    call local%assign_meta_data(this)
     select type(rhs)
     class is(cheb1d_vector_field)
       min_dims = min(this%extra_dims,rhs%extra_dims) + 1
@@ -1885,6 +1958,49 @@ contains
     call move_alloc(local,res)
   end function cheb1d_vector_dot_prod
 
+  logical function cheb1d_vector_is_equal(this,rhs) result(iseq)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Evaluates whether two vector fields are equal within a tolerance,
+    ! specified by [[set_tol]].
+    !
+    class(cheb1d_vector_field), intent(in) :: this
+    class(vector_field), intent(in) :: rhs
+    integer :: i, dims
+    real(r8) :: normalization
+    iseq = .true.
+    select type(rhs)
+    class is(cheb1d_vector_field)
+      if (this%numpoints/=rhs%numpoints) then
+        iseq = .false.
+        return
+      end if
+      if (this%extra_dims>rhs%extra_dims) then
+        dims = rhs%extra_dims + 1
+        iseq = all(this%field_data(:,this%dimensions()+dims:)==0.0_r8)
+        if (.not. iseq) return
+      else if (this%extra_dims<rhs%extra_dims) then
+        dims = this%extra_dims + 1
+        iseq = all(rhs%field_data(:,rhs%dimensions()+dims:)==0.0_r8)
+        if (.not. iseq) return
+      else
+        dims = this%extra_dims + 1
+      end if
+      do i=1,this%numpoints+1
+        normalization = norm2(this%field_data(i,:dims))
+        if (normalization < tiny(normalization)) normalization = 1.0_r8
+        iseq = iseq .and. ( (norm2(this%field_data(i,this%dimensions()+1:dims) &
+             - rhs%field_data(i,rhs%dimensions()+1:dims))/normalization < get_tol()) &
+             .or. (isnan(norm2(this%field_data(i,this%dimensions()+1:dims))) .and. &
+                   isnan(norm2(rhs%field_data(i,rhs%dimensions()+1:dims)))) )
+        if (.not. iseq) return
+      end do
+    class default
+      iseq = .false.
+    end select
+  end function cheb1d_vector_is_equal
+  
   subroutine cheb1d_vector_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
@@ -1955,7 +2071,7 @@ contains
     !
     class(cheb1d_vector_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
-     logical, optional, intent(in) :: alloc
+    logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
    select type(rhs)
     class is(cheb1d_scalar_field)

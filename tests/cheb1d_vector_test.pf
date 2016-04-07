@@ -31,10 +31,15 @@ module cheb1d_vector_test
   
 @TestCase
   type, extends(testcase) :: test_field
-    type(cheb1d_vector_field) :: field1, field2
+    type(cheb1d_vector_field) :: field1, field2, field3
+    type(cheb1d_scalar_field) :: sfield
     integer :: nodes = length
+    integer :: extra_dims1 = 0
+    integer :: extra_dims2 = 1
+    integer :: extra_dims3 = 2
     real(r8) :: lower1 = -1.0_r8, upper1 = 1.0_r8
     real(r8) :: lower2 = -1.0_r8, upper2 = 1.0_r8
+    real(r8) :: lower3 = -1.0_r8, upper3 = 1.0_r8
   contains
     procedure :: setup
   end type test_field
@@ -43,39 +48,70 @@ contains
 
   subroutine setup(this)
     class(test_field), intent(inout) :: this
-    this%field1 = cheb1d_scalar_field(this%nodes,f1,extra_dims=1)
-    this%field2 = cheb1d_scalar_field(this%nodes,f2,this%lower2,this%upper2,extra_dims=2)
+    this%field1 = cheb1d_vector_field(this%nodes,f1)
+    this%field2 = cheb1d_vector_field(this%nodes,f2,this%lower2,this%upper2,extra_dims=this%extra_dims2)
+    this%field3 = cheb1d_vector_field(this%nodes,f3,extra_dims=this%extra_dims3)
+    this%sfield = cheb1d_scalar_field(this%nodes,sf1)
   end subroutine setup
 
-  pure real(r8) function f1(x)
+  pure real(r8) function sf1(x)
     real(r8), intent(in) :: x
-    f1 = sin(x)
+    sf1 = sqrt(abs(x))
+  end function sf1
+
+  pure function f1(x)
+    real(r8), intent(in) :: x
+    real(r8), dimension(:), allocatable :: f1
+    f1 = [x**2]
   end function f1
-  
-  pure real(r8) function df1(x)
+
+  pure function df1(x)
     real(r8), intent(in) :: x
-    df1 = cos(x)
+    real(r8), dimension(:), allocatable :: df1
+    df1 = [2.0_r8*x]
   end function df1
-  
-  pure real(r8) function d2f1(x)
+
+  pure function d2f1(x)
     real(r8), intent(in) :: x
-    d2f1 = -sin(x)
+    real(r8), dimension(:), allocatable :: d2f1
+    d2f1 = [2.0_r8]
   end function d2f1
-  
-  pure real(r8) function f2(x)
+
+  pure function f2(x)
     real(r8), intent(in) :: x
-    f2 = 1.0_r8 + x*exp(x)
+    real(r8), dimension(:), allocatable :: f2
+    f2 = [sin(x),cos(x)]
   end function f2
   
-  pure real(r8) function df2(x)
+  pure function df2(x)
     real(r8), intent(in) :: x
-    df2 = exp(x) + x*exp(x)
+    real(r8), dimension(:), allocatable :: df2
+    df2 = [cos(x),-sin(x)]
   end function df2
-
-  pure real(r8) function d2f2(x)
+  
+  pure function d2f2(x)
     real(r8), intent(in) :: x
-    d2f2 = 2._r8*exp(x) + x*exp(x)
+    real(r8), dimension(:), allocatable :: d2f2
+    d2f2 = [-sin(x),-cos(x)]
   end function d2f2
+  
+  pure function f3(x)
+    real(r8), intent(in) :: x
+    real(r8), dimension(:), allocatable :: f3
+    f3 = [1.0_r8 + x*exp(x), exp(-x),sinh(x)]
+  end function f3
+  
+  pure function df3(x)
+    real(r8), intent(in) :: x
+    real(r8), dimension(:), allocatable :: df3
+    df3 = [exp(x) + x*exp(x),-exp(-x),cosh(x)]
+  end function df3
+
+  pure function d2f3(x)
+    real(r8), intent(in) :: x
+    real(r8), dimension(:), allocatable :: d2f3
+    d2f3 = [2._r8*exp(x) + x*exp(x),exp(-x),sinh(x)]
+  end function d2f3
   
 @Test
   subroutine test_domain(this)
@@ -85,7 +121,7 @@ contains
     @assertEqual([this%lower1,this%upper1],dom,message='Incorrect domain returned.')
     dom = pack(this%field2%domain(),.true.)
     @assertEqual([this%lower2,this%upper2],dom,message='Incorrect domain returned.')
-    this%field1 = cheb1d_scalar_field(this%nodes,f1,-20._r8,1.5_r8)
+    this%field1 = cheb1d_vector_field(this%nodes,f1,-20._r8,1.5_r8)
     dom = pack(this%field1%domain(),.true.)
     @assertEqual([-20._r8,1.5_r8],dom,message='Incorrect domain returned.')
   end subroutine test_domain
@@ -107,46 +143,70 @@ contains
     @assertEqual(this%nodes,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
     @assertEqual(this%nodes,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
     @assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual((this%nodes+1)*2,this%field2%raw_size(),message='Wrong raw size returned.')
+    @assertEqual(this%nodes*2,this%field2%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes*2,this%field2%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
+    @assertEqual((this%nodes-1)*2,this%field2%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual((this%nodes+1)*3,this%field3%raw_size(),message='Wrong raw size returned.')
+    @assertEqual(this%nodes*3,this%field3%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes*3,this%field3%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
+    @assertEqual((this%nodes-1)*3,this%field3%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
   end subroutine test_raw_size
 
 @Test
   subroutine test_raw(this)
     class(test_field), intent(inout) :: this
-    real(r8), allocatable, dimension(:) :: raw, expected
-    integer :: i
-    raw = this%field1%raw()
-    expected = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) expected(i) = f1(expected(i))
+    real(r8), allocatable, dimension(:,:) :: raw, expected
+    real(r8), dimension(this%nodes+1) :: xvals
+    integer :: i, comps
+    comps = this%extra_dims1 + 1
+    xvals = collocation_points(this%nodes,this%lower1,this%upper1)
+    allocate(expected(this%nodes+1,comps))
+    forall (i = 1:this%nodes+1) expected(i,:) = f1(xvals(i))
+    raw = reshape(this%field1%raw(),[this%nodes+1,comps])
     @assertEqual(expected,raw,message='Wrong raw contents returned')
-    raw = this%field1%raw([.false.])
-    @assertEqual(expected(:this%nodes),raw,message='Wrong raw contents returned')
-    raw = this%field1%raw([.true.],[.false.])
-    @assertEqual(expected(2:),raw,message='Wrong raw contents returned')
-    raw = this%field1%raw([.false.],[.false.])
-    @assertEqual(expected(2:this%nodes),raw,message='Wrong raw contents returned')
+    raw = reshape(this%field1%raw([.false.]),[this%nodes,comps])
+    @assertEqual(expected(:this%nodes,:),raw,message='Wrong raw contents returned')
+    raw = reshape(this%field1%raw([.true.],[.false.]),[this%nodes,comps])
+    @assertEqual(expected(2:,:),raw,message='Wrong raw contents returned')
+    raw = reshape(this%field1%raw([.false.],[.false.]),[this%nodes-1,comps])
+    @assertEqual(expected(2:this%nodes,:),raw,message='Wrong raw contents returned')
+    deallocate(expected)
+    comps = this%extra_dims3 + 1
+    allocate(expected(this%nodes+1,comps))
+    forall (i = 1:this%nodes+1) expected(i,:) = f3(xvals(i))
+    raw = reshape(this%field3%raw(),[this%nodes+1,comps])
+    @assertEqual(expected,raw,message='Wrong raw contents returned')
+    raw = reshape(this%field3%raw([.false.]),[this%nodes,comps])
+    @assertEqual(expected(:this%nodes,:),raw,message='Wrong raw contents returned')
+    raw = reshape(this%field3%raw([.true.],[.false.]),[this%nodes,comps])
+    @assertEqual(expected(2:,:),raw,message='Wrong raw contents returned')
+    raw = reshape(this%field3%raw([.false.],[.false.]),[this%nodes-1,comps])
+    @assertEqual(expected(2:this%nodes,:),raw,message='Wrong raw contents returned')
   end subroutine test_raw
 
 @Test
   subroutine test_assign_raw(this)
     class(test_field), intent(inout) :: this
-    real(r8), dimension(this%nodes+1) :: raw, xvals
+    real(r8), dimension(this%nodes+1,this%extra_dims2+1) :: raw
+    real(r8), dimension(this%nodes+1) :: xvals
     integer :: i
     xvals = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
-    call this%field1%set_from_raw(raw)
-    @assertEqual(raw,this%field2%raw(),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
-    call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
-    @assertEqual(raw(2:),this%field2%raw([.false.],[.true.]))
-    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
-    call this%field2%set_from_raw(raw(:this%nodes),[.true.],[.false.])
-    @assertEqual(raw(:this%nodes),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
-    call this%field2%set_from_raw(raw(2:this%nodes),[.false.],[.false.])
-    @assertEqual(raw(2:this%nodes),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
-    call this%field2%set_from_raw(raw)
-    @assertEqual(raw,this%field2%raw(),message='Error setting field from raw')
+    forall (i = 1:this%nodes+1) raw(i,:) = f2(xvals(i))
+    call this%field2%set_from_raw(pack(raw,.true.))
+    @assertEqual(pack(raw,.true.),this%field2%raw(),message='Error setting field from raw.')
+!~     forall (i = 1:this%nodes+1) raw(i,:) = f2(xvals(i))
+    call this%field2%set_from_raw(pack(raw(2:,:),.true.),[.false.],[.true.])
+    @assertEqual(pack(raw(2:,:),.true.),this%field2%raw([.false.],[.true.]),message='Error setting field from raw.')
+!~     forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
+    call this%field2%set_from_raw(pack(raw(:this%nodes,:),.true.),[.true.],[.false.])
+    @assertEqual(pack(raw(:this%nodes,:),.true.),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
+!~     forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field2%set_from_raw(pack(raw(2:this%nodes,:),.true.),[.false.],[.false.])
+    @assertEqual(pack(raw(2:this%nodes,:),.true.),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.')
+!~     forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    call this%field1%set_from_raw(pack(raw(:,1),.true.))
+    @assertEqual(pack(raw(:,1),.true.),this%field1%raw(),message='Error setting field from raw')
   end subroutine test_assign_raw
 
 @Test
@@ -161,33 +221,36 @@ contains
 @Test
   subroutine test_fmf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 * this%field2
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    type(cheb1d_vector_field) :: field
+    field = this%sfield * this%field2
+!~     this%field2 = cheb1d_vector_field(this%nodes,func, extra_dims=2)
+    this%field2 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
     @assertTrue(this%field2==field,message='Error calculating field*field')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) * f2(x)
+      real(r8), dimension(:), allocatable :: func
+      func = sf1(x) * f2(x)
     end function func
   end subroutine test_fmf
     
 @Test
   subroutine test_rmf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
+    type(cheb1d_vector_field) :: field
     field = 2.0_r8 * this%field1
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    this%field2 = cheb1d_vector_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating real*field')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func
       func = f1(x) * 2.0_r8
     end function func
   end subroutine test_rmf
@@ -195,164 +258,311 @@ contains
 @Test
   subroutine test_fmr(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 * 2._r8
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    type(cheb1d_vector_field) :: field
+    field = this%field3 * 2._r8
+    this%field2 = cheb1d_vector_field(this%nodes,func,extra_dims=2)
     @assertTrue(this%field2==field,message='Error calculating field*real')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) * 2.0_r8
+      real(r8), dimension(:), allocatable :: func
+      func = f3(x) * 2.0_r8
     end function func
   end subroutine test_fmr
   
 @Test
   subroutine test_fdf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 / this%field2
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    type(cheb1d_vector_field) :: field
+    field = this%field1 / this%sfield
+    this%field2 = cheb1d_vector_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating field/field')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) / f2(x)
+      real(r8), dimension(:), allocatable :: func
+      func = f1(x) / sf1(x)
     end function func
   end subroutine test_fdf
     
 @Test
   subroutine test_fdr(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 / 5.0_r8
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    type(cheb1d_vector_field) :: field
+    field = this%field2 / 5.0_r8
+    this%field2 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
     @assertTrue(this%field2==field,message='Error calculating field/real')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x)/5.0_r8
+      real(r8), dimension(:), allocatable :: func
+      func = f2(x)/5.0_r8
     end function func
   end subroutine test_fdr
   
 @Test
   subroutine test_faf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
+    type(cheb1d_vector_field) :: field
     field = this%field1 + this%field2
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating field+field')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    this%field3 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating field-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 + this%field1
+    this%field3 = cheb1d_vector_field(this%nodes,func2,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating field-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 + this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func3,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating field-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) + f2(x)
+      real(r8), dimension(:), allocatable :: func
+      func = [f1(x),0.0_r8] + f2(x)
     end function func
+    pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func2
+      func2 = f2(x) + [f1(x),0.0_r8]
+    end function func2
+    pure function func3(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func3
+      func3 = 2.0_r8*f2(x)
+    end function func3
   end subroutine test_faf
   
 @Test
   subroutine test_raf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = 1.0e3_r8 + this%field1
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating real+field')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    type(cheb1d_vector_field) :: field
+    field = [1.0e3_r8] + this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real+field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = [1.0e3_r8,2.0e2_r8] + this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func1,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real+field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = [1.0e3_r8,2.0e2_r8,3.0e1_r8] + this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func2,extra_dims=2)
+    @assertTrue(this%field3==field,message='Error calculating real+field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) + 1.0e3_r8
+      real(r8), allocatable, dimension(:) :: func
+      func = f2(x) + [1.0e3_r8,0.0_r8]
     end function func
+    pure function func1(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func1
+      func1 = f2(x) + [1.0e3_r8,2.0e2_r8]
+    end function func1
+    pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func2
+      func2 = [f2(x),0.0_r8] + [1.0e3_r8,2.0e2_r8,3.0e1_r8]
+    end function func2
   end subroutine test_raf
   
 @Test
   subroutine test_far(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 + 1.0e3_r8
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating field+real')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    type(cheb1d_vector_field) :: field
+    field = this%field2 + [1.0e3_r8]
+    this%field3 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real+field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 + [1.0e3_r8,2.0e2_r8]
+    this%field3 = cheb1d_vector_field(this%nodes,func1,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real+field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 + [1.0e3_r8,2.0e2_r8,3.0e1_r8]
+    this%field3 = cheb1d_vector_field(this%nodes,func2,extra_dims=2)
+    @assertTrue(this%field3==field,message='Error calculating real+field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) + 1.0e3_r8
+      real(r8), allocatable, dimension(:) :: func
+      func = f2(x) + [1.0e3_r8,0.0_r8]
     end function func
+    pure function func1(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func1
+      func1 = f2(x) + [1.0e3_r8,2.0e2_r8]
+    end function func1
+    pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func2
+      func2 = [f2(x),0.0_r8] + [1.0e3_r8,2.0e2_r8,3.0e1_r8]
+    end function func2
   end subroutine test_far
   
 @Test
   subroutine test_fsf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
+    type(cheb1d_vector_field) :: field
     field = this%field1 - this%field2
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating field-field')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    this%field3 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating field-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 - this%field1
+    this%field3 = cheb1d_vector_field(this%nodes,func2,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating field-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 - this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func3,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating field-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) - f2(x)
+      real(r8), dimension(:), allocatable :: func
+      func = [f1(x),0.0_r8] - f2(x)
     end function func
+    pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func2
+      func2 = f2(x) - [f1(x),0.0_r8]
+    end function func2
+    pure function func3(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func3
+      func3 = [0.0_r8,0.0_r8]
+    end function func3
   end subroutine test_fsf
   
 @Test
   subroutine test_fsr(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 - 4.323_r8
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating field-real')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    type(cheb1d_vector_field) :: field
+    field = this%field2 - [1.0e3_r8]
+    this%field3 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 - [1.0e3_r8,2.0e2_r8]
+    this%field3 = cheb1d_vector_field(this%nodes,func1,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 - [1.0e3_r8,2.0e2_r8,3.0e1_r8]
+    this%field3 = cheb1d_vector_field(this%nodes,func2,extra_dims=2)
+    @assertTrue(this%field3==field,message='Error calculating real-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) - 4.323_r8
+      real(r8), allocatable, dimension(:) :: func
+      func = f2(x) - [1.0e3_r8,0.0_r8]
     end function func
+    pure function func1(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func1
+      func1 = f2(x) - [1.0e3_r8,2.0e2_r8]
+    end function func1
+    pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func2
+      func2 = [f2(x),0.0_r8] - [1.0e3_r8,2.0e2_r8,3.0e1_r8]
+    end function func2
   end subroutine test_fsr
   
 @Test
   subroutine test_rsf(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = 10.2_r8 - this%field1
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating real-field')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    type(cheb1d_vector_field) :: field
+    field = [1.0e3_r8] - this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = [1.0e3_r8,2.0e2_r8] - this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func1,extra_dims=1)
+    @assertTrue(this%field3==field,message='Error calculating real-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = [1.0e3_r8,2.0e2_r8,3.0e1_r8] - this%field2
+    this%field3 = cheb1d_vector_field(this%nodes,func2,extra_dims=2)
+    @assertTrue(this%field3==field,message='Error calculating real-field')
+    @assertEqual(this%field3%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field3%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field3%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = 10.2_r8 - f1(x)
+      real(r8), allocatable, dimension(:) :: func
+      func = [1.0e3_r8,0.0_r8] - f2(x)
     end function func
+    pure function func1(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func1
+      func1 = [1.0e3_r8,2.0e2_r8] - f2(x)
+    end function func1
+    pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: func2
+      func2 = [1.0e3_r8,2.0e2_r8,3.0e1_r8] - [f2(x),0.0_r8]
+    end function func2
   end subroutine test_rsf
   
 @Test
   subroutine test_norm(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_scalar_field) :: field
+    field = this%field2%norm()
+    this%sfield = cheb1d_scalar_field(this%nodes,func)
+    @assertTrue(this%sfield==field,message='Error calculating norm of field')
+    @assertEqual(this%sfield%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%sfield%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%sfield%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = atanh(f1(x))
+      func = 1.0_r8
     end function func
   end subroutine test_norm
   
@@ -360,59 +570,92 @@ contains
   subroutine test_d_dx(this)
     class(test_field), intent(inout) :: this
     integer :: i
-    type(cheb1d_scalar_field) :: field
+    type(cheb1d_vector_field) :: field
     this%field1 = this%field2%d_dx(1)
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    this%field2 = cheb1d_vector_field(this%nodes,func,extra_dims=1)
     @assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx')
     this%field1 = this%field2%d_dx(1,2)
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    this%field2 = cheb1d_vector_field(this%nodes,func2,extra_dims=1)
     @assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx')
     do i = 2,4
       field = this%field2%d_dx(i)
-      this%field2 = cheb1d_scalar_field(this%nodes,zeros)
+      this%field2 = cheb1d_vector_field(this%nodes,zeros)
       @assertTrue(this%field2==field,message='Error calculating d(field)/dx')
     end do
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func
       func = df2(x)
     end function func
-    real(r8) pure function func2(x)
+    pure function func2(x)
       real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: func2
       func2 = d2f2(x)
     end function func2
-    real(r8) pure function zeros(x)
+    pure function zeros(x)
       real(r8), intent(in) :: x
-      zeros = 0.0_r8
+      real(r8), dimension(:), allocatable :: zeros
+      zeros = [0.0_r8]
     end function zeros
   end subroutine test_d_dx
   
 @Test
   subroutine test_div(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_vector_field) :: field1, field2
+    type(cheb1d_scalar_field) :: field
+    field = .div. this%field1
+    this%sfield = cheb1d_scalar_field(this%nodes,func)
+    @assertTrue(this%sfield==field,message='Error calculating divergence of field')
+    @assertEqual(this%sfield%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%sfield%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%sfield%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = .div. this%field2
+    this%sfield = cheb1d_scalar_field(this%nodes,func2)
+    @assertTrue(this%sfield==field,message='Error calculating divergence of field')
+    field = .div. this%field3
+    this%sfield = cheb1d_scalar_field(this%nodes,func3)
+    @assertTrue(this%sfield==field,message='Error calculating divergence of field')
   contains
-    pure function func(x)
+    real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      real(r8), dimension(:), allocatable :: func
-      allocate(func(1))
-      func = df2(x)
+      real(r8), dimension(:), allocatable :: tmp
+      tmp = df1(x)
+      func = tmp(1)
     end function func
+    real(r8) pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: tmp
+      tmp = df2(x)
+      func2 = tmp(1)
+    end function func2
+    real(r8) pure function func3(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: tmp
+      tmp = df3(x)
+      func3 = tmp(1)
+    end function func3
   end subroutine test_div
 
 @Test
   subroutine test_curl(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_vector_field) :: field1, field2
+    type(cheb1d_vector_field) :: field
+    field = .curl. this%field3
+    this%field2 = cheb1d_vector_field(this%nodes,func,extra_dims=2)
+    @assertTrue(this%field2==field,message='Error calculating curl of field')
+    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     pure function func(x)
       real(r8), intent(in) :: x
-      real(r8), dimension(:), allocatable :: func
-      allocate(func(1))
-      func = df2(x)
+      real(r8), dimension(:), allocatable :: func, tmp
+      tmp = df3(x)
+      func = [0.0_r8,-tmp(3),tmp(2)]
     end function func
   end subroutine test_curl
   
@@ -420,17 +663,20 @@ contains
   subroutine test_lap(this)
     class(test_field), intent(inout) :: this
     integer :: i
-    type(cheb1d_scalar_field) :: field
+    type(cheb1d_vector_field) :: field
     field = .laplacian. this%field1
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
+    this%field2 = cheb1d_vector_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating laplacian of field')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = d2f1(x)
+      real(r8), dimension(:), allocatable :: func
+      real(r8), dimension(:), allocatable :: tmp
+      tmp = d2f1(x)
+      func = [tmp(1)]
     end function func
   end subroutine test_lap
 
@@ -438,34 +684,91 @@ contains
   subroutine test_dot(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_scalar_field) :: field
-    field = this%field1 * this%field2
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating field*field')
+    field = this%field2 .dot. this%field2
+    this%sfield = cheb1d_scalar_field(this%nodes,func)
+    @assertTrue(this%sfield==field,message='Error calculating field .dot. field')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field2 .dot. this%field1
+    this%sfield = cheb1d_scalar_field(this%nodes,func2)
+    @assertTrue(this%sfield==field,message='Error calculating field .dot. field')
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) * f2(x)
+      func = 1.0_r8
     end function func
+    real(r8) pure function func2(x)
+      real(r8), intent(in) :: x
+      real(r8), allocatable, dimension(:) :: tmp1, tmp2
+      tmp1 = f1(x)
+      tmp2 = f2(x)
+      func2 = tmp1(1) * tmp2(1)
+    end function func2
   end subroutine test_dot
 
 @Test
   subroutine test_cross(this)
     class(test_field), intent(inout) :: this
-    type(cheb1d_scalar_field) :: field
-    field = this%field1 * this%field2
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==field,message='Error calculating field*field')
-    @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
-    @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
-    @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    type(cheb1d_vector_field) :: field
+    field = this%field2 .cross. this%field3
+    this%field1 = cheb1d_vector_field(this%nodes,func,extra_dims=2)
+    @assertTrue(this%field1==field,message='Error calculating field .cross. field')
+    @assertEqual(this%field1%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%field1%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%field1%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    field = this%field3 .cross. this%field2 
+    @assertTrue(-this%field1==field,message='Error calculating field .cross. field')
+    field = this%field3 .cross. this%field3 
+    this%field1 = cheb1d_vector_field(this%nodes,zeros,extra_dims=0)
+    @assertTrue(this%field1==field,message='Error calculating field .cross. field')
   contains
-    real(r8) pure function func(x)
+    pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) * f2(x)
+      real(r8), dimension(:), allocatable :: tmp1, tmp2
+      real(r8), dimension(:), allocatable :: func
+      tmp1 = f2(x)
+      tmp2 = f3(x)
+      func = [tmp1(2)*tmp2(3) - tmp2(2)*0.e0_r8, &
+              0.e0_r8*tmp2(1) - tmp2(3)*tmp1(1), &
+              tmp1(1)*tmp2(2) - tmp2(1)*tmp1(2)]
     end function func
+    pure function zeros(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: zeros
+      zeros = [0.0_r8]
+    end function zeros
   end subroutine test_cross
+
+@Test
+  subroutine test_component(this)
+    class(test_field), intent(inout) :: this
+    type(cheb1d_scalar_field) :: field
+    field = this%field2%component(1)
+    this%sfield = cheb1d_scalar_field(this%nodes,func)
+    @assertTrue(this%sfield==field,message='Error extracting field component')
+    @assertEqual(this%sfield%resolution(),field%resolution(),message='Result has wrong resolution')
+    @assertEqual(this%sfield%domain(),field%domain(),message='Result has wrong domain')
+    @assertEqual(this%sfield%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
+    this%sfield = this%field2%component(6)
+    field = cheb1d_scalar_field(this%nodes,zeros)
+    @assertTrue(field==this%sfield,message='Error extracting field component')
+    @assertEqual(field%resolution(),this%sfield%resolution(),message='Result has wrong resolution')
+    @assertEqual(field%domain(),this%sfield%domain(),message='Result has wrong domain')
+    @assertEqual(field%dimensions(),this%sfield%dimensions(),message='Result has wrong number of dimensions')
+  contains
+    pure function func(x)
+      real(r8), intent(in) :: x
+      real(r8), dimension(:), allocatable :: tmp1
+      real(r8) :: func
+      tmp1 = f2(x)
+      func = tmp1(1)
+    end function func
+    pure function zeros(x)
+      real(r8), intent(in) :: x
+      real(r8) :: zeros
+      zeros = 0.0_r8
+    end function zeros
+  end subroutine
 
 end module cheb1d_vector_test

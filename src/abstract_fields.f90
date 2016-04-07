@@ -194,7 +194,7 @@ module abstract_fields_mod
     generic, public :: operator(.grad.) => gradient
     generic, public :: operator(.laplacian.) => laplacian
     generic, public :: assignment(=) => assign_field
-    procedure :: is_equal => scalar_is_equal
+    procedure(sf_is_equal), deferred :: is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
     procedure :: negation => scalar_field_negation
@@ -241,7 +241,7 @@ module abstract_fields_mod
       !! \({\rm \vec{real}} - {\rm \vec{field}}\)
     procedure(vf_vr), deferred :: field_sub_real
       !! \({\rm \vec{field}} - {\rm \vec{real}}\)
-    procedure(vf_norm), private, deferred :: norm
+    procedure(vf_norm), public, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
       !! Returns a scalar field containing the specified component of 
@@ -273,7 +273,7 @@ module abstract_fields_mod
     generic, public :: operator(.dot.) => dot_prod
     generic, public :: operator(.cross.) => cross_prod
     generic, public :: assignment(=) => assign_field
-    procedure :: is_equal => vector_is_equal
+    procedure(vf_is_equal), deferred :: is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
     procedure :: negation => vector_field_negation
@@ -599,75 +599,91 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_comp !! Component number `comp`
     end function vf_comp
 
-    subroutine sf_bound(this,direction,lower,free_bound,bound_val, &
-                        bound_deriv)
-      !* Sets boundary conditions and values. If a boundary is not
-      !  explicitly set by calling this subroutine then it defaults to
-      !  being free.
-      !
-      import :: scalar_field
-      import :: r8
-      class(scalar_field), intent(inout) :: this
-      integer, intent(in) :: direction
-        !! The number corresponding to the direction/dimension whose
-        !! boundary condition is to be set
-      logical, optional, intent(in) :: lower
-        !! Sets lower boundary if true (default), upper if false
-      logical, optional, intent(in) :: free_bound
-        !! If true, makes this a free boundary. Any boundary values 
-        !! passed will be ignored. Default is `.false.`.
-      real(r8), optional, intent(in) :: bound_val
-        !! Value of the field at the boundary. Default is 0.
-      real(r8), optional, intent(in) :: bound_deriv
-        !! Value of the first derivative of the field at the boundary.
-        !! Default is 0.
-    end subroutine sf_bound
+!~     subroutine sf_bound(this,direction,lower,free_bound,bound_val, &
+!~                         bound_deriv)
+!~       !* Sets boundary conditions and values. If a boundary is not
+!~       !  explicitly set by calling this subroutine then it defaults to
+!~       !  being free.
+!~       !
+!~       import :: scalar_field
+!~       import :: r8
+!~       class(scalar_field), intent(inout) :: this
+!~       integer, intent(in) :: direction
+!~         !! The number corresponding to the direction/dimension whose
+!~         !! boundary condition is to be set
+!~       logical, optional, intent(in) :: lower
+!~         !! Sets lower boundary if true (default), upper if false
+!~       logical, optional, intent(in) :: free_bound
+!~         !! If true, makes this a free boundary. Any boundary values 
+!~         !! passed will be ignored. Default is `.false.`.
+!~       real(r8), optional, intent(in) :: bound_val
+!~         !! Value of the field at the boundary. Default is 0.
+!~       real(r8), optional, intent(in) :: bound_deriv
+!~         !! Value of the first derivative of the field at the boundary.
+!~         !! Default is 0.
+!~     end subroutine sf_bound
+!~ 
+!~     subroutine vf_bound(this,direction,lower,free_bound,bound_val, &
+!~                         bound_deriv)
+!~       !* Sets boundary conditions and values. If a boundary is not
+!~       !  explicitly set by calling this subroutine then it defaults to
+!~       !  being free.
+!~       !
+!~       import :: vector_field
+!~       import :: r8
+!~       class(vector_field), intent(inout) :: this
+!~       integer, intent(in) :: direction
+!~         !! The number corresponding to the direction/dimension whose
+!~         !! boundary condition is to be set
+!~       logical, optional, intent(in) :: lower
+!~         !! Sets lower boundary if true (default), upper if false
+!~       logical, optional, intent(in) :: free_bound
+!~         !! If true, makes this a free boundary. Any boundary values 
+!~         !! passed will be ignored. Default is `.false.`.
+!~       real(r8), dimension(:), optional, intent(in) :: bound_val
+!~         !! Value of the field at the boundary. Default is 0.
+!~       real(r8), dimension(:), optional, intent(in) :: bound_deriv
+!~         !! Value of the first derivative of the field at the boundary.
+!~         !! Default is 0.
+!~     end subroutine vf_bound
+!~     
+!~     function sf_same_bounds(this,other)
+!~       import :: scalar_field
+!~       class(scalar_field), intent(in) :: this
+!~       class(scalar_field), intent(in) :: other
+!~         !! The fields whose boundary conditions are being compared to
+!~         !! those of this one
+!~       logical :: sf_same_bounds
+!~         !! `.true.` if boundary conditions agree within tolerance,
+!~         !! `.false.` otherwise
+!~     end function sf_same_bounds
+!~     
+!~     function vf_same_bounds(this,other)
+!~       import :: vector_field
+!~       class(vector_field), intent(in) :: this
+!~       class(vector_field), intent(in) :: other
+!~         !! The fields whose boundary conditions are being compared to
+!~         !! those of this one
+!~       logical :: vf_same_bounds
+!~         !! `.true.` if boundary conditions agree within tolerance,
+!~         !! `.false.` otherwise
+!~     end function vf_same_bounds
 
-    subroutine vf_bound(this,direction,lower,free_bound,bound_val, &
-                        bound_deriv)
-      !* Sets boundary conditions and values. If a boundary is not
-      !  explicitly set by calling this subroutine then it defaults to
-      !  being free.
-      !
-      import :: vector_field
-      import :: r8
-      class(vector_field), intent(inout) :: this
-      integer, intent(in) :: direction
-        !! The number corresponding to the direction/dimension whose
-        !! boundary condition is to be set
-      logical, optional, intent(in) :: lower
-        !! Sets lower boundary if true (default), upper if false
-      logical, optional, intent(in) :: free_bound
-        !! If true, makes this a free boundary. Any boundary values 
-        !! passed will be ignored. Default is `.false.`.
-      real(r8), dimension(:), optional, intent(in) :: bound_val
-        !! Value of the field at the boundary. Default is 0.
-      real(r8), dimension(:), optional, intent(in) :: bound_deriv
-        !! Value of the first derivative of the field at the boundary.
-        !! Default is 0.
-    end subroutine vf_bound
-    
-    function sf_same_bounds(this,other)
+    function sf_is_equal(this,rhs) result(iseq)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
-      class(scalar_field), intent(in) :: other
-        !! The fields whose boundary conditions are being compared to
-        !! those of this one
-      logical :: sf_same_bounds
-        !! `.true.` if boundary conditions agree within tolerance,
-        !! `.false.` otherwise
-    end function sf_same_bounds
-    
-    function vf_same_bounds(this,other)
+      class(scalar_field), intent(in) :: rhs
+      logical :: iseq
+        !! True if two fields are equal, false otherwise
+    end function sf_is_equal
+
+    function vf_is_equal(this,rhs) result(iseq)
       import :: vector_field
       class(vector_field), intent(in) :: this
-      class(vector_field), intent(in) :: other
-        !! The fields whose boundary conditions are being compared to
-        !! those of this one
-      logical :: vf_same_bounds
-        !! `.true.` if boundary conditions agree within tolerance,
-        !! `.false.` otherwise
-    end function vf_same_bounds
+      class(vector_field), intent(in) :: rhs
+      logical :: iseq
+        !! True if two fields are equal, false otherwise
+    end function vf_is_equal
   end interface
 
   interface sin
@@ -745,14 +761,9 @@ module abstract_fields_mod
   interface maxval
     module procedure :: scalar_field_maxval
   end interface
-  
-  interface norm2
-    module procedure :: vector_field_norm
-  end interface norm2
-  
+    
   public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
-            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval, &
-            norm2
+            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
 contains
   
@@ -1028,18 +1039,6 @@ contains
     res = field%maxval()
   end function scalar_field_maxval
 
-  pure function vector_field_norm(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: April 2016
-    !
-    ! Computes the Euclidean norm of each vector in a vector field,
-    ! returning the information as a scalar field.
-    !
-    class(vector_field), intent(in) :: field
-    class(scalar_field), allocatable :: res
-    res = field%norm()
-  end function vector_field_norm
-
   function scalar_field_negation(field) result(res)
     !* Author: Chris MacMackin
     !  Date: April 2016
@@ -1048,6 +1047,7 @@ contains
     !
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res
+    allocate(res,mold=field)
     res = 0.0_r8 - field
   end function scalar_field_negation
 
@@ -1059,35 +1059,9 @@ contains
     !
     class(vector_field), intent(in) :: field
     class(vector_field), allocatable :: res
+    allocate(res,mold=field)
     res = [0.0_r8] - field
   end function vector_field_negation
-
-  logical function scalar_is_equal(this,rhs) result(iseq)
-    !* Author: Chris MacMackin
-    !  Date: April 2016
-    !
-    ! Evaluates whether two scalar fields are equal within a tolerance,
-    ! specified by [[set_tol]].
-    !
-    class(scalar_field), intent(in) :: this
-    class(scalar_field), intent(in) :: rhs
-    iseq = (maxval(abs((this-rhs)/this)) < tolerance)
-  end function scalar_is_equal
-
-  logical function vector_is_equal(this,rhs) result(iseq)
-    !* Author: Chris MacMackin
-    !  Date: April 2016
-    !
-    ! Evaluates whether two vector fields are equal within a tolerance,
-    ! specified by [[set_tol]].
-    !
-    class(vector_field), intent(in) :: this
-    class(vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: tmp
-    allocate(tmp, mold=rhs)
-    tmp = (this - rhs)/this%norm()
-    iseq = (maxval(abs(tmp%norm())) < tolerance)
-  end function vector_is_equal
   
   subroutine set_tol(tol)
     !* Author: Chris MacMackin

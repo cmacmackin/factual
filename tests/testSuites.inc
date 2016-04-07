@@ -1,2 +1,3 @@
-ADD_TEST_SUITE(cheb1d_scalar_test_suite)
 ADD_TEST_SUITE(chebyshev_test_suite)
+ADD_TEST_SUITE(cheb1d_scalar_test_suite)
+ADD_TEST_SUITE(cheb1d_vector_test_suite)
