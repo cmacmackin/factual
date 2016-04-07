@@ -38,7 +38,8 @@ module cheb1d_fields_mod
   private
 
   public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
-            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
+            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval, &
+            norm2
 
   type, extends(scalar_field), public :: cheb1d_scalar_field
     !* Author: Chris MacMackin
@@ -226,7 +227,7 @@ module cheb1d_fields_mod
       !! \({\rm real} - {\rm field}\)
     procedure :: field_sub_real => cheb1d_vector_vf_s_r
       !! \({\rm field} - {\rm real}\)
-    procedure, public :: norm => cheb1d_vector_norm
+    procedure, private :: norm => cheb1d_vector_norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure, public :: component => cheb1d_vector_component
       !! Returns a scalar field containing the specified component of 
@@ -1488,7 +1489,6 @@ contains
     type(cheb1d_vector_field), allocatable :: local
     allocate(local)
     call local%assign_meta_data(rhs)
-!~     allocate(local%field_data(local%numpoints,)) !Needed due to compiler bug
     local%field_data = lhs * rhs%field_data
     call move_alloc(local,res)
   end function cheb1d_vector_r_m_vf

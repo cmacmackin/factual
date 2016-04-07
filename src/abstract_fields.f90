@@ -197,6 +197,8 @@ module abstract_fields_mod
     procedure :: is_equal => scalar_is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
+    procedure :: negation => scalar_field_negation
+    generic, public :: operator(-) => negation
   end type scalar_field
   
   type, extends(abstract_field), abstract, public :: vector_field
@@ -239,7 +241,7 @@ module abstract_fields_mod
       !! \({\rm \vec{real}} - {\rm \vec{field}}\)
     procedure(vf_vr), deferred :: field_sub_real
       !! \({\rm \vec{field}} - {\rm \vec{real}}\)
-    procedure(vf_ret_sf), public, deferred :: norm
+    procedure(vf_norm), private, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
       !! Returns a scalar field containing the specified component of 
@@ -274,6 +276,8 @@ module abstract_fields_mod
     procedure :: is_equal => vector_is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
+    procedure :: negation => vector_field_negation
+    generic, public :: operator(-) => negation
   end type vector_field
 
 
@@ -527,6 +531,14 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_ret_vf !! The result of this operation
     end function vf_ret_vf
     
+    pure function vf_norm(this)
+      !! \([{\rm operator}] {\rm field}\)
+      import :: scalar_field
+      import :: vector_field
+      class(vector_field), intent(in) :: this
+      class(scalar_field), allocatable :: vf_norm !! The result of this operation
+    end function vf_norm
+    
     function vf_vf_ret_sf(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{field}}\)
       import :: scalar_field
@@ -734,8 +746,13 @@ module abstract_fields_mod
     module procedure :: scalar_field_maxval
   end interface
   
+  interface norm2
+    module procedure :: vector_field_norm
+  end interface norm2
+  
   public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
-            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
+            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval, &
+            norm2
 
 contains
   
@@ -1010,6 +1027,40 @@ contains
     real(r8) :: res
     res = field%maxval()
   end function scalar_field_maxval
+
+  pure function vector_field_norm(field) result(res)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Computes the Euclidean norm of each vector in a vector field,
+    ! returning the information as a scalar field.
+    !
+    class(vector_field), intent(in) :: field
+    class(scalar_field), allocatable :: res
+    res = field%norm()
+  end function vector_field_norm
+
+  function scalar_field_negation(field) result(res)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Computes the negative version of the scalar field.
+    !
+    class(scalar_field), intent(in) :: field
+    class(scalar_field), allocatable :: res
+    res = 0.0_r8 - field
+  end function scalar_field_negation
+
+  function vector_field_negation(field) result(res)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Computes the negative version of the vector field.
+    !
+    class(vector_field), intent(in) :: field
+    class(vector_field), allocatable :: res
+    res = [0.0_r8] - field
+  end function vector_field_negation
 
   logical function scalar_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
