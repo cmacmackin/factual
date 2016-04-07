@@ -776,9 +776,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%sin()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%sin()
   end function scalar_field_sin
 
   pure function scalar_field_cos(field) result(res)
@@ -790,9 +789,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%cos()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%cos()
   end function scalar_field_cos
 
   pure function scalar_field_tan(field) result(res)
@@ -804,9 +802,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%tan()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%tan()
   end function scalar_field_tan
 
   pure function scalar_field_asin(field) result(res)
@@ -819,9 +816,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%asin()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%asin()
   end function scalar_field_asin
 
   pure function scalar_field_acos(field) result(res)
@@ -834,9 +830,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%acos()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%acos()
   end function scalar_field_acos
 
   pure function scalar_field_atan(field) result(res)
@@ -849,9 +844,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%atan()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%atan()
   end function scalar_field_atan
 
   pure function scalar_field_sinh(field) result(res)
@@ -864,9 +858,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%sinh()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%sinh()
   end function scalar_field_sinh
 
   pure function scalar_field_cosh(field) result(res)
@@ -879,9 +872,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%cosh()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%cosh()
   end function scalar_field_cosh
 
   pure function scalar_field_tanh(field) result(res)
@@ -894,9 +886,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%tanh()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%tanh()
   end function scalar_field_tanh
 
   pure function scalar_field_asinh(field) result(res)
@@ -909,9 +900,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%asinh()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%asinh()
   end function scalar_field_asinh
 
   pure function scalar_field_acosh(field) result(res)
@@ -924,9 +914,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%acosh()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%acosh()
   end function scalar_field_acosh
 
   pure function scalar_field_atanh(field) result(res)
@@ -939,9 +928,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%atanh()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%atanh()
   end function scalar_field_atanh
 
   pure function scalar_field_log(field) result(res)
@@ -954,9 +942,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%log()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%log()
   end function scalar_field_log
 
   pure function scalar_field_log10(field) result(res)
@@ -969,9 +956,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%log10()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%log10()
   end function scalar_field_log10
 
   pure function scalar_field_exp(field) result(res)
@@ -984,9 +970,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%exp()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%exp()
   end function scalar_field_exp
 
   pure function scalar_field_abs(field) result(res)
@@ -1012,9 +997,8 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), allocatable :: res 
     class(scalar_field), allocatable :: tmp
-    allocate(tmp, mold=field)
-    tmp = field%sqrt()
-    call move_alloc(tmp, res)
+    allocate(res, mold=field)
+    res = field%sqrt()
   end function scalar_field_sqrt
 
   pure function scalar_field_minval(field) result(res)
