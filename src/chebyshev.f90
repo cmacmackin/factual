@@ -29,6 +29,8 @@ module chebyshev_mod
   ! differentiation.
   !
   use iso_fortran_env, only: r8 => real64
+  use iso_c_binding
+  use fftw3_mod
   implicit none
   private
   
@@ -65,6 +67,55 @@ contains
     collocation_points = (lower + 1.0_r8*factor) + collocation_points
   end function collocation_points
 
-  
+  subroutine differentiate_1d(field_data,xvals,order)
+    !* Author: Chris MacMackin
+    !  Date: April 2016
+    !
+    ! Computes the derivative (in place) of 1D data using a Chebyshev
+    ! pseudo-spectral methods and a type-I discrete cosine transform,
+    ! provided by the FFTW3 library. This is fastest for arrays of odd
+    ! size.
+    !
+    ! @Note This routine works recursively for all derivatives with
+    ! order greater than one. This is much simpler to implement than,
+    ! but only about half as efficient as, directly computing any
+    ! derivative.
+    !
+    ! @Todo Add the ability to directly calculate second derivative.
+    !
+    real(c_double), dimension(:), intent(inout), contiguous :: field_data
+      !! The data which is to be differentiated, along the direction of
+      !! the array.
+    real(c_double), dimension(size(field_data)), intent(in) :: xvals
+      !! The location of each data point in `field_data`.
+    integer, intent(in), optional :: order
+      !! The order of the derivative to take. If absent, defaults to 1.
+      !! Zero corresponds to no derivative and negative values are
+      !! treated as zero.
+    integer :: order_, field_size, i
+    real(r8) :: field_width, field_centre
+    type(c_ptr) :: plan, tmp
+    field_size = size(field_data)
+    if (present(order)) then
+      order_ = order
+    else
+      order_ = 1
+    end if
+    field_width = xvals(field_size) - xvals(1)
+    field_centre = xvals(1) + field_width/2.0_r8
+    if (order_ < 1) then
+      return
+    else if (order_==1) then
+      plan = fftw_plan_r2r_1d(field_size, field_data, field_data, &
+                              FFTW_REDFT00, FFTW_MEASURE)
+      call fftw_execute_r2r(plan,field_data,field_data)
+      field_data = pi/real(field_size) * field_data
+      forall (i=0:field_size-1) field_data(i) = -real(i,c_double)*field_data(i)
+      field_data(field_size) = 0.0_c_double
+      
+    
+  contains
+    
+  end subroutine differentiate
 
 end module chebyshev_mod
