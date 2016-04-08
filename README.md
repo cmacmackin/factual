@@ -27,10 +27,8 @@ collocation points.
 - [ ] Ability to set tolerance on a per-field basis
 
 ## License
-FACTUAL is licensed under the GNU Lesser General Public License (LGPL) v3.0 or
-later. The terms are provided in the file `LICENSE`. The LGPL make reference
-to the GNU General Public License (GPL), which is provided in the file `GPL`.
-In brief, the LGPL allows this library to be linked to software under any
-license (with a few, minor, restrictions). However, should a modified version
-of the _library itself_ be released, it must be licensed under the terms of
-the LGPL or GPL.
+FACTUAL is licensed under the GNU General Public License (GPL) v3.0 or
+later. The terms are provided in the file `LICENSE`. The Lesser General
+Public License (LGPL) would have been used, but the Chebyshev pseudo-spectral
+implementation uses the FFTW3 library, which is licensed under the GPL.
+
