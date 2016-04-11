@@ -1103,14 +1103,12 @@ contains
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(vector_field), allocatable :: res !! The result of this operation
-    type(cheb1d_scalar_field) :: local_scalar
-    type(cheb1d_vector_field), allocatable :: local_vector
-    allocate(local_vector)
-    local_scalar = this%d_dx(1,1)
-    call local_vector%assign_meta_data(this)
-    local_vector%field_data(:,1) = local_scalar%field_data
-    deallocate(local_scalar%field_data)
-    call move_alloc(local_vector,res)
+    type(cheb1d_vector_field), allocatable :: local
+    allocate(local)
+    call local%assign_meta_data(this)
+    local%field_data(:,1) = this%field_data
+    call differentiate_1d(local%field_data(:,1),local%colloc_points)
+    call move_alloc(local,res)
   end function cheb1d_scalar_gradient
   
   elemental subroutine cheb1d_scalar_assign(this,rhs)
@@ -1141,6 +1139,12 @@ contains
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
     call local%assign_meta_data(this)
+    if (dir==1) then
+      local%field_data = this%field_data
+      call differentiate_1d(local%field_data,local%colloc_points,order)
+    else
+      local%field_data = 0.0
+    end if    
     call move_alloc(local, res)
   end function cheb1d_scalar_d_dx
 
@@ -1847,8 +1851,19 @@ contains
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(vector_field), allocatable :: res
     type(cheb1d_vector_field), allocatable :: local
+    integer :: i
     allocate(local)
-    call local%assign_meta_data(this)
+    if (dir==1) then
+      local = this
+      do i=1,1+local%extra_dims
+        call differentiate_1d(local%field_data(:,i),local%colloc_points,order)
+      end do
+    else
+      call local%assign_meta_data(this,.false.)
+      allocate(local%field_data(local%numpoints+1,1))
+      local%field_data = 0.0_r8
+      local%extra_dims = 0
+    end if
     call move_alloc(local, res)
   end function cheb1d_vector_d_dx
 
@@ -1877,6 +1892,8 @@ contains
     type(cheb1d_scalar_field), allocatable :: local
     allocate(local)
     call local%assign_meta_data(this)
+    local%field_data = this%field_data(:,1)
+    call differentiate_1d(local%field_data,local%colloc_points)
     call move_alloc(local, res)
   end function cheb1d_vector_divergence
   
@@ -1890,7 +1907,22 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     type(cheb1d_vector_field), allocatable :: local
     allocate(local)
-    call local%assign_meta_data(this)
+    call local%assign_meta_data(this,.false.)
+    local%extra_dims = 2
+    allocate(local%field_data(local%numpoints+1,3))
+    local%field_data(:,1) = 0.0_r8
+    if (this%extra_dims >= 2) then
+      local%field_data(:,2) = -this%field_data(:,3)
+      call differentiate_1d(local%field_data(:,2),local%colloc_points)
+    else
+      local%field_data(:,2) = 0.0_r8
+    end if
+    if (this%extra_dims >= 1) then
+      local%field_data(:,3) = this%field_data(:,2)
+      call differentiate_1d(local%field_data(:,3),local%colloc_points)
+    else
+      local%field_data(:,3) = 0.0_r8
+    end if
     call move_alloc(local, res)
   end function cheb1d_vector_curl
 

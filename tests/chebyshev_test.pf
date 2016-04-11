@@ -107,5 +107,61 @@ contains
     @assertEqual(this%nodes+1,size(points),message="Collocation points array wrong length.")
     @assertEqual(this%expected,points,message="Calculated Chebyshev collocation points incorrect.",tolerance=1.e-9_r8)
   end subroutine test_collocation
+
+@Test
+  subroutine test_differntiate_1d(this)
+    class(test_cheb), intent(inout) :: this
+    integer, parameter :: nodes = 24
+    real(r8), dimension(nodes+1) :: xvals, func
+    xvals = collocation_points(nodes,this%lower,this%upper)
+    func = f1(xvals)
+    call differentiate_1d(func,xvals)
+    @assertEqual(df1(xvals(2:nodes)),func(2:nodes),message="Derivative calculation incorrect.", tolerance=1.e-9_r8)
+    func = f1(xvals)
+    call differentiate_1d(func,xvals,2)
+    @assertEqual(d2f1(xvals),func,message="Derivative calculation incorrect.", tolerance=1.e-9_r8)
+    func = f1(xvals)
+    call differentiate_1d(func,xvals,3)
+    @assertEqual(d3f1(xvals),func,message="Derivative calculation incorrect.", tolerance=1.e-7_r8)
+    func = f1(xvals)
+    call differentiate_1d(func,xvals,0)
+    @assertEqual(f1(xvals),func,message="Derivative calculation incorrect.", tolerance=1.e-9_r8)
+    func = f1(xvals)
+    call differentiate_1d(func,xvals,-1)
+    @assertEqual(f1(xvals),func,message="Derivative calculation incorrect.", tolerance=1.e-9_r8)
+    func = f2(xvals)
+    call differentiate_1d(func,xvals,1)
+    @assertEqual(df2(xvals),func,message="Derivative calculation incorrect.", tolerance=1.e-9_r8)
+    func = f2(xvals)
+    call differentiate_1d(func,xvals,2)
+    @assertEqual(-f2(xvals),func,message="Derivative calculation incorrect.", tolerance=1.e-9_r8)
+  contains
+    elemental real(r8) function f1(x)
+      real(r8), intent(in) :: x
+      f1 = x**3 - 2.0_r8*x**2 + 8.0_r8*x -12._r8
+    end function f1
+    elemental real(r8) function df1(x)
+      real(r8), intent(in) :: x
+      df1 = 3.0_r8*x**2 - 4.0_r8*x + 8.0_r8
+    end function df1
+    elemental real(r8) function d2f1(x)
+      real(r8), intent(in) :: x
+      d2f1 = 6.0_r8*x - 4.0_r8
+    end function d2f1
+    elemental real(r8) function d3f1(x)
+      real(r8), intent(in) :: x
+      d3f1 = 6.0_r8
+    end function d3f1
+    elemental real(r8) function f2(x)
+      real(r8), intent(in) :: x
+      f2 = sin(x)
+!~       f2 = exp(x)*sin(5.0_r8*x)
+    end function f2
+    elemental real(r8) function df2(x)
+      real(r8), intent(in) :: x
+      df2 = cos(x)
+!~       df2 = exp(x)*(sin(5.0_r8*x) + 5.0_r8*cos(5.0_r8*x))
+    end function df2
+  end subroutine test_differntiate_1d
   
 end module chebyshev_test

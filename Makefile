@@ -1,16 +1,19 @@
+LOCAL_ROOT ?= $(HOME)/Code/local
+
 VENDOR ?= GNU
 VENDOR_ = $(shell echo $(VENDOR) | tr A-Z a-z)
 
 ifeq ($(VENDOR_),gnu)
-F90 = gfortran-5
-PFUNIT = /opt/pfunit-gfortran-5
-FCFLAGS = -Og -g -I$(INC) -J$(INC)
-LDFLAGS = -Og -g 
+F90 = gfortran
+PFUNIT = $(HOME)/Code/pfunit-gfortran
+FCFLAGS = -O0 -g -J$(INC) -I$(SYSINC) -fcheck=all -DDEBUG
+LDFLAGS = -O0 -g 
 COVFLAGS = -fprofile-arcs -ftest-coverage
 else ifeq ($(VENDOR_),intel)
 F90 = ifort
-PFUNIT = /opt/pfunit-ifort
-FCFLAGS = -O0 -g -I$(INC) -module $(INC) -traceback -assume realloc_lhs
+PFUNIT = $(HOME)/Code/pfunit-ifort
+FCFLAGS = -O0 -g -I$(INC) -module $(INC) -I$(SYSINC) -traceback \
+          -assume realloc_lhs
 LDFLAGS = -O0 -g -traceback
 COVFLAGS = 
 endif
@@ -22,9 +25,11 @@ export FCFLAGS
 export LDFLAGS
 export COVFLAGS
 
-# flags for debugging or for maximum performance, comment as necessary
 PWD = $(shell pwd)
 INC = $(PWD)/mod
+SYSINC = $(LOCAL_ROOT)/include
+LIBS = -L$(PFUNIT)/lib -lpfunit $(COVFLAGS) -L. -lfactual -L$(LOCAL_ROOT)/lib -lfftw3 -lm
+
 
 ARCHIVE = libfactual.a
 SRC = ./src
@@ -50,7 +55,7 @@ tests: $(EXE)
 SUT: lib
 	make -C $(TEST) tests
 
-gcov: tests
+gcov: $(EXE)
 	make -C $(SRC) gcov
 
 %: $(ODIR)/%.o
@@ -77,14 +82,16 @@ gcov: tests
 clean:
 	make -C $(SRC) clean
 	make -C $(TEST) clean
-	rm -f $(ARCHIVE)
-	rm -f *.gcov
+	rm -f $(ARCHIVE) $(EXE)
+	rm -f *.gcov *.gcda *.gcno
 
 init:
 	mkdir -p $(ODIR)
 	mkdir -p $(INC)
 
 echo:
+	echo $(LOCAL_ROOT)
+	echo $(PFUNIT)
 	make -C $(SRC) echo
 
 
@@ -92,5 +99,5 @@ $(EXE): SUT
 	$(F90) -o $@ -I$(PFUNIT)/mod -I$(PFUNIT)/include \
 		-I$(TEST) -I$(TESTINC) \
 		$(PFUNIT)/include/driver.F90 $(TEST)/*.o $(FCFLAGS) \
-		 -L. -lfactual -L$(PFUNIT)/lib -lpfunit $(COVFLAGS)
+		$(LIBS)
 

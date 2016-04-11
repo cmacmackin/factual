@@ -782,7 +782,7 @@ contains
     type(cheb1d_vector_field) :: field1, field2
     field1 = .grad. this%field1
     field2 = cheb1d_vector_field(this%nodes,func)
-    @assertTrue(this%field2==this%field1,message='Error calculating gradient of field')
+    @assertTrue(field2==field1,message='Error calculating gradient of field')
     @assertEqual(field2%resolution(),field1%resolution(),message='Result has wrong resolution')
     @assertEqual(field2%domain(),field1%domain(),message='Result has wrong domain')
     @assertEqual(field2%dimensions(),field1%dimensions(),message='Result has wrong number of dimensions')
@@ -791,7 +791,7 @@ contains
       real(r8), intent(in) :: x
       real(r8), dimension(:), allocatable :: func
       allocate(func(1))
-      func = df2(x)
+      func = df1(x)
     end function func
   end subroutine test_grad
   

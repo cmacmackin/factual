@@ -36,7 +36,7 @@ module chebyshev_mod
   
   real(r8), parameter :: pi = 4.0_r8*atan(1.0_r8)
   
-  public :: collocation_points
+  public :: collocation_points, differentiate_1d
   
 contains
   
@@ -79,11 +79,14 @@ contains
     ! @Note This routine works recursively for all derivatives with
     ! order greater than one. This is much simpler to implement than,
     ! but only about half as efficient as, directly computing any
-    ! derivative.
+    ! derivative. It also causes error to accumulate as higher
+    ! derivatives are computed, which can not be avoided simply by using
+    ! more nodes. This routine has been found to be somewhat unreliable
+    ! for derivatives of order greater than three.
     !
     ! @Todo Add the ability to directly calculate second derivative.
     !
-    real(c_double), dimension(:), intent(inout), contiguous :: field_data
+    real(c_double), dimension(:), intent(inout) :: field_data
       !! The data which is to be differentiated, along the direction of
       !! the array.
     real(c_double), dimension(size(field_data)), intent(in) :: xvals
@@ -92,30 +95,55 @@ contains
       !! The order of the derivative to take. If absent, defaults to 1.
       !! Zero corresponds to no derivative and negative values are
       !! treated as zero.
-    integer :: order_, field_size, i
-    real(r8) :: field_width, field_centre
-    type(c_ptr) :: plan, tmp
-    field_size = size(field_data)
+    integer :: ord, order_, i
+    integer(c_int) :: field_size
+    real(c_double), dimension(:), pointer :: array1, array2
+    real(r8) :: inverse_width, field_centre
+    type(c_ptr) :: plan_dct, plan_dst, array_c1, array_c2
+    field_size = size(field_data,kind=c_size_t)
     if (present(order)) then
       order_ = order
     else
       order_ = 1
     end if
-    field_width = xvals(field_size) - xvals(1)
-    field_centre = xvals(1) + field_width/2.0_r8
-    if (order_ < 1) then
+    ord = order_
+    inverse_width = 2.0_c_double/(xvals(1) - xvals(field_size))
+    field_centre = xvals(1) - 1.0_r8/(inverse_width)
+    if (ord > 0) then
+      array_c1 = fftw_alloc_real(int(field_size,c_size_t))
+      call c_f_pointer(array_c1, array1, [int(field_size,c_size_t)])
+      array_c2 = fftw_alloc_real(int(field_size,c_size_t))
+      call c_f_pointer(array_c2, array2, [int(field_size,c_size_t)])
+    else
       return
-    else if (order_==1) then
-      plan = fftw_plan_r2r_1d(field_size, field_data, field_data, &
-                              FFTW_REDFT00, FFTW_MEASURE)
-      call fftw_execute_r2r(plan,field_data,field_data)
-      field_data = pi/real(field_size) * field_data
-      forall (i=0:field_size-1) field_data(i) = -real(i,c_double)*field_data(i)
-      field_data(field_size) = 0.0_c_double
-      
-    
-  contains
-    
-  end subroutine differentiate
+    end if
+    plan_dct = fftw_plan_r2r_1d(field_size, array1, array2, FFTW_REDFT00, FFTW_ESTIMATE)
+    plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array1, FFTW_RODFT00, FFTW_ESTIMATE)
+    array1 = field_data
+    do while(ord > 0)
+      call fftw_execute_r2r(plan_dct,array1,array2)
+      array2 = pi/real(field_size-1,c_double) * array2
+      forall (i=1:field_size-1) array1(i) = -real(i,c_double)*array2(i+1)
+      array1(field_size - 1) = array1(field_size - 1)*0.5_r8
+      array1(field_size) = 0.0_c_double
+      call fftw_execute_r2r(plan_dst,array1,array1)
+      array1 = 0.5_c_double/pi * array1
+      forall (i=2:field_size-1) array1(i) = -array1(i-1)/ &
+          sqrt(1.0_c_double - ((xvals(i)-field_centre)*inverse_width)**2)
+      array2 = 1.0_c_double/pi * array2
+      forall (i=2:field_size) array2(i) = real(i-1,c_double)**2 * array2(i)
+      array1(1) = sum(array2(2:field_size-1))
+      array1(1) = array1(1) + 0.5_c_double*array2(field_size)
+      forall (i=2:field_size) array2(i) = (-1._c_double)**(i) * array2(i)
+      array1(field_size) = sum(array2(2:field_size-1))
+      array1(field_size) = array1(field_size) + 0.5_c_double*array2(field_size)
+      ord = ord - 1
+    end do
+    field_data = array1 * inverse_width**order_
+    call fftw_free(array_c1)
+    call fftw_free(array_c2)
+    call fftw_destroy_plan(plan_dct)
+    call fftw_destroy_plan(plan_dst)
+  end subroutine differentiate_1d
 
 end module chebyshev_mod
