@@ -1313,7 +1313,7 @@ contains
       !! less than 0.
     type(cheb1d_vector_field) :: field
     real(r8), dimension(:), allocatable :: tmp
-    integer :: i, j, dims, initializer_dims
+    integer :: i, dims, initializer_dims
     dims = 1
     if (present(extra_dims)) then
       if (extra_dims > 0) then
@@ -2146,5 +2146,17 @@ contains
       end if
     end select
   end subroutine cheb1d_vector_assign_meta_data
+
+  pure logical function isnan(number)
+    !* Author: Christopher MacMackin
+    !  Date: April 2016
+    !
+    ! Checks whether a real number is NaN. Included as drop-in replacement for
+    ! GNU extension of the same name.
+    !
+    real(r8), intent(in) :: number
+      !! The number being checked to ensure it isn't a NaN
+    isnan = (number /= number)
+  end function isnan
 
 end module cheb1d_fields_mod
