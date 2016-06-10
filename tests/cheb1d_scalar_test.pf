@@ -64,7 +64,7 @@ contains
   
   pure real(r8) function f2(x)
     real(r8), intent(in) :: x
-    f2 = 1.0_r8 + x*exp(x)
+    f2 = 2.0_r8 + x*exp(x)
   end function f2
   
   pure real(r8) function df2(x)
@@ -392,7 +392,7 @@ contains
   subroutine test_fpr(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_scalar_field) :: field
-    field = this%field1**5.2_r8
+    field = this%field2**5.2_r8
     this%field2 = cheb1d_scalar_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating field**real')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
@@ -401,7 +401,7 @@ contains
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) ** 5.2_r8
+      func = f2(x) ** 5.2_r8
     end function func
   end subroutine test_fpr
   
@@ -409,7 +409,7 @@ contains
   subroutine test_fpr4(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_scalar_field) :: field
-    field = this%field1**3.5
+    field = this%field2**3.5
     this%field2 = cheb1d_scalar_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating field**real')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
@@ -418,7 +418,7 @@ contains
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = f1(x) ** 3.5
+      func = f2(x) ** 3.5
     end function func
   end subroutine test_fpr4
   
@@ -647,7 +647,7 @@ contains
   subroutine test_log(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_scalar_field) :: field
-    field = log(this%field1)
+    field = log(this%field2)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating log(field)')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
@@ -656,7 +656,7 @@ contains
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = log(f1(x))
+      func = log(f2(x))
     end function func
   end subroutine test_log
   
@@ -664,7 +664,7 @@ contains
   subroutine test_log10(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_scalar_field) :: field
-    field = log10(this%field1)
+    field = log10(this%field2)
     this%field2 = cheb1d_scalar_field(this%nodes,func)
     @assertTrue(this%field2==field,message='Error calculating log10(field)')
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
@@ -673,7 +673,7 @@ contains
   contains
     real(r8) pure function func(x)
       real(r8), intent(in) :: x
-      func = log10(f1(x))
+      func = log10(f2(x))
     end function func
   end subroutine test_log10
   
