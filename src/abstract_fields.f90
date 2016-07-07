@@ -60,6 +60,8 @@ module abstract_fields_mod
     ! Cambridge University Press, New York, NY, USA.
     !
   contains
+    procedure :: elements
+      !! Specifies the number of individual data points present in this field.
     procedure(f_ret_r), deferred :: domain
       !! Provides array with upper and lower limits of field's domain
     procedure(f_ret_i), deferred :: dimensions
@@ -134,6 +136,12 @@ module abstract_fields_mod
       !! \({\rm field}^{\rm real}\)
     procedure(sf_i), deferred :: field_pow_int
       !! \({\rm field}^{\rm int}\)
+    procedure(sf_elem), public, deferred :: get_element
+      !! Returns one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location
+    procedure(sf_set_elem), deferred :: set_element
+      !! Sets one of the constituent values of the field, i.e. the field's
+      !! value at a particular location
     procedure(sf_ret_sf), deferred :: sin
       !! \(\sin({\rm field})\)
     procedure(sf_ret_sf), deferred :: cos
@@ -241,6 +249,20 @@ module abstract_fields_mod
       !! \({\rm \vec{real}} - {\rm \vec{field}}\)
     procedure(vf_vr), deferred :: field_sub_real
       !! \({\rm \vec{field}} - {\rm \vec{real}}\)
+    procedure(vf_elem_vec), deferred :: get_element_vector
+      !! Returns ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location
+    procedure(vf_elem_comp), deferred :: get_element_component
+      !! Returns one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location
+    generic, public :: get_element => get_element_vector, get_element_component
+      !! Returns a constituent value of the field, i.e. the vector or 
+      !! vector component giving the field's value at a particular 
+      !! location
+    procedure(vf_set_elem), deferred :: set_element
+      !! Sets the value of a constituent vector of the field, i.e. the field's
+      !! value at a particular location
     procedure(vf_norm), public, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
@@ -337,28 +359,28 @@ module abstract_fields_mod
         !! Array containing data needed to describe field
     end function f_raw
     
-    pure function f_jacob(this,order)
-      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
-      ! is returned, where \(\vec{y}\) is the field represented as a 1D
-      ! array of values (i.e. the output of [[abstract_field:raw]])
-      ! and \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \).
-      ! Here, \(n\) is the `order` of the derivative to be taken, with 0
-      ! corresponding to not taking any derivative.
-      !
-      ! @BUG The returned value has shape `(this%raw_size(),
-      ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
-      ! 5) caused the compiler to segfault if it was declared as such.
-      ! As a workaround, it is allocatable isntead.
-      !
-      import :: abstract_field
-      import :: r8
-      class(abstract_field), intent(in) :: this
-      integer, intent(in), optional :: order
-        !! The order of the derivative of the field whose Jacobian is
-        !! to be returned. Default is 0 (no differentiation)
-      real(r8), dimension(:,:), allocatable :: f_jacob
-        !! The resulting Jacobian matrix
-    end function f_jacob
+!$    pure function f_jacob(this,order)
+!$      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
+!$      ! is returned, where \(\vec{y}\) is the field represented as a 1D
+!$      ! array of values (i.e. the output of [[abstract_field:raw]])
+!$      ! and \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \).
+!$      ! Here, \(n\) is the `order` of the derivative to be taken, with 0
+!$      ! corresponding to not taking any derivative.
+!$      !
+!$      ! @BUG The returned value has shape `(this%raw_size(),
+!$      ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
+!$      ! 5) caused the compiler to segfault if it was declared as such.
+!$      ! As a workaround, it is allocatable isntead.
+!$      !
+!$      import :: abstract_field
+!$      import :: r8
+!$      class(abstract_field), intent(in) :: this
+!$      integer, intent(in), optional :: order
+!$        !! The order of the derivative of the field whose Jacobian is
+!$        !! to be returned. Default is 0 (no differentiation)
+!$      real(r8), dimension(:,:), allocatable :: f_jacob
+!$        !! The resulting Jacobian matrix
+!$    end function f_jacob
 
     pure function f_res(this)
       import :: abstract_field
@@ -445,6 +467,30 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: sf_i !! The result of this operation
     end function sf_i
   
+    pure function sf_elem(this,element)
+      !! Returns an element of the field corresponding to the provided ID 
+      !! number
+      import :: scalar_field
+      import :: r8
+      class(scalar_field), intent(in) :: this
+      integer, intent(in) :: element
+        !! The ID number of the field element to be returned
+      real(r8) :: sf_elem
+        !! The value of the field corresponding to the specified ID
+    end function sf_elem
+
+    pure subroutine sf_set_elem(this,element,val)
+      !! Sets the element of the field corresponding to the given ID to
+      !! the given value.
+      import :: scalar_field
+      import :: r8
+      class(scalar_field), intent(inout) :: this
+      integer, intent(in) :: element
+        !! The ID number of the field element to be set
+      real(r8), intent(in) :: val
+        !! The new value the field element is to be set to
+    end subroutine sf_set_elem
+
     pure function sf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
@@ -516,6 +562,45 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_r !! The result of this operation
     end function vf_r
     
+    pure function vf_elem_vec(this,element)
+      !! Returns a vector of the field corresponding to the provided ID 
+      !! number
+      import :: vector_field
+      import :: r8
+      class(vector_field), intent(in) :: this
+      integer, intent(in) :: element
+        !! The ID number of the field element to be returned
+      real(r8), allocatable, dimension(:) :: vf_elem_vec
+        !! The vector in the field corresponding to the specified ID
+    end function vf_elem_vec
+    
+    pure function vf_elem_comp(this,element,component)
+      !! Returns a component of the vector of the field corresponding to 
+      !! the provided ID number
+      import :: vector_field
+      import :: r8
+      class(vector_field), intent(in) :: this
+      integer, intent(in) :: element
+        !! The ID number of the field element to be returned
+      integer, intent(in) :: component
+        !! The number of the vector component to be returned
+      real(r8), allocatable, dimension(:) :: vf_elem_comp
+        !! The vector component in the field corresponding to the 
+        !! specified ID
+    end function vf_elem_comp
+
+    pure subroutine vf_set_elem(this,element,val)
+      !! Sets the element of the field corresponding to the given ID to
+      !! the given vector value.
+      import :: vector_field
+      import :: r8
+      class(vector_field), intent(inout) :: this
+      integer, intent(in) :: element
+        !! The ID number of the field element to be set
+      real(r8), dimension(:), intent(in) :: val
+        !! The new vector value the field element is to be set to
+    end subroutine vf_set_elem
+
     function vf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
@@ -766,6 +851,17 @@ module abstract_fields_mod
             acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
 contains
+
+  pure function elements(this)
+    !* Author: Chris MacMackin
+    !  Date: June 2016
+    !
+    ! Gives the number of individual data points present in the field.
+    !
+    class(abstract_field), intent(in) :: this
+    integer :: elements
+    elements = product(this%resolution())
+  end function elements
   
   pure function scalar_field_sin(field) result(res)
     !* Author: Chris MacMackin

@@ -220,6 +220,14 @@ contains
   end subroutine test_resolution
 
 @Test
+  subroutine test_elements(this)
+    class(test_field), intent(inout) :: this
+    integer :: res
+    res = this%field1%elements()
+    @assertEqual(this%nodes,res,message='Incorrect number of elements returned')
+  end subroutine test_elements
+
+@Test
   subroutine test_fmf(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_vector_field) :: field

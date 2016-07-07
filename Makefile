@@ -6,9 +6,9 @@ VENDOR_ = $(shell echo $(VENDOR) | tr A-Z a-z)
 ifeq ($(VENDOR_),gnu)
 F90 = gfortran
 PFUNIT = $(HOME)/Code/pfunit-gfortran
-FCFLAGS = -O0 -g -J$(INC) -I$(SYSINC) -fcheck=all -DDEBUG
-LDFLAGS = -O0 -g 
-COVFLAGS = -fprofile-arcs -ftest-coverage
+FCFLAGS = -Ofast -p -J$(INC) -I$(SYSINC)# -fcheck=all -DDEBUG
+LDFLAGS = -Ofast -p 
+COVFLAGS = #-fprofile-arcs -ftest-coverage
 else ifeq ($(VENDOR_),intel)
 F90 = ifort
 PFUNIT = $(HOME)/Code/pfunit-ifort
