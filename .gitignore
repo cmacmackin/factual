@@ -11,3 +11,5 @@ doc/
 *.smod
 a.out
 *.x
+gmon.out
+gprof.log
