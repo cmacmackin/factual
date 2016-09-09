@@ -161,7 +161,7 @@ module cheb1d_fields_mod
       !! Copies all data other than values stored in field from another
       !! field object to this one.
     procedure :: check_compatible => cheb1d_scalar_check_compatible
-  end type
+  end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
     module procedure scalar_constructor
@@ -253,7 +253,7 @@ module cheb1d_fields_mod
       !! Copies all data other than values stored in field from another
       !! field object to this one.
     procedure :: check_compatible => cheb1d_vector_check_compatible
-  end type
+  end type cheb1d_vector_field
   
   interface cheb1d_vector_field
     module procedure vector_constructor
@@ -264,7 +264,7 @@ module cheb1d_fields_mod
       !! Function used to specify value held by a scalar field at
       !! location `x`.
       import :: r8
-      real(r8), intent(in) :: x 
+      real(r8), dimension(:), intent(in) :: x 
         !! The position at which this function is evaluated
       real(r8) :: scalar
         !! The value of the field at this location
@@ -274,7 +274,7 @@ module cheb1d_fields_mod
       !! Function used to specify value held by a vector field at
       !! location `x`.
       import :: r8
-      real(r8), intent(in) :: x 
+      real(r8), dimension(:), intent(in) :: x 
         !! The position at which this function is evaluated
       real(r8), dimension(:), allocatable :: vector
         !! The value of the field at this location
@@ -309,7 +309,7 @@ contains
     if (present(upper_bound)) field%extent(1,2) = upper_bound
     field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
     if (present(initializer)) then
-      forall (i=1:nodes+1) field%field_data(i) = initializer(field%colloc_points(i))
+      forall (i=1:nodes+1) field%field_data(i) = initializer([field%colloc_points(i)])
     else
       field%field_data = 0.0_r8
     end if
@@ -1299,7 +1299,7 @@ contains
       !! The number of collocation nodes to use when modelling this
       !! field. This corresponds to resolution.
     procedure(vector_init), optional :: initializer
-      !! An elemental procedure taking which takes the position in the
+      !! An elemental procedure which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
@@ -1327,20 +1327,20 @@ contains
     field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
     allocate(field%field_data(nodes+1,dims))
     if (present(initializer)) then
-      initializer_dims = size(initializer(field%extent(1,1)))
+      initializer_dims = size(initializer([field%extent(1,1)]))
       if (initializer_dims < dims) then
         tmp = [(0.0, i=1,(1+dims-initializer_dims))]
         forall (i=1:nodes+1) &
-          field%field_data(i,:) = [initializer(field%colloc_points(i)),&
+          field%field_data(i,:) = [initializer([field%colloc_points(i)]),&
                                    tmp]
       else if (initializer_dims > dims) then
         do i=1,nodes+1
-          tmp = initializer(field%colloc_points(i))
+          tmp = initializer([field%colloc_points(i)])
           field%field_data(i,:) = tmp(1:dims)
         end do
       else
         forall (i=1:nodes+1) &
-          field%field_data(i,:) = initializer(field%colloc_points(i))
+          field%field_data(i,:) = initializer([field%colloc_points(i)])
       end if
     else
       field%field_data = 0.0_r8
