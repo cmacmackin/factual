@@ -139,9 +139,6 @@ module abstract_fields_mod
     procedure(sf_elem), public, deferred :: get_element
       !! Returns one of the constituent values of the field, i.e. the 
       !! field's value at a particular location
-    procedure(sf_set_elem), deferred :: set_element
-      !! Sets one of the constituent values of the field, i.e. the field's
-      !! value at a particular location
     procedure(sf_ret_sf), deferred :: sin
       !! \(\sin({\rm field})\)
     procedure(sf_ret_sf), deferred :: cos
@@ -227,6 +224,8 @@ module abstract_fields_mod
     !
   contains
     private
+    procedure(vf_ret_i), deferred :: vector_dimensions
+      !! Returns dimension of the vectors in the field
     procedure(vf_sf), deferred :: field_multiply_field
       !! \({\rm\vec{field}} \times {\rm field}\)
     procedure(r_vf), pass(rhs), deferred :: real_multiply_field
@@ -260,9 +259,6 @@ module abstract_fields_mod
       !! Returns a constituent value of the field, i.e. the vector or 
       !! vector component giving the field's value at a particular 
       !! location
-    procedure(vf_set_elem), deferred :: set_element
-      !! Sets the value of a constituent vector of the field, i.e. the field's
-      !! value at a particular location
     procedure(vf_norm), public, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
@@ -320,6 +316,12 @@ module abstract_fields_mod
       class(abstract_field), intent(in) :: this
       integer :: f_ret_i
     end function f_ret_i
+
+    elemental function vf_ret_i(this)
+      import :: vector_field
+      class(vector_field), intent(in) :: this
+      integer :: vf_ret_i
+    end function vf_ret_i
 
     pure function f_rawsize(this,return_lower_bound,return_upper_bound)
       import :: abstract_field
