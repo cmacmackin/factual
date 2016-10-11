@@ -1730,14 +1730,16 @@ contains
     integer, intent(in) :: component !! Which component of the vector is being differentiated
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(scalar_field), allocatable :: res
-    class(array_scalar_field), allocatable :: local
-    integer :: i
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    
-    local%field_data(:) = this%array_component_dx(this%field_data(:,component), &
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      res%field_data(:) = this%array_component_dx(this%field_data(:,component), &
                                                  dir, order)
-    call move_alloc(local, res)
+    class default
+      error stop('Non-array_scalar_field type allocated by '//&
+                 '`allocate_scalar_field` routine.')
+    end select
   end function array_vector_component_d_dx
 
   function array_vector_laplacian(this) result(res)
