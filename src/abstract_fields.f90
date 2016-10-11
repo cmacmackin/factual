@@ -80,6 +80,14 @@ module abstract_fields_mod
     procedure(f_eq_meta), deferred :: assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
+    procedure(scalar_factory), public, deferred :: allocate_scalar_field
+      !! Allocates a scalar field to be of the same concrete type as
+      !! those returned by type-bound procedures of this field which
+      !! produce scalar fields.
+    procedure(vector_factory), public, deferred :: allocate_vector_field
+      !! Allocates a vector field to be of the same concrete type as
+      !! those returned by type-bound procedures of this field which
+      !! produce vector fields.
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -224,7 +232,7 @@ module abstract_fields_mod
     !
   contains
     private
-    procedure(vf_ret_i), deferred :: vector_dimensions
+    procedure(vf_ret_i), public, deferred :: vector_dimensions
       !! Returns dimension of the vectors in the field
     procedure(vf_sf), deferred :: field_multiply_field
       !! \({\rm\vec{field}} \times {\rm field}\)
@@ -266,11 +274,13 @@ module abstract_fields_mod
       !! the vector field
     procedure(vf_dx), public, deferred :: d_dx
       !! \(\frac{\partial^n}{\partial x_i^n}({\rm \vec{field}})\)
-    procedure(vf_ret_sf), deferred :: divergence
+    procedure(vf_comp_dx), public, deferred :: component_d_dx
+      !! \(\frac{\partial^n}{\partial x_i^n}({\rm field_j})\)
+    procedure(impure_vf_ret_sf), deferred :: divergence
       !! \(\nabla\cdot {\rm \vec{field}}\)
-    procedure(vf_ret_vf), deferred :: curl
+    procedure(impure_vf_ret_vf), deferred :: curl
       !! \(\nabla\times {\rm \vec{field}}\)
-    procedure(vf_ret_vf), deferred :: laplacian
+    procedure(impure_vf_ret_vf), deferred :: laplacian
       !! \(\nabla^2 {\rm \vec{field}}\)
     procedure(vf_vf_ret_sf), deferred :: dot_prod
       !! \({\rm \vec{field}} \cdot {\rm \vec{field}}\)
@@ -391,7 +401,7 @@ module abstract_fields_mod
         !! Array specifying the number of data points in each dimension.
     end function f_res
 
-    subroutine f_eq_raw(this,raw,provide_lower_bound,provide_upper_bound)
+    pure subroutine f_eq_raw(this,raw,provide_lower_bound,provide_upper_bound)
       !! Assigns raw data, such as that produced by 
       !! [[abstract_field:raw]], to the field
       import :: abstract_field
@@ -418,15 +428,33 @@ module abstract_fields_mod
       logical, optional, intent(in) :: alloc
         !! If present and false, do not allocate the array of `this`.
     end subroutine f_eq_meta
+
+    pure subroutine scalar_factory(this, new_field)
+      import :: abstract_field
+      import :: scalar_field
+      class(abstract_field), intent(in)               :: this
+      class(scalar_field), allocatable, intent(inout) :: new_field
+        !! A field which, upon return, is allocated to be of the same
+        !! concrete type as scalar fields produced by `this`.
+    end subroutine scalar_factory
+
+    pure subroutine vector_factory(this, new_field)
+      import :: abstract_field
+      import :: vector_field
+      class(abstract_field), intent(in)               :: this
+      class(vector_field), allocatable, intent(inout) :: new_field
+        !! A field which, upon return, is allocated to be of the same
+        !! concrete type as vector fields produced by `this`.
+    end subroutine vector_factory
     
-    function sf_sf(this,rhs)
+    pure function sf_sf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this, rhs
       class(scalar_field), allocatable :: sf_sf !! The restult of this operation
     end function sf_sf
 
-    function sf_vf(this,rhs)
+    pure function sf_vf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm \vec{field}}\)
       import :: scalar_field
       import :: vector_field
@@ -435,7 +463,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: sf_vf !! The result of this operation
     end function sf_vf
 
-    function r_sf(lhs,rhs)
+    pure function r_sf(lhs,rhs)
       !! \({\rm real} [{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: r8
@@ -444,7 +472,7 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: r_sf !! The result of this operation
     end function r_sf
   
-    function sf_r(this,rhs)
+    pure function sf_r(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm real}\)
       import :: scalar_field
       import :: r8
@@ -453,7 +481,7 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: sf_r !! The result of this operation
     end function sf_r
   
-    function sf_r4(this,rhs)
+    pure function sf_r4(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm real}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
@@ -461,8 +489,8 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: sf_r4 !! The result of this operation
     end function sf_r4
   
-    function sf_i(this,rhs)
-      !! \({\rm field} [{\rm operator}] {\rm real}\)
+    pure function sf_i(this,rhs)
+      !! \({\rm field} [{\rm operator}] {\rm integer}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
       integer, intent(in) :: rhs
@@ -530,8 +558,8 @@ module abstract_fields_mod
       class(scalar_field), intent(in) :: rhs
     end subroutine sf_eq_sf
     
-    function vf_sf(this,rhs)
-      !! \({\rm \vec{field} [{\rm operator}] {\rm field}\)
+    pure function vf_sf(this,rhs)
+      !! \({\rm \vec{field}} [{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this
@@ -539,14 +567,14 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_sf !! The restult of this operation
     end function vf_sf
 
-    function vf_vf(this,rhs)
+    pure function vf_vf(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{field}}\)
       import :: vector_field
       class(vector_field), intent(in) :: this, rhs
       class(vector_field), allocatable :: vf_vf !! The result of this operation
     end function vf_vf
 
-    function r_vf(lhs,rhs)
+    pure function r_vf(lhs,rhs)
       !! \({\rm real} [{\rm operator}] {\rm field}\)
       import :: vector_field
       import :: r8
@@ -555,7 +583,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: r_vf !! The result of this operation
     end function r_vf
   
-    function vf_r(this,rhs)
+    pure function vf_r(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm real}\)
       import :: vector_field
       import :: r8
@@ -603,20 +631,35 @@ module abstract_fields_mod
         !! The new vector value the field element is to be set to
     end subroutine vf_set_elem
 
-    function vf_ret_sf(this)
+    pure function vf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this
       class(scalar_field), allocatable :: vf_ret_sf !! The result of this operation
     end function vf_ret_sf
+
+    function impure_vf_ret_sf(this)
+      !! \([{\rm operator}] {\rm field}\)
+      import :: scalar_field
+      import :: vector_field
+      class(vector_field), intent(in) :: this
+      class(scalar_field), allocatable :: impure_vf_ret_sf !! The result of this operation
+    end function impure_vf_ret_sf
     
-    function vf_ret_vf(this)
+    pure function vf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: vector_field
       class(vector_field), intent(in) :: this
       class(vector_field), allocatable :: vf_ret_vf !! The result of this operation
     end function vf_ret_vf
+    
+    function impure_vf_ret_vf(this)
+      !! \([{\rm operator}] {\rm field}\)
+      import :: vector_field
+      class(vector_field), intent(in) :: this
+      class(vector_field), allocatable :: impure_vf_ret_vf !! The result of this operation
+    end function impure_vf_ret_vf
     
     pure function vf_norm(this)
       !! \([{\rm operator}] {\rm field}\)
@@ -626,7 +669,7 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_norm !! The result of this operation
     end function vf_norm
     
-    function vf_vf_ret_sf(this,rhs)
+    pure function vf_vf_ret_sf(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{field}}\)
       import :: scalar_field
       import :: vector_field
@@ -652,6 +695,17 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_dx !! The derivative
     end function vf_dx
 
+    function vf_comp_dx(this, dir, component, order)
+      !! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}{\rm field_{component}}\)
+      import :: vector_field
+      import :: scalar_field
+      class(vector_field), intent(in) :: this
+      integer, intent(in) :: dir !! Direction in which to differentiation
+      integer, intent(in) :: component !! Which component of the vector is being differentiated
+      integer, optional, intent(in) :: order !! Order of the derivative, default = 1
+      class(scalar_field), allocatable :: vf_comp_dx !! The derivative
+    end function vf_comp_dx
+
     elemental subroutine vf_eq_vf(this,rhs)
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
       import :: vector_field
@@ -659,7 +713,7 @@ module abstract_fields_mod
       class(vector_field), intent(in) :: rhs
     end subroutine vf_eq_vf
 
-    function vr_vf(lhs,rhs)
+    pure function vr_vf(lhs,rhs)
       !! \({\rm \vec{real}} [{\rm operator}] {\rm field}\)
       import :: vector_field
       import :: r8
@@ -668,7 +722,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vr_vf !! The result of this operation
     end function vr_vf
 
-    function vf_vr(this,rhs)
+    pure function vf_vr(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{real}}\)
       import :: vector_field
       import :: r8
@@ -677,7 +731,7 @@ module abstract_fields_mod
       class(vector_field), allocatable :: vf_vr !! The result of this operation
     end function vf_vr
 
-    function vf_comp(this,comp)
+    pure function vf_comp(this,comp)
       !! Scalar field containing specified component of the vector field
       import :: scalar_field
       import :: vector_field
@@ -756,7 +810,7 @@ module abstract_fields_mod
 !~         !! `.false.` otherwise
 !~     end function vf_same_bounds
 
-    function sf_is_equal(this,rhs) result(iseq)
+    pure function sf_is_equal(this,rhs) result(iseq)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
       class(scalar_field), intent(in) :: rhs
@@ -764,7 +818,7 @@ module abstract_fields_mod
         !! True if two fields are equal, false otherwise
     end function sf_is_equal
 
-    function vf_is_equal(this,rhs) result(iseq)
+    pure function vf_is_equal(this,rhs) result(iseq)
       import :: vector_field
       class(vector_field), intent(in) :: this
       class(vector_field), intent(in) :: rhs
@@ -1156,7 +1210,7 @@ contains
     tolerance = tol
   end subroutine set_tol
   
-  real(r8) function get_tol()
+  pure real(r8) function get_tol()
     !* Author: Chris MacMackin
     !  Date: April 2016
     !

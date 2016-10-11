@@ -52,7 +52,7 @@ contains
 #endif
   end function is_nan
 
-  subroutine check_set_from_raw(field,raw,provide_lower_bound,provide_upper_bound)
+  pure subroutine check_set_from_raw(field,raw,provide_lower_bound,provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: September 2016
     !
@@ -76,12 +76,8 @@ contains
     integer :: expected
     expected = field%raw_size(provide_lower_bound,provide_upper_bound)
     if (expected /= size(raw)) then
-      write(stderr,*) 'array_vector_field: Error, setting from raw array of wrong size'
-      write(stderr,"('    Needed: ',i0,', Actual: ',i0)") expected, size(raw)
-#ifdef __GFORTRAN__
-      call backtrace
-#endif
-      error stop
+      error stop('array_vector_field: Error, setting from raw array of '//&
+                 'wrong size')
     end if
 #endif
   end subroutine check_set_from_raw

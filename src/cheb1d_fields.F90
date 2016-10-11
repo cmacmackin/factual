@@ -1179,7 +1179,7 @@ contains
     end select
   end function cheb1d_scalar_is_equal
 
-  subroutine cheb1d_scalar_check_compatible(this,other)
+  pure subroutine cheb1d_scalar_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1231,12 +1231,8 @@ contains
       has_message = .true.
     end if
     if (has_message) then
-      write(stderr,*) 'cheb1d_scalar_field: Error, operation with incompatible fields'
-      write(stderr,*) '    Following inconsistencies:'//trim(err_message)
-#ifdef __GFORTRAN__
-      call backtrace
-#endif
-      error stop
+      error stop('cheb1d_scalar_field: Error, operation with incompatible '//&
+                 'fields')
     end if
   end subroutine cheb1d_scalar_check_compatible
 
