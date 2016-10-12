@@ -60,13 +60,13 @@ module array_fields_mod
     private
     integer :: numpoints
       !! The number of datapoints used
-    real(r8), dimension(:,:), allocatable :: extent
-      !! The start and end values of the domain
     real(r8), dimension(:), allocatable :: field_data
       !! The value of the scalar field at the data-points. Each
       !! element represents the value at a different location.
   contains
     private
+    procedure, non_overridable, public :: elements => array_scalar_elements
+      !! Specifies the number of individual data points present in this field. 
     procedure, public :: raw_size => array_scalar_raw_size
       !! Provides the number of pieces of data needed to represent the
       !! field, i.e. the size of the array returned by `get_raw`.
@@ -146,6 +146,8 @@ module array_fields_mod
       !! \(\min({\rm field})\)
     procedure :: maxval => array_scalar_maxval
       !! \(\max({\rm field})\)
+    procedure, public :: d_dx => array_scalar_d_dx
+      !! \(\frac{\partial^n}{\partial x_i^n}({\rm field})\)
     procedure :: gradient => array_scalar_gradient
       !! \(\nabla {\rm field}\)
     procedure :: laplacian => array_scalar_laplacian
@@ -230,8 +232,6 @@ module array_fields_mod
     private
     integer :: numpoints
       !! The number of datapoints used
-    real(r8), dimension(:,:), allocatable :: extent
-      !! The start and end values of the domain
     real(r8), dimension(:,:), allocatable :: field_data
       !! The value of the vector field at the data-points. Each row
       !! represents a different spatial location, while each column
@@ -240,6 +240,11 @@ module array_fields_mod
       !! The number of vector components
   contains
     private
+    procedure, non_overridable, public :: &
+         vector_dimensions => array_vector_vector_dimensions
+      !! Returns dimension of the vectors in the field
+    procedure, public :: elements => array_vector_elements
+      !! Specifies the number of individual data points present in this field. 
     procedure, public :: raw_size => array_vector_raw_size
       !! Provides the number of pieces of data needed to represent the
       !! field, i.e. the size of the array returned by `get_raw`.
@@ -276,6 +281,10 @@ module array_fields_mod
     procedure, public :: component => array_vector_component
       !! Returns a scalar field containing the specified component of 
       !! the vector field
+    procedure, public :: d_dx => array_vector_d_dx
+      !! \(\frac{\partial^n}{\partial x_i^n}({\rm \vec{field}})\)
+    procedure, public :: component_d_dx => array_vector_component_d_dx
+      !! \(\frac{\partial^n}{\partial x_i^n}({\rm field_j})\)
     procedure :: divergence => array_vector_divergence
       !! \(\nabla\cdot {\rm field}\)
     procedure :: curl => array_vector_curl
@@ -361,7 +370,7 @@ module array_fields_mod
         !! Direction in which to differentiate
       integer, optional                     :: order
         !! Order of the derivative, default = 1
-      real(r8), dimension(:,:), allocatable   :: res
+      real(r8), dimension(:,:), allocatable :: res
         !! The spatial derivative of order `order` taken in direction `dir`
     end function vf_vector_dx    
   end interface
@@ -374,6 +383,17 @@ contains
   ! Scalar Field Methods
   !=====================================================================
 
+
+  pure function array_scalar_elements(this) result(elements)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Gives the number of individual data points present in the field.
+    !
+    class(array_scalar_field), intent(in) :: this
+    integer :: elements
+    elements = this%numpoints
+  end function array_scalar_elements
 
   pure function array_scalar_raw_size(this,return_lower_bound, &
                                        return_upper_bound) result(res)
@@ -445,7 +465,6 @@ contains
     end if
   end function array_scalar_raw
   
-
   pure subroutine array_scalar_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
@@ -1217,7 +1236,6 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      this%extent = rhs%extent
       if (allocated(this%field_data)) deallocate(this%field_data)
       if (present(alloc)) then
         if (allocated(rhs%field_data) .and. alloc) &
@@ -1227,7 +1245,6 @@ contains
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
-      this%extent = rhs%extent
       if (allocated(this%field_data)) deallocate(this%field_data)
       if (present(alloc)) then
         if (allocated(rhs%field_data) .and. alloc) &
@@ -1243,6 +1260,29 @@ contains
   ! Vector Field Methods
   !=====================================================================
 
+
+  elemental function array_vector_vector_dimensions(this) result(dims)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Returns the number of dimensions/components are in the vectors
+    ! of this field.
+    !
+    class(array_vector_field), intent(in) :: this
+    integer :: dims !! Number of vector components
+    dims = this%vector_dims
+  end function array_vector_vector_dimensions
+
+  pure function array_vector_elements(this) result(elements)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Gives the number of individual data points present in the field.
+    !
+    class(array_vector_field), intent(in) :: this
+    integer :: elements
+    elements = this%numpoints
+  end function array_vector_elements
 
   pure function array_vector_raw_size(this,return_lower_bound, &
                                        return_upper_bound) result(res)
@@ -1989,7 +2029,6 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      this%extent = rhs%extent
       this%vector_dims = this%dimensions()
       if (allocated(this%field_data)) deallocate(this%field_data)
       if (present(alloc)) then
@@ -2001,7 +2040,6 @@ contains
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
-      this%extent = rhs%extent
       this%vector_dims = rhs%vector_dims
       if (allocated(this%field_data)) deallocate(this%field_data)
       if (present(alloc)) then

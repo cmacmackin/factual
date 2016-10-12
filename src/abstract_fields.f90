@@ -144,7 +144,7 @@ module abstract_fields_mod
       !! \({\rm field}^{\rm real}\)
     procedure(sf_i), deferred :: field_pow_int
       !! \({\rm field}^{\rm int}\)
-    procedure(sf_elem), public, deferred :: get_element
+    !~ procedure(sf_elem), public, deferred :: get_element
       !! Returns one of the constituent values of the field, i.e. the 
       !! field's value at a particular location
     procedure(sf_ret_sf), deferred :: sin
@@ -256,17 +256,17 @@ module abstract_fields_mod
       !! \({\rm \vec{real}} - {\rm \vec{field}}\)
     procedure(vf_vr), deferred :: field_sub_real
       !! \({\rm \vec{field}} - {\rm \vec{real}}\)
-    procedure(vf_elem_vec), deferred :: get_element_vector
-      !! Returns ones of the constituent vectors of the field, i.e. the 
-      !! field's value at a particular location
-    procedure(vf_elem_comp), deferred :: get_element_component
-      !! Returns one of the components of a constituent vector of the 
-      !! field, i.e. the component of the field's value at a particular 
-      !! location
-    generic, public :: get_element => get_element_vector, get_element_component
-      !! Returns a constituent value of the field, i.e. the vector or 
-      !! vector component giving the field's value at a particular 
-      !! location
+!~     procedure(vf_elem_vec), deferred :: get_element_vector
+!~       !! Returns ones of the constituent vectors of the field, i.e. the 
+!~       !! field's value at a particular location
+!~     procedure(vf_elem_comp), deferred :: get_element_component
+!~       !! Returns one of the components of a constituent vector of the 
+!~       !! field, i.e. the component of the field's value at a particular 
+!~       !! location
+!~     generic, public :: get_element => get_element_vector, get_element_component
+!~       !! Returns a constituent value of the field, i.e. the vector or 
+!~       !! vector component giving the field's value at a particular 
+!~       !! location
     procedure(vf_norm), public, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
@@ -371,28 +371,28 @@ module abstract_fields_mod
         !! Array containing data needed to describe field
     end function f_raw
     
-!$    pure function f_jacob(this,order)
-!$      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
-!$      ! is returned, where \(\vec{y}\) is the field represented as a 1D
-!$      ! array of values (i.e. the output of [[abstract_field:raw]])
-!$      ! and \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \).
-!$      ! Here, \(n\) is the `order` of the derivative to be taken, with 0
-!$      ! corresponding to not taking any derivative.
-!$      !
-!$      ! @BUG The returned value has shape `(this%raw_size(),
-!$      ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
-!$      ! 5) caused the compiler to segfault if it was declared as such.
-!$      ! As a workaround, it is allocatable isntead.
-!$      !
-!$      import :: abstract_field
-!$      import :: r8
-!$      class(abstract_field), intent(in) :: this
-!$      integer, intent(in), optional :: order
-!$        !! The order of the derivative of the field whose Jacobian is
-!$        !! to be returned. Default is 0 (no differentiation)
-!$      real(r8), dimension(:,:), allocatable :: f_jacob
-!$        !! The resulting Jacobian matrix
-!$    end function f_jacob
+!~    pure function f_jacob(this,order)
+!~      !* A Jacobian matrix \(\frac{\partial}{\partial y_j}f_i(\vec{y})\)
+!~      ! is returned, where \(\vec{y}\) is the field represented as a 1D
+!~      ! array of values (i.e. the output of [[abstract_field:raw]])
+!~      ! and \( f_i(\vec{y}) = \frac{\partial^{n}y_i}{\partial x^n} \).
+!~      ! Here, \(n\) is the `order` of the derivative to be taken, with 0
+!~      ! corresponding to not taking any derivative.
+!~      !
+!~      ! @BUG The returned value has shape `(this%raw_size(),
+!~      ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
+!~      ! 5) caused the compiler to segfault if it was declared as such.
+!~      ! As a workaround, it is allocatable isntead.
+!~      !
+!~      import :: abstract_field
+!~      import :: r8
+!~      class(abstract_field), intent(in) :: this
+!~      integer, intent(in), optional :: order
+!~        !! The order of the derivative of the field whose Jacobian is
+!~        !! to be returned. Default is 0 (no differentiation)
+!~      real(r8), dimension(:,:), allocatable :: f_jacob
+!~        !! The resulting Jacobian matrix
+!~    end function f_jacob
 
     pure function f_res(this)
       import :: abstract_field
