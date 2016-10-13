@@ -53,7 +53,7 @@ module cheb1d_fields_mod
     ! functions.
     !
     private
-    real(r8), dimension(:,:), allocatable :: extent
+    real(r8), dimension(2)              :: extent
       !! The start and end values of the domain
     real(r8), dimension(:), allocatable :: colloc_points
       !! The location of the data-points
@@ -69,7 +69,7 @@ module cheb1d_fields_mod
     procedure :: assign_subtype_meta_data => cheb1d_scalar_assign_meta
       !! Copies all data unique to this field type from another field
       !! object to this one.
-    procedure :: check_compatible => cheb1d_scalar_check_compatible
+    procedure :: check_subtype_compatible => cheb1d_scalar_check_compatible
       !! Tests whether two fields are suitable for binary operations
       !! together
     procedure :: array_dx => cheb1d_scalar_array_dx
@@ -96,7 +96,7 @@ module cheb1d_fields_mod
     ! differentiate.
     !
     private
-    real(r8), dimension(:,:), allocatable :: extent
+    real(r8), dimension(2)              :: extent
       !! The start and end values of the domain
     real(r8), dimension(:), allocatable :: colloc_points
       !! The location of the data-points
@@ -111,7 +111,7 @@ module cheb1d_fields_mod
     procedure :: assign_subtype_meta_data => cheb1d_vector_assign_meta
       !! Copies all data other than values stored in field from another
       !! field object to this one.
-    procedure :: check_compatible => cheb1d_vector_check_compatible
+    procedure :: check_subtype_compatible => cheb1d_vector_check_compatible
       !! Tests whether two fields are suitable for binary operations
       !! together
     procedure :: array_component_dx => cheb1d_vector_component_array_dx
@@ -174,16 +174,9 @@ contains
       !! The position of the upper bound of the field's domain. Default is 1.0.
     type(cheb1d_scalar_field) :: field
     integer :: i
-    field%numpoints = nodes
-    allocate(field%field_data(nodes+1))
-    if (present(lower_bound)) field%extent(1,1) = lower_bound
-    if (present(upper_bound)) field%extent(1,2) = upper_bound
+    if (present(lower_bound)) field%extent(1) = lower_bound
+    if (present(upper_bound)) field%extent(2) = upper_bound
     field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
-    if (present(initializer)) then
-      forall (i=1:nodes+1) field%field_data(i) = initializer([field%colloc_points(i)])
-    else
-      field%field_data = 0.0_r8
-    end if
   end function scalar_constructor
 
   pure function cheb1d_scalar_domain(this) result(res)
@@ -198,7 +191,8 @@ contains
       !  dimensions of the field. Each row contains the lower and the
       !  upper extent of the fields domain in the corresponding 
       !  dimension
-    res = this%extent
+    allocate(res(1,2))
+    res(1,:) = this%extent
   end function cheb1d_scalar_domain
 
   elemental function cheb1d_scalar_dimensions(this) result(res)
@@ -233,11 +227,11 @@ contains
     ! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}{\rm field}\)
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    integer, intent(in) :: dir
-      !! Direction in which to differentiate
     real(r8), dimension(:), intent(in)     :: data_array
       !! An array holding the datapoints for this field, identical
       !! in layout to that stored the field itself.
+    integer, intent(in) :: dir
+      !! Direction in which to differentiate
     integer, optional, intent(in) :: order
       !! Order of the derivative, default = 1
     real(r8), dimension(:), allocatable   :: res
@@ -248,66 +242,34 @@ contains
     else
       res = 0.0
     end if
-  end function cheb1d_scalar_d_dx
+  end function cheb1d_scalar_array_dx
 
   pure subroutine cheb1d_scalar_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
-    ! Checks whether a field has the same type, boundaries, and
-    ! resolution as this one, making it compatible for binary 
-    ! operations. If incompatible, stops program with an error message.
+    ! Checks whether a field has the same type, and domain as this
+    ! one, making it compatible for binary operations. If
+    ! incompatible, stops program with an error message.
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(abstract_field), intent(in) :: other
       !! The field being checked against this one
-    character(len=128) :: err_message
-    logical :: type_err, domain_err, res_err, alloc_err, has_message
-    has_message = .false.
+    character(len=70), parameter :: err_message = 'cheb1d_scalar_field: '//&
+         'Error, operation with incompatible fields due to'//new_line('a')
     select type(other)
     class is(cheb1d_scalar_field)
-      type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
-      res_err = this%elements() /= other%elements()
-      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
+      if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
+           error stop(err_message//'    domains.')           
     class is(cheb1d_vector_field)
-      type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
-      res_err = this%elements() /= other%elements()
-      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
+      if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
+           error stop(err_message//'    domains.')           
     class default
-      type_err = .true.
-      domain_err = .false.
-      res_err = .false.
-      alloc_err = .false.
+      error stop(err_message//'    incompatible types.')
     end select
-    err_message = ''
-    if (type_err) then
-      err_message = ' incompatible types'
-      has_message = .true.
-    end if
-    if (domain_err) then
-      if (has_message) err_message = trim(err_message)//','
-      err_message = trim(err_message)//' different domains'
-      has_message = .true.
-    end if
-    if (res_err) then
-      if (has_message) err_message = trim(err_message)//','
-      err_message = trim(err_message)//' different resolutions'
-      has_message = .true.
-    end if
-    if (alloc_err) then
-      if (has_message) err_message = trim(err_message)//','
-      err_message = trim(err_message)//' uninitialized field'
-      has_message = .true.
-    end if
-    if (has_message) then
-      error stop('cheb1d_scalar_field: Error, operation with incompatible '//&
-                 'fields')
-    end if
   end subroutine cheb1d_scalar_check_compatible
 
-  pure subroutine cheb1d_scalar_assign_meta(this, rhs, alloc)
+  pure subroutine cheb1d_scalar_assign_meta(this, rhs)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -316,7 +278,6 @@ contains
     !
     class(cheb1d_scalar_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
-    logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
     select type(rhs)
     class is(cheb1d_scalar_field)
@@ -340,9 +301,43 @@ contains
     end select
   end subroutine cheb1d_scalar_assign_meta
 
+  pure subroutine cheb1d_scalar_allocate_scalar(this, new_field)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Allocates an abstract [[scalar_field(type)]] to have a type
+    ! compatible for operations on this field and to be the type
+    ! returned by this field's methods which produce scalars.
+    !
+    class(cheb1d_scalar_field), intent(in)          :: this
+    class(scalar_field), allocatable, intent(inout) :: new_field
+      !! A field which, upon return, is allocated to be of the same
+      !! concrete type as scalar fields produced by `this`.
+    if (allocated(new_field)) deallocate(new_field)
+    allocate(cheb1d_scalar_field :: new_field)
+  end subroutine cheb1d_scalar_allocate_scalar
+
+  pure subroutine cheb1d_scalar_allocate_vector(this, new_field)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Allocates an abstract [[vector_field(type)]] to have a type
+    ! compatible for operations on this field and to be the type
+    ! returned by this field's methods which produce vectors.
+    !
+    class(cheb1d_scalar_field), intent(in)          :: this
+    class(vector_field), allocatable, intent(inout) :: new_field
+      !! A field which, upon return, is allocated to be of the same
+      !! concrete type as vector fields produced by `this`.
+    if (allocated(new_field)) deallocate(new_field)
+    allocate(cheb1d_vector_field :: new_field)
+  end subroutine cheb1d_scalar_allocate_vector
+
+
   !=====================================================================
   ! Vector Field Methods
   !=====================================================================
+
 
   function vector_constructor(nodes,initializer,lower_bound, &
                               upper_bound, extra_dims) result(field)
@@ -369,33 +364,11 @@ contains
     if (present(extra_dims)) then
       if (extra_dims > 0) then
         dims = dims + extra_dims
-        field%extra_dims = extra_dims
       end if
     end if
-    field%numpoints = nodes
-    if (present(lower_bound)) field%extent(1,1) = lower_bound
-    if (present(upper_bound)) field%extent(1,2) = upper_bound
+    if (present(lower_bound)) field%extent(1) = lower_bound
+    if (present(upper_bound)) field%extent(2) = upper_bound
     field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
-    allocate(field%field_data(nodes+1,dims))
-    if (present(initializer)) then
-      initializer_dims = size(initializer([field%extent(1,1)]))
-      if (initializer_dims < dims) then
-        tmp = [(0.0, i=1,(1+dims-initializer_dims))]
-        forall (i=1:nodes+1) &
-          field%field_data(i,:) = [initializer([field%colloc_points(i)]),&
-                                   tmp]
-      else if (initializer_dims > dims) then
-        do i=1,nodes+1
-          tmp = initializer([field%colloc_points(i)])
-          field%field_data(i,:) = tmp(1:dims)
-        end do
-      else
-        forall (i=1:nodes+1) &
-          field%field_data(i,:) = initializer([field%colloc_points(i)])
-      end if
-    else
-      field%field_data = 0.0_r8
-    end if
   end function vector_constructor
 
   pure function cheb1d_vector_domain(this) result(res)
@@ -410,7 +383,8 @@ contains
       !  dimensions of the field. Each row contains the lower and the
       !  upper extent of the fields domain in the corresponding 
       !  dimension
-    res = this%extent
+    allocate(res(1,2))
+    res(1,:) = this%extent
   end function cheb1d_vector_domain
 
   elemental function cheb1d_vector_dimensions(this) result(res)
@@ -460,7 +434,7 @@ contains
     integer :: i
     if (dir==1) then
       res = data_array
-      do i=1,local%vector_dimensions()
+      do i=1,this%vector_dimensions()
         call differentiate_1d(res(:,i),this%colloc_points,order)
       end do
     else
@@ -475,7 +449,7 @@ contains
     !
     ! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}{\rm field}\)
     !
-    class(cheb1d_scalar_field), intent(in) :: this
+    class(cheb1d_vector_field), intent(in) :: this
     integer, intent(in) :: dir
       !! Direction in which to differentiate
     real(r8), dimension(:), intent(in)     :: data_array
@@ -497,60 +471,28 @@ contains
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
-    ! Checks whether a field has the same type, boundaries, and
-    ! resolution as this one, making it compatible for binary 
-    ! operations. If incompatible, stops program with an error message.
+    ! Checks whether a field has the same type, and domain as this
+    ! one, making it compatible for binary operations. If
+    ! incompatible, stops program with an error message.
     !
     class(cheb1d_vector_field), intent(in) :: this
     class(abstract_field), intent(in) :: other
       !! The field being checked against this one
-    character(len=128) :: err_message
-    logical :: type_err, domain_err, res_err, alloc_err, has_message
-    has_message = .false.
+    character(len=70), parameter :: err_message = 'cheb1d_vector_field: '//&
+         'Error, operation with incompatible fields due to'//new_line('a')
     select type(other)
     class is(cheb1d_scalar_field)
-      type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
-      res_err = this%elements() /= other%elements()
-      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
+      if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
+           error stop(err_message//'    domains.')           
     class is(cheb1d_vector_field)
-      type_err = .false.
-      domain_err = any(abs(this%extent - other%extent) > 1.e-15_r8)
-      res_err = this%elements() /= other%elements()
-      alloc_err = .not. (allocated(this%field_data).and.allocated(other%field_data))
+      if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
+           error stop(err_message//'    domains.')           
     class default
-      type_err = .true.
-      domain_err = .false.
-      res_err = .false.
-      alloc_err = .false.
+      error stop(err_message//'    incompatible types.')
     end select
-    err_message = ''
-    if (type_err) then
-      err_message = ' incompatible types'
-      has_message = .true.
-    end if
-    if (domain_err) then
-      if (has_message) err_message = trim(err_message)//','
-      err_message = trim(err_message)//' different domains'
-      has_message = .true.
-    end if
-    if (res_err) then
-      if (has_message) err_message = trim(err_message)//','
-      err_message = trim(err_message)//' different resolutions'
-      has_message = .true.
-    end if
-    if (alloc_err) then
-      if (has_message) err_message = trim(err_message)//','
-      err_message = trim(err_message)//' uninitialized field'
-      has_message = .true.
-    end if
-    if (has_message) then
-      error stop('cheb1d_vector_field: Error, operation with incompatible '//&
-                 'fields')
-    end if
   end subroutine cheb1d_vector_check_compatible
 
-  pure subroutine cheb1d_vector_assign_meta(this, rhs, alloc)
+  pure subroutine cheb1d_vector_assign_meta(this, rhs)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -559,7 +501,6 @@ contains
     !
     class(cheb1d_vector_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
-    logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
     select type(rhs)
     class is(cheb1d_scalar_field)
@@ -582,5 +523,37 @@ contains
       end if
     end select
   end subroutine cheb1d_vector_assign_meta
+
+  pure subroutine cheb1d_vector_allocate_scalar(this, new_field)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Allocates an abstract [[scalar_field(type)]] to have a type
+    ! compatible for operations on this field and to be the type
+    ! returned by this field's methods which produce scalars.
+    !
+    class(cheb1d_vector_field), intent(in)          :: this
+    class(scalar_field), allocatable, intent(inout) :: new_field
+      !! A field which, upon return, is allocated to be of the same
+      !! concrete type as scalar fields produced by `this`.
+    if (allocated(new_field)) deallocate(new_field)
+    allocate(cheb1d_scalar_field :: new_field)
+  end subroutine cheb1d_vector_allocate_scalar
+
+  pure subroutine cheb1d_vector_allocate_vector(this, new_field)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Allocates an abstract [[vector_field(type)]] to have a type
+    ! compatible for operations on this field and to be the type
+    ! returned by this field's methods which produce vectors.
+    !
+    class(cheb1d_vector_field), intent(in)          :: this
+    class(vector_field), allocatable, intent(inout) :: new_field
+      !! A field which, upon return, is allocated to be of the same
+      !! concrete type as vector fields produced by `this`.
+    if (allocated(new_field)) deallocate(new_field)
+    allocate(cheb1d_vector_field :: new_field)
+  end subroutine cheb1d_vector_allocate_vector
 
 end module cheb1d_fields_mod

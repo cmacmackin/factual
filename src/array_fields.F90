@@ -162,8 +162,12 @@ module array_fields_mod
     procedure(sf_meta), deferred :: assign_subtype_meta_data
       !! Copies all data stored in a subtype of [[array_scalar_field(type)]]
       !! from another field object to this one.
-    procedure(sf_compatible), deferred :: check_compatible
+    procedure, non_overridable :: check_compatible => array_scalar_compatible
       !! Tests whether two fields are suitable for binary operations together
+    procedure(sf_compatible), deferred :: check_subtype_compatible
+      !! Tests whether two fields are suitable for binary operations
+      !! together, checking that any properties of subtypes of
+      !! [[array_scalar_field(type)]] are compatible.
     procedure(sf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of the scalar field using a 1-D array of
       !! data passed to it.
@@ -201,9 +205,9 @@ module array_fields_mod
       real(r8), dimension(:), intent(in)    :: data_array
         !! An array holding the datapoints for this field, identical
         !! in layout to that stored the field itself.
-      integer                               :: dir
+      integer, intent(in)                   :: dir
         !! Direction in which to differentiate
-      integer, optional                     :: order
+      integer, intent(in), optional         :: order
         !! Order of the derivative, default = 1
       real(r8), dimension(:), allocatable   :: res
         !! The spatial derivative of order `order` taken in direction `dir`
@@ -305,8 +309,12 @@ module array_fields_mod
     procedure(vf_meta), deferred :: assign_subtype_meta_data
       !! Copies all data stored in a subtype of [[array_vector_field(type)]]
       !! from another field object to this one.
-    procedure(vf_compatible), deferred :: check_compatible
+    procedure, non_overridable :: check_compatible => array_vector_compatible
       !! Tests whether two fields are suitable for binary operations together
+    procedure(vf_compatible), deferred :: check_subtype_compatible
+      !! Tests whether two fields are suitable for binary operations
+      !! together, checking that any properties of subtypes of
+      !! [[array_vector_field(type)]] are compatible.
     procedure(vf_scalar_dx), deferred :: array_component_dx
       !! Takes the derivative of particular vector component of the
       !! field, using a 1-D array of data passed to it.
@@ -348,9 +356,9 @@ module array_fields_mod
         !! An array holding the datapoints for a component of the
         !! vectors in this field, with identical in layout to the
         !! storage in the field itself.
-      integer                               :: dir
+      integer, intent(in)                   :: dir
         !! Direction in which to differentiate
-      integer, optional                     :: order
+      integer, intent(in), optional         :: order
         !! Order of the derivative, default = 1
       real(r8), dimension(:), allocatable   :: res
         !! The spatial derivative of order `order` taken in direction `dir`
@@ -366,9 +374,9 @@ module array_fields_mod
         !! itself. Each row represents a different spatial location,
         !! while each column represents a different component of the
         !! vector.
-      integer                               :: dir
+      integer, intent(in)                   :: dir
         !! Direction in which to differentiate
-      integer, optional                     :: order
+      integer, intent(in), optional         :: order
         !! Order of the derivative, default = 1
       real(r8), dimension(:,:), allocatable :: res
         !! The spatial derivative of order `order` taken in direction `dir`
@@ -1255,6 +1263,36 @@ contains
     end select
   end subroutine array_scalar_assign_meta_data
 
+  pure subroutine array_scalar_compatible(this,other)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Checks whether a field has the same type, boundaries, and
+    ! resolution as this one, making it compatible for binary 
+    ! operations. If incompatible, stops program with an error message.
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(abstract_field), intent(in) :: other
+      !! The field being checked against this one
+    character(len=69), parameter :: err_message = 'array_scalar_field: '//&
+         'Error, operation with incompatible fields due to'//new_line('a')
+    call this%check_subtype_compatible(other)
+    select type(other)
+    class is(array_scalar_field)
+      if (this%numpoints /= other%numpoints) &
+           error stop(err_message//'    different resolutions.')
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+           error stop(err_message//'    uninitialised fields.')
+    class is(array_vector_field)
+      if (this%numpoints /= other%numpoints) &
+           error stop(err_message//'    different resolutions.')
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+           error stop(err_message//'    uninitialised fields.')
+    class default
+      error stop(err_message//'    incompatible types.')
+    end select
+  end subroutine array_scalar_compatible
+
 
   !=====================================================================
   ! Vector Field Methods
@@ -2051,5 +2089,35 @@ contains
       end if
     end select
   end subroutine array_vector_assign_meta_data
+
+  pure subroutine array_vector_compatible(this,other)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Checks whether a field has the same type, boundaries, and
+    ! resolution as this one, making it compatible for binary 
+    ! operations. If incompatible, stops program with an error message.
+    !
+    class(array_vector_field), intent(in) :: this
+    class(abstract_field), intent(in) :: other
+      !! The field being checked against this one
+    character(len=69), parameter :: err_message = 'array_vector_field: '//&
+         'Error, operation with incompatible fields due to'//new_line('a')
+    call this%check_subtype_compatible(other)
+    select type(other)
+    class is(array_scalar_field)
+      if (this%numpoints /= other%numpoints) &
+           error stop(err_message//'    different resolutions.')
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+           error stop(err_message//'    uninitialised fields.')
+    class is(array_vector_field)
+      if (this%numpoints /= other%numpoints) &
+           error stop(err_message//'    different resolutions.')
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+           error stop(err_message//'    uninitialised fields.')
+    class default
+      error stop(err_message//'    incompatible types.')
+    end select
+  end subroutine array_vector_compatible
 
 end module array_fields_mod
