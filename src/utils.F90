@@ -32,7 +32,7 @@ module utils_mod
   implicit none
   private
 
-  public :: is_nan, check_set_from_raw
+  public :: is_nan, check_set_from_raw, elements_in_slice
 
 contains
 
@@ -81,5 +81,24 @@ contains
     end if
 #endif
   end subroutine check_set_from_raw
+
+  elemental function elements_in_slice(start, finish, stride) result(res)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Computes the number of array elements which would be returned
+    ! from a slice of the form `start:finish:stride'.
+    !
+    integer, intent(in) :: start
+      !! The index which the array slice starts counting from, inclusive
+    integer, intent(in) :: finish
+      !! The index at which the array slice stops reading elements, inclusive
+    integer, intent(in) :: stride
+      !! How frequently to read an element from the array. `stride =
+      !! 1` would read every element, `stride = 2` would read every
+      !! second element, etc.
+    integer :: res
+    res = (finish - start + 1)/stride
+  end function elements_in_slice
 
 end module utils_mod

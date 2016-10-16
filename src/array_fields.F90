@@ -33,7 +33,7 @@ module array_fields_mod
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use abstract_fields_mod, only: abstract_field, scalar_field, vector_field, &
                                  get_tol
-  use utils_mod, only: is_nan, check_set_from_raw
+  use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
   implicit none
   private
 
@@ -69,13 +69,16 @@ module array_fields_mod
       !! Specifies the number of individual data points present in this field. 
     procedure, public :: raw_size => array_scalar_raw_size
       !! Provides the number of pieces of data needed to represent the
-      !! field, i.e. the size of the array returned by `get_raw`.
+      !! field, i.e. the size of the array returned by `raw`.
     procedure, public :: raw => array_scalar_raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers
     procedure, public :: set_from_raw => array_scalar_set_from_raw
       !! Assigns raw data, such as that produced by 
       !! [[array_scalar_field:raw]], to the field
+    procedure(sf_raw_slices), deferred :: raw_slices
+      !! Returns an array of integers used for getting the correct
+      !! data for a given raw representation of the field.
     procedure :: field_multiply_field => array_scalar_sf_m_sf
       !! \({\rm field} \times {\rm field}\)
     procedure :: field_multiply_vecfield => array_scalar_sf_m_vf
@@ -173,7 +176,34 @@ module array_fields_mod
       !! data passed to it.
   end type array_scalar_field
 
+  interface array_scalar_field
+    module procedure array_scalar_constructor
+  end interface array_scalar_field
+
   abstract interface
+    pure function sf_raw_slices(this,return_lower_bound,return_upper_bound) &
+                                                             result(slices)
+      import array_scalar_field
+      class(array_scalar_field), intent(in)       :: this
+      logical, dimension(:), optional, intent(in) :: return_lower_bound
+        !! Specifies whether to return the values at the lower boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      logical, dimension(:), optional, intent(in) :: return_upper_bound
+        !! Specifies whether to return the values at the upper boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:,:), allocatable        :: slices
+        !! An array containing array slice data which can be used to
+        !! construct the raw representation of a field, with the given
+        !! boundary conditions. The form of the array is
+        !! ```
+        !! slices(1,i) = start_index
+        !! slices(2,i) = end_index
+        !! slices(3,i) = stride
+        !! ```
+    end function sf_raw_slices
+     
     pure subroutine sf_compatible(this,other)
       !* Author: Chris MacMackin
       !  Date: April 2016
@@ -212,6 +242,16 @@ module array_fields_mod
       real(r8), dimension(:), allocatable   :: res
         !! The spatial derivative of order `order` taken in direction `dir`
     end function sf_scalar_dx
+
+    pure function scalar_init(x) result(scalar)
+      !! Function used to specify value held by a scalar field at
+      !! location `x`.
+      import :: r8
+      real(r8), dimension(:), intent(in) :: x 
+      !! The position at which this function is evaluated
+      real(r8) :: scalar
+      !! The value of the field at this location
+    end function scalar_init
   end interface
 
 
@@ -251,13 +291,16 @@ module array_fields_mod
       !! Specifies the number of individual data points present in this field. 
     procedure, public :: raw_size => array_vector_raw_size
       !! Provides the number of pieces of data needed to represent the
-      !! field, i.e. the size of the array returned by `get_raw`.
+      !! field, i.e. the size of the array returned by `raw`.
     procedure, public :: raw => array_vector_raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
     procedure, public :: set_from_raw => array_vector_set_from_raw
       !! Assigns raw data, such as that produced by 
       !! [[array_vector_field:raw]], to the field
+    procedure(vf_raw_slices), deferred :: raw_slices
+      !! Returns an array of integers used for getting the correct
+      !! data for a given raw representation of the field.
     procedure :: field_multiply_field => array_vector_vf_m_sf
       !! \({\rm field} \times {\rm field}\)
     procedure, pass(rhs) :: real_multiply_field => array_vector_r_m_vf
@@ -323,7 +366,34 @@ module array_fields_mod
       !! data passed to it.
   end type array_vector_field
 
+  interface array_vector_field
+    module procedure array_vector_constructor
+  end interface array_vector_field
+
   abstract interface
+    pure function vf_raw_slices(this,return_lower_bound,return_upper_bound) &
+                                                             result(slices)
+      import array_vector_field
+      class(array_vector_field), intent(in)       :: this
+      logical, dimension(:), optional, intent(in) :: return_lower_bound
+        !! Specifies whether to return the values at the lower boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      logical, dimension(:), optional, intent(in) :: return_upper_bound
+        !! Specifies whether to return the values at the upper boundary
+        !! for each dimension, with the index of the element
+        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:,:), allocatable        :: slices
+        !! An array containing array slice data which can be used to
+        !! construct the raw representation of a field, with the given
+        !! boundary conditions. The form of the array is
+        !! ```
+        !! slices(1,i) = start_index
+        !! slices(2,i) = end_index
+        !! slices(3,i) = stride
+        !! ```
+    end function vf_raw_slices
+
     pure subroutine vf_compatible(this,other)
       !* Author: Chris MacMackin
       !  Date: September 2016
@@ -380,9 +450,20 @@ module array_fields_mod
         !! Order of the derivative, default = 1
       real(r8), dimension(:,:), allocatable :: res
         !! The spatial derivative of order `order` taken in direction `dir`
-    end function vf_vector_dx    
+    end function vf_vector_dx
+    
+    pure function vector_init(x) result(vector)
+      !! Function used to specify value held by a vector field at
+      !! location `x`.
+      import :: r8
+      real(r8), dimension(:), intent(in) :: x 
+        !! The position at which this function is evaluated
+      real(r8), dimension(:), allocatable :: vector
+        !! The value of the field at this location
+    end function vector_init
   end interface
 
+  public :: scalar_init, vector_init
 
 contains
 
@@ -391,6 +472,38 @@ contains
   ! Scalar Field Methods
   !=====================================================================
 
+  function array_scalar_constructor(template,numpoints, &
+       initializer) result(this)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Creates a new field with the same concrete type as the template
+    ! argument. The array of values will be allocated an initiated.
+    !
+    class(array_scalar_field), intent(in)  :: template
+      !! A scalar field object which will act as a mold for the concrete
+      !! type of the returned type, also copying over any metadata.
+    integer, intent(in)                    :: numpoints
+      !! The number of data points needed in the array when modelling this
+      !! field.
+    procedure(scalar_init), optional       :: initializer
+      !! An elemental procedure taking which takes the position in the
+      !! fields domain (an 8-byte real) as an argument and returns the
+      !! fields value at that position. Default is for field to be zero
+      !! everywhere.
+    class(array_scalar_field), allocatable :: this
+      !! A scalar field initiated based on the arguments to this function.
+    integer :: i
+    allocate(this, source=template)
+    if (allocated(this%field_data)) deallocate(this%field_data)
+    allocate(this%field_data(numpoints))
+    this%numpoints = numpoints
+    if (present(initializer)) then
+      do i = 1, numpoints
+        this%field_data(i) = initializer(this%id_to_position(i))
+      end do
+    end if
+  end function array_scalar_constructor
 
   pure function array_scalar_elements(this) result(elements)
     !* Author: Chris MacMackin
@@ -412,7 +525,7 @@ contains
     ! field. This would be the number of data points, adjusted based on
     ! how boundary conditions are accounted for.
     !
-    class(array_scalar_field), intent(in) :: this
+    class(array_scalar_field), intent(in)       :: this
     logical, dimension(:), optional, intent(in) :: return_lower_bound
       !! Specifies whether to return the values at the lower boundary
       !! for each dimension, with the index of the element
@@ -422,12 +535,13 @@ contains
       !! for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
     integer :: res
-    res = this%numpoints + 1
-    if (present(return_lower_bound)) then
-      if (.not. return_lower_bound(1)) res = res - 1
-    end if
-    if (present(return_upper_bound)) then
-      if (.not. return_upper_bound(1)) res = res - 1
+    integer, dimension(:,:), allocatable :: slices
+    integer :: i
+    if (allocated(this%field_data)) then
+      slices = this%raw_slices(return_lower_bound,return_upper_bound)
+      res = sum(elements_in_slice(slices(1,:),slices(2,:),slices(3,:)))
+    else
+      res = 0
     end if
   end function array_scalar_raw_size
   
@@ -446,8 +560,6 @@ contains
     ! allocatable isntead.
     !
     class(array_scalar_field), intent(in) :: this
-    real(r8), dimension(:), allocatable :: res
-      !! Array containing data needed to describe field
     logical, dimension(:), optional, intent(in) :: return_lower_bound
       !! Specifies whether to return the values at the lower boundary
       !! for each dimension, with the index of the element
@@ -456,20 +568,16 @@ contains
       !! Specifies whether to return the values at the upper boundary
       !! for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
-    integer :: lower, upper
-    lower = 1
-    upper = this%numpoints + 1
-    ! Recall that Chebyshev points are in reverse order...
-    if (present(return_lower_bound)) then
-      if (.not. return_lower_bound(1)) upper = upper - 1
-    end if
-    if (present(return_upper_bound)) then
-      if (.not. return_upper_bound(1)) lower = lower + 1
-    end if
+    real(r8), dimension(:), allocatable :: res
+      !! Array containing data needed to describe field
+    integer, dimension(:,:), allocatable :: slices
+    integer :: i
+    slices = this%raw_slices(return_lower_bound,return_upper_bound)
     if (allocated(this%field_data)) then
-      res = this%field_data(lower:upper)
+      res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), i=1, &
+             size(slices,2))]
     else
-      res = [0.0_r8]
+      allocate(res(0))
     end if
   end function array_scalar_raw
   
@@ -494,20 +602,20 @@ contains
       !! Specifies whether raw data contains values at the upper
       !! boundary, for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
-    integer :: lower, upper
+    integer, dimension(:,:), allocatable :: slices
+    integer, dimension(:), allocatable :: counts
+    integer :: i, start, finish
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
-    lower = 1
-    upper = this%numpoints + 1
-    ! Recall that Chebyshev points are in reverse order...
-    if (present(provide_lower_bound)) then
-      if (.not. provide_lower_bound(1)) upper = upper - 1
+    slices = this%raw_slices(provide_lower_bound,provide_upper_bound)
+    counts = elements_in_slice(slices(1,:),slices(2,:),slices(3,:))
+    if (.not. allocated(this%field_data)) then
+       allocate(this%field_data(maxval(slices(2,:))))
     end if
-    if (present(provide_upper_bound)) then
-      if (.not. provide_upper_bound(1)) lower = lower + 1
-    end if
-    if (.not. allocated(this%field_data)) &
-      allocate(this%field_data(this%numpoints + 1))
-    this%field_data(lower:upper) = raw
+    do concurrent (i = 1:size(counts))
+      start = sum(counts(1:i-1)) + 1
+      finish = start + counts(i) - 1 
+      this%field_data(slices(1,i):slices(2,i):slices(3,i)) = raw(start:finish)
+    end do
   end subroutine array_scalar_set_from_raw
   
   pure function array_scalar_sf_m_sf(this,rhs) result(res)
@@ -1298,6 +1406,41 @@ contains
   ! Vector Field Methods
   !=====================================================================
 
+  function array_vector_constructor(template,numpoints,vector_dims, &
+                                    initializer) result(this)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! Creates a new field with the same concrete type as the template
+    ! argument. The array of values will be allocated an initiated.
+    !
+    class(array_vector_field), intent(in)  :: template
+    !! A scalar field object which will act as a mold for the concrete
+    !! type of the returned type.
+    integer, intent(in)                    :: numpoints
+    !! The number of data points needed in the array when modelling this
+    !! field.
+    integer, intent(in)                    :: vector_dims
+    !! The number of components of vectors in this field
+    procedure(vector_init), optional       :: initializer
+    !! An elemental procedure taking which takes the position in the
+    !! fields domain (an 8-byte real) as an argument and returns the
+    !! fields value at that position. Default is for field to be zero
+    !! everywhere.
+    class(array_vector_field), allocatable :: this
+    !! A scalar field initiated based on the arguments to this function.
+    integer :: i
+    allocate(this, source=template)
+    if (allocated(this%field_data)) deallocate(this%field_data)
+    allocate(this%field_data(numpoints,vector_dims))
+    this%numpoints = numpoints
+    this%vector_dims = vector_dims
+    if (present(initializer)) then
+      do i = 1, numpoints
+        this%field_data(i,:) = initializer(this%id_to_position(i))
+      end do
+    end if
+  end function array_vector_constructor
 
   elemental function array_vector_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin
@@ -1331,7 +1474,7 @@ contains
     ! field. This would be the number of data points, adjusted based on
     ! how boundary conditions are accounted for.
     !
-    class(array_vector_field), intent(in) :: this
+    class(array_vector_field), intent(in)       :: this
     logical, dimension(:), optional, intent(in) :: return_lower_bound
       !! Specifies whether to return the values at the lower boundary
       !! for each dimension, with the index of the element
@@ -1341,14 +1484,15 @@ contains
       !! for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
     integer :: res
-    res = (this%numpoints + 1)
-    if (present(return_lower_bound)) then
-      if (.not. return_lower_bound(1)) res = res - 1
+    integer, dimension(:,:), allocatable :: slices
+    integer :: i
+    if (allocated(this%field_data)) then
+      slices = this%raw_slices(return_lower_bound,return_upper_bound)
+      res = sum(elements_in_slice(slices(1,:),slices(2,:),slices(3,:))) * &
+            this%vector_dims
+    else
+      res = 0
     end if
-    if (present(return_upper_bound)) then
-      if (.not. return_upper_bound(1)) res = res - 1
-    end if
-    res = res*(this%vector_dims)
   end function array_vector_raw_size
   
   pure function array_vector_raw(this,return_lower_bound, &
@@ -1366,8 +1510,6 @@ contains
     ! allocatable isntead.
     !
     class(array_vector_field), intent(in) :: this
-    real(r8), dimension(:), allocatable :: res
-      !! Array containing data needed to describe field
     logical, dimension(:), optional, intent(in) :: return_lower_bound
       !! Specifies whether to return the values at the lower boundary
       !! for each dimension, with the index of the element
@@ -1376,35 +1518,28 @@ contains
       !! Specifies whether to return the values at the upper boundary
       !! for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
-    integer :: lower, upper
-    lower = 1
-    upper = this%numpoints + 1
-    ! Recall that Chebyshev points are in reverse order...
-    if (present(return_lower_bound)) then
-      if (.not. return_lower_bound(1)) upper = upper - 1
-    end if
-    if (present(return_upper_bound)) then
-      if (.not. return_upper_bound(1)) lower = lower + 1
-    end if
+    real(r8), dimension(:), allocatable :: res
+      !! Array containing data needed to describe field
+    integer, dimension(:,:), allocatable :: slices
+    integer :: i
+    slices = this%raw_slices(return_lower_bound,return_upper_bound)
     if (allocated(this%field_data)) then
-      res = pack(this%field_data(lower:upper,:),.true.)
+      res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i),:), i=1, &
+             size(slices,2))]
     else
-      res = [0.0_r8]
+      allocate(res(0))
     end if
   end function array_vector_raw
-
+  
   pure subroutine array_vector_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
     ! Assigns raw data, such as that produced by 
-    ! [[array_vector_field:raw]], to the field. The routine will
+    ! [[array_scalar_field:raw]], to the field. The routine will
     ! stop with an error if the array is the wrong length for a field
     ! of this resolution and with these boundary conditions. 
-    ! 
-    ! @FIXME
-    ! This won't work for higher dimensional arrays
     !
     class(array_vector_field), intent(inout) :: this
     real(r8), dimension(:), intent(in) :: raw
@@ -1417,22 +1552,23 @@ contains
       !! Specifies whether raw data contains values at the upper
       !! boundary, for each dimension, with the index of the element
       !! corresponding to the dimension. Defaults to all `.true.`.
-    integer :: lower, upper
+    integer, dimension(:,:), allocatable :: slices
+    integer, dimension(:), allocatable :: counts
+    integer :: i, start, finish
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
-    lower = 1
-    upper = this%numpoints + 1
-    ! Recall that Chebyshev points are in reverse order...
-    if (present(provide_lower_bound)) then
-      if (.not. provide_lower_bound(1)) upper = upper - 1
+    slices = this%raw_slices(provide_lower_bound,provide_upper_bound)
+    counts = elements_in_slice(slices(1,:),slices(2,:),slices(3,:)) * this%vector_dims
+    if (.not. allocated(this%field_data)) then
+       allocate(this%field_data(maxval(slices(2,:)),this%vector_dims))
     end if
-    if (present(provide_upper_bound)) then
-      if (.not. provide_upper_bound(1)) lower = lower + 1
-    end if
-    if (.not. allocated(this%field_data)) &
-      allocate(this%field_data(this%numpoints + 1,this%vector_dims))
-    this%field_data(lower:upper,:) = reshape(raw,[upper-lower+1,this%vector_dims])
+    do concurrent (i = 1:size(counts))
+      start = sum(counts(1:i-1)) + 1
+      finish = start + counts(i) - 1 
+      this%field_data(slices(1,i):slices(2,i):slices(3,i),:) = reshape(raw(start:finish), &
+           [counts(i),this%vector_dims])
+    end do
   end subroutine array_vector_set_from_raw
-  
+
   pure function array_vector_vf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016

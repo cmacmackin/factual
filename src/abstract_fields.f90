@@ -88,6 +88,9 @@ module abstract_fields_mod
       !! Allocates a vector field to be of the same concrete type as
       !! those returned by type-bound procedures of this field which
       !! produce vector fields.
+    procedure(id_pos), public, deferred :: id_to_position
+      !! Given the ID number of a location in the field, returns the
+      !! coordinates of that position
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -110,7 +113,7 @@ module abstract_fields_mod
     ! Damian and Xia, Jim and Xu, Xiaofeng, 2011, ISBN 9780521888134, 
     ! Cambridge University Press, New York, NY, USA.
     !
-  contains
+   contains
     private
     procedure(sf_sf), deferred :: field_multiply_field
       !! \({\rm field} \times {\rm field}\)
@@ -446,6 +449,16 @@ module abstract_fields_mod
         !! A field which, upon return, is allocated to be of the same
         !! concrete type as vector fields produced by `this`.
     end subroutine vector_factory
+
+    pure function id_pos(this, id)
+      import :: abstract_field
+      import :: r8
+      class(abstract_field), intent(in) :: this
+      integer, intent(in)               :: id
+        !! The ID number for some location in the field
+      real(r8), dimension(:), allocatable :: id_pos
+        !! The coordinates for this location in the field
+    end function id_pos
     
     pure function sf_sf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm field}\)

@@ -1,5 +1,5 @@
 !
-!  cheb2d_fields.f90
+!  cheb1d_fields.f90
 !  This file is part of FACTUAL.
 !
 !  Copyright 2016 Christopher MacMackin <cmacmackin@gmail.com>
@@ -33,7 +33,8 @@ module cheb1d_fields_mod
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use abstract_fields_mod
-  use array_fields_mod, only: array_scalar_field, array_vector_field
+  use array_fields_mod, only: array_scalar_field, array_vector_field, &
+                              scalar_init, vector_init
   use chebyshev_mod
   implicit none
   private
@@ -64,8 +65,14 @@ module cheb1d_fields_mod
     procedure, public :: domain => cheb1d_scalar_domain
       !! Provides array with upper and lower limits of field's domain
     procedure, public :: resolution => cheb1d_scalar_resolution
-      !! Returns array containing number of datapoints in each
+    !! Returns array containing number of datapoints in each
       !! dimension.
+    procedure :: raw_slices => cheb1d_scalar_raw_slices
+      !! Returns an array of integers used for getting the correct
+      !! data for a given raw representation of the field.
+    procedure, public :: id_to_position => cheb1d_scalar_id_to_position
+      !! Given the ID number of a location in the field, returns the
+      !! coordinates of that position
     procedure :: assign_subtype_meta_data => cheb1d_scalar_assign_meta
       !! Copies all data unique to this field type from another field
       !! object to this one.
@@ -108,6 +115,12 @@ module cheb1d_fields_mod
       !! Provides array with upper and lower limits of field's domain
     procedure, public :: resolution => cheb1d_vector_resolution
       !! Returns array containing number of datapoints in each dimension.
+    procedure :: raw_slices => cheb1d_vector_raw_slices
+      !! Returns an array of integers used for getting the correct
+      !! data for a given raw representation of the field.
+    procedure, public :: id_to_position => cheb1d_vector_id_to_position
+      !! Given the ID number of a location in the field, returns the
+      !! coordinates of that position
     procedure :: assign_subtype_meta_data => cheb1d_vector_assign_meta
       !! Copies all data other than values stored in field from another
       !! field object to this one.
@@ -128,39 +141,17 @@ module cheb1d_fields_mod
   
   interface cheb1d_vector_field
     module procedure vector_constructor
-  end interface
-  
-  abstract interface
-    pure function scalar_init(x) result(scalar)
-      !! Function used to specify value held by a scalar field at
-      !! location `x`.
-      import :: r8
-      real(r8), dimension(:), intent(in) :: x 
-        !! The position at which this function is evaluated
-      real(r8) :: scalar
-        !! The value of the field at this location
-    end function scalar_init
-  
-    pure function vector_init(x) result(vector)
-      !! Function used to specify value held by a vector field at
-      !! location `x`.
-      import :: r8
-      real(r8), dimension(:), intent(in) :: x 
-        !! The position at which this function is evaluated
-      real(r8), dimension(:), allocatable :: vector
-        !! The value of the field at this location
-    end function vector_init
-  end interface
-  
+  end interface cheb1d_vector_field
+ 
 contains
 
   !=====================================================================
   ! Scalar Field Methods
   !=====================================================================
 
-  function scalar_constructor(nodes,initializer,lower_bound, &
+  function scalar_constructor(numpoints,initializer,lower_bound, &
                               upper_bound) result(field)
-    integer, intent(in) :: nodes
+    integer, intent(in) :: numpoints
       !! The number of collocation nodes to use when modelling this
       !! field. This corresponds to resolution.
     procedure(scalar_init), optional :: initializer
@@ -173,10 +164,18 @@ contains
     real(r8), intent(in), optional :: upper_bound
       !! The position of the upper bound of the field's domain. Default is 1.0.
     type(cheb1d_scalar_field) :: field
-    integer :: i
-    if (present(lower_bound)) field%extent(1) = lower_bound
-    if (present(upper_bound)) field%extent(2) = upper_bound
-    field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
+    if (present(lower_bound)) then
+      field%extent(1) = lower_bound
+    else
+      field%extent(1) = 0.0_r8
+    end if
+    if (present(upper_bound)) then
+      field%extent(2) = upper_bound
+    else
+      field%extent(2) = 1.0_r8
+    end if
+    field%colloc_points = collocation_points(numpoints-1,lower_bound,upper_bound)
+    field = array_scalar_field(field,numpoints,initializer)
   end function scalar_constructor
 
   pure function cheb1d_scalar_domain(this) result(res)
@@ -220,6 +219,65 @@ contains
     res(1) = this%elements()
   end function cheb1d_scalar_resolution
 
+  pure function cheb1d_scalar_raw_slices(this,return_lower_bound,return_upper_bound) &
+                                                                      result(slices)
+    class(cheb1d_scalar_field), intent(in)      :: this
+    logical, dimension(:), optional, intent(in) :: return_lower_bound
+      !! Specifies whether to return the values at the lower boundary
+      !! for each dimension, with the index of the element
+      !! corresponding to the dimension. Defaults to all `.true.`.
+    logical, dimension(:), optional, intent(in) :: return_upper_bound
+      !! Specifies whether to return the values at the upper boundary
+      !! for each dimension, with the index of the element
+      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:,:), allocatable        :: slices
+      !! An array containing array slice data which can be used to
+      !! construct the raw representation of a field, with the given
+      !! boundary conditions. The form of the array is
+      !! ```
+      !! slices(1,i) = start_index
+      !! slices(2,i) = end_index
+      !! slices(3,i) = stride
+      !! ```
+    allocate(slices(3,1))
+    if (present(return_lower_bound)) then
+      if (return_lower_bound(1)) then
+        slices(1,1) = 1
+      else
+        slices(1,1) = 2
+      end if
+    end if
+    if (present(return_upper_bound)) then
+      if (return_upper_bound(1)) then
+        slices(1,1) = this%elements()
+      else
+        slices(1,1) = this%elements() - 1
+      end if
+    end if
+    slices(3,1) = 1
+  end function cheb1d_scalar_raw_slices
+
+  pure function cheb1d_scalar_id_to_position(this, id) result(pos)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! From an ID number (representing the index of the element in this
+    ! field's 1-D storage array), the coordinates of a location in the
+    ! field with that ID are returned.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    integer, intent(in)                    :: id
+      !! The ID number for some location in the field
+    real(r8), dimension(:), allocatable    :: pos
+      !! The coordinates for this location in the field
+    allocate(pos(1))
+    if (id <= this%elements()) then
+      pos(1) = this%colloc_points(id)
+    else
+      error stop('cheb1d_scalar_field: Invalid ID number provided.')
+    end if
+  end function cheb1d_scalar_id_to_position
+
   function cheb1d_scalar_array_dx(this, data_array, dir, order) result(res)
     !* Author: Chris MacMackin
     !  Date: October 2016
@@ -260,10 +318,10 @@ contains
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')           
+           error stop(err_message//'    domains.')
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')           
+           error stop(err_message//'    domains.')
     class default
       error stop(err_message//'    incompatible types.')
     end select
@@ -339,9 +397,9 @@ contains
   !=====================================================================
 
 
-  function vector_constructor(nodes,initializer,lower_bound, &
+  function vector_constructor(numpoints,initializer,lower_bound, &
                               upper_bound, extra_dims) result(field)
-    integer, intent(in) :: nodes
+    integer, intent(in) :: numpoints
       !! The number of collocation nodes to use when modelling this
       !! field. This corresponds to resolution.
     procedure(vector_init), optional :: initializer
@@ -359,16 +417,25 @@ contains
       !! less than 0.
     type(cheb1d_vector_field) :: field
     real(r8), dimension(:), allocatable :: tmp
-    integer :: i, dims, initializer_dims
+    integer :: dims
     dims = 1
     if (present(extra_dims)) then
       if (extra_dims > 0) then
         dims = dims + extra_dims
       end if
     end if
-    if (present(lower_bound)) field%extent(1) = lower_bound
-    if (present(upper_bound)) field%extent(2) = upper_bound
-    field%colloc_points = collocation_points(nodes,lower_bound,upper_bound)
+    if (present(lower_bound)) then
+       field%extent(1) = lower_bound
+    else
+       field%extent(1) = 0.0_r8
+    end if
+    if (present(upper_bound)) then
+       field%extent(2) = upper_bound
+    else
+       field%extent(2) = 1.0_r8
+    end if
+    field%colloc_points = collocation_points(numpoints-1,lower_bound,upper_bound)
+    field = array_vector_field(field,numpoints,dims,initializer)
   end function vector_constructor
 
   pure function cheb1d_vector_domain(this) result(res)
@@ -411,6 +478,65 @@ contains
     allocate(res(1))
     res(1) = this%elements()
   end function cheb1d_vector_resolution
+
+  pure function cheb1d_vector_raw_slices(this,return_lower_bound,return_upper_bound) &
+                                                                      result(slices)
+    class(cheb1d_vector_field), intent(in)      :: this
+    logical, dimension(:), optional, intent(in) :: return_lower_bound
+      !! Specifies whether to return the values at the lower boundary
+      !! for each dimension, with the index of the element
+      !! corresponding to the dimension. Defaults to all `.true.`.
+    logical, dimension(:), optional, intent(in) :: return_upper_bound
+      !! Specifies whether to return the values at the upper boundary
+      !! for each dimension, with the index of the element
+      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:,:), allocatable        :: slices
+      !! An array containing array slice data which can be used to
+      !! construct the raw representation of a field, with the given
+      !! boundary conditions. The form of the array is
+      !! ```
+      !! slices(1,i) = start_index
+      !! slices(2,i) = end_index
+      !! slices(3,i) = stride
+      !! ```
+    allocate(slices(3,1))
+    if (present(return_lower_bound)) then
+      if (return_lower_bound(1)) then
+        slices(1,1) = 1
+      else
+        slices(1,1) = 2
+      end if
+    end if
+    if (present(return_upper_bound)) then
+      if (return_upper_bound(1)) then
+        slices(1,1) = this%elements()
+      else
+        slices(1,1) = this%elements() - 1
+      end if
+    end if
+    slices(3,1) = 1
+  end function cheb1d_vector_raw_slices
+  
+  pure function cheb1d_vector_id_to_position(this, id) result(pos)
+    !* Author: Chris MacMackin
+    !  Date: October 2016
+    !
+    ! From an ID number (representing the index of the element in this
+    ! field's 1-D storage array), the coordinates of a location in the
+    ! field with that ID are returned.
+    !
+    class(cheb1d_vector_field), intent(in) :: this
+    integer, intent(in)                    :: id
+    !! The ID number for some location in the field
+    real(r8), dimension(:), allocatable    :: pos
+    !! The coordinates for this location in the field
+    allocate(pos(1))
+    if (id <= this%elements()) then
+      pos(1) = this%colloc_points(id)
+    else
+      error stop('cheb1d_vector_field: Invalid ID number provided.')
+    end if
+  end function cheb1d_vector_id_to_position
   
   function cheb1d_vector_array_dx(this, data_array, dir, order) result(res)
     !* Author: Chris MacMackin
@@ -483,10 +609,10 @@ contains
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')           
+           error stop(err_message//'    domains.')
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')           
+           error stop(err_message//'    domains.')
     class default
       error stop(err_message//'    incompatible types.')
     end select
