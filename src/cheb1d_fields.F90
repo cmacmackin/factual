@@ -240,19 +240,24 @@ contains
       !! slices(3,i) = stride
       !! ```
     allocate(slices(3,1))
-    if (present(return_lower_bound)) then
-      if (return_lower_bound(1)) then
+    ! Remember that Chebyshev collocation nodes end up in reverse order
+    if (present(return_upper_bound)) then
+      if (return_upper_bound(1)) then
         slices(1,1) = 1
       else
         slices(1,1) = 2
       end if
+    else
+      slices(1,1) = 1
     end if
-    if (present(return_upper_bound)) then
-      if (return_upper_bound(1)) then
-        slices(1,1) = this%elements()
+    if (present(return_lower_bound)) then
+      if (return_lower_bound(1)) then
+        slices(2,1) = this%elements()
       else
-        slices(1,1) = this%elements() - 1
+        slices(2,1) = this%elements() - 1
       end if
+    else
+      slices(2,1) = this%elements()
     end if
     slices(3,1) = 1
   end function cheb1d_scalar_raw_slices
@@ -341,8 +346,8 @@ contains
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
       if (allocated(rhs%colloc_points)) then
-        if (.not. allocated(this%colloc_points)) &
-          allocate(this%colloc_points(this%elements() + 1))
+      !  if (.not. allocated(this%colloc_points)) &
+       !   allocate(this%colloc_points(this%elements() + 1))
         this%colloc_points = rhs%colloc_points
       else if (allocated(this%colloc_points)) then
         deallocate(this%colloc_points)
@@ -350,8 +355,8 @@ contains
     class is(cheb1d_vector_field)
       this%extent = rhs%extent
       if (allocated(rhs%colloc_points)) then
-        if (.not. allocated(this%colloc_points)) &
-          allocate(this%colloc_points(this%elements() + 1))
+        !if (.not. allocated(this%colloc_points)) &
+         ! allocate(this%colloc_points(this%elements() + 1))
         this%colloc_points = rhs%colloc_points
       else if (allocated(this%colloc_points)) then
         deallocate(this%colloc_points)
@@ -500,19 +505,24 @@ contains
       !! slices(3,i) = stride
       !! ```
     allocate(slices(3,1))
-    if (present(return_lower_bound)) then
-      if (return_lower_bound(1)) then
+    ! Remember that Chebyshev collocation nodes end up in reverse order
+    if (present(return_upper_bound)) then
+      if (return_upper_bound(1)) then
         slices(1,1) = 1
       else
         slices(1,1) = 2
       end if
+    else
+      slices(1,1) = 1
     end if
-    if (present(return_upper_bound)) then
-      if (return_upper_bound(1)) then
-        slices(1,1) = this%elements()
+    if (present(return_lower_bound)) then
+      if (return_lower_bound(1)) then
+        slices(2,1) = this%elements()
       else
-        slices(1,1) = this%elements() - 1
+        slices(2,1) = this%elements() - 1
       end if
+    else
+      slices(2,1) = this%elements()
     end if
     slices(3,1) = 1
   end function cheb1d_vector_raw_slices
@@ -632,8 +642,8 @@ contains
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
       if (allocated(rhs%colloc_points)) then
-        if (.not. allocated(this%colloc_points)) &
-          allocate(this%colloc_points(this%elements()))
+        !if (.not. allocated(this%colloc_points)) &
+        !  allocate(this%colloc_points(this%elements()))
         this%colloc_points = rhs%colloc_points
       else if (allocated(this%colloc_points)) then
         deallocate(this%colloc_points)
@@ -641,8 +651,8 @@ contains
     class is(cheb1d_vector_field)
       this%extent = rhs%extent
       if (allocated(rhs%colloc_points)) then
-        if (.not. allocated(this%colloc_points)) &
-          allocate(this%colloc_points(this%elements()))
+        !if (.not. allocated(this%colloc_points)) &
+        !  allocate(this%colloc_points(this%elements()))
         this%colloc_points = rhs%colloc_points
       else if (allocated(this%colloc_points)) then
         deallocate(this%colloc_points)

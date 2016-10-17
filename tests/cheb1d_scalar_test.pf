@@ -48,33 +48,33 @@ contains
   end subroutine setup
 
   pure real(r8) function f1(x)
-    real(r8), intent(in) :: x
-    f1 = sin(x)
+    real(r8), dimension(:), intent(in) :: x
+    f1 = sin(x(1))
   end function f1
   
   pure real(r8) function df1(x)
-    real(r8), intent(in) :: x
-    df1 = cos(x)
+    real(r8), dimension(:), intent(in) :: x
+    df1 = cos(x(1))
   end function df1
   
   pure real(r8) function d2f1(x)
-    real(r8), intent(in) :: x
-    d2f1 = -sin(x)
+    real(r8), dimension(:), intent(in) :: x
+    d2f1 = -sin(x(1))
   end function d2f1
   
   pure real(r8) function f2(x)
-    real(r8), intent(in) :: x
-    f2 = 2.0_r8 + x*exp(x)
+    real(r8), dimension(:), intent(in) :: x
+    f2 = 2.0_r8 + x(1)*exp(x(1))
   end function f2
   
   pure real(r8) function df2(x)
-    real(r8), intent(in) :: x
-    df2 = exp(x) + x*exp(x)
+    real(r8), dimension(:), intent(in) :: x
+    df2 = exp(x(1)) + x(1)*exp(x(1))
   end function df2
 
   pure real(r8) function d2f2(x)
-    real(r8), intent(in) :: x
-    d2f2 = 2._r8*exp(x) + x*exp(x)
+    real(r8), dimension(:), intent(in) :: x
+    d2f2 = 2._r8*exp(x(1)) + x(1)*exp(x(1))
   end function d2f2
   
 @Test
@@ -116,7 +116,7 @@ contains
     integer :: i
     raw = this%field1%raw()
     expected = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) expected(i) = f1(expected(i))
+    forall (i = 1:this%nodes+1) expected(i) = f1([expected(i)])
     @assertEqual(expected,raw,message='Wrong raw contents returned')
     raw = this%field1%raw([.false.])
     @assertEqual(expected(:this%nodes),raw,message='Wrong raw contents returned')
@@ -132,19 +132,19 @@ contains
     real(r8), dimension(this%nodes+1) :: raw, xvals
     integer :: i
     xvals = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
+    forall (i = 1:this%nodes+1) raw(i) = f2([xvals(i)])
     call this%field1%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    forall (i = 1:this%nodes+1) raw(i) = f1([xvals(i)])
     call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
     @assertEqual(raw(2:),this%field2%raw([.false.],[.true.]))
-    forall (i = 1:this%nodes+1) raw(i) = f2(xvals(i))
+    forall (i = 1:this%nodes+1) raw(i) = f2([xvals(i)])
     call this%field2%set_from_raw(raw(:this%nodes),[.true.],[.false.])
     @assertEqual(raw(:this%nodes),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    forall (i = 1:this%nodes+1) raw(i) = f1([xvals(i)])
     call this%field2%set_from_raw(raw(2:this%nodes),[.false.],[.false.])
     @assertEqual(raw(2:this%nodes),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1(xvals(i))
+    forall (i = 1:this%nodes+1) raw(i) = f1([xvals(i)])
     call this%field2%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw')
   end subroutine test_assign_raw
@@ -178,7 +178,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) * f2(x)
     end function func
   end subroutine test_fmf
@@ -196,13 +196,13 @@ contains
     @assertEqual(vfield2%dimensions(),vfield1%dimensions(),message='Result has wrong number of dimensions')
   contains
     pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       real(r8), dimension(:), allocatable :: func
       allocate(func(2))
       func = [f1(x),df2(x)]
     end function func
     pure function func2(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       real(r8), dimension(:), allocatable :: func2
       allocate(func2(2))
       func2 = f1(x)*func(x)
@@ -221,7 +221,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) * 2.0_r8
     end function func
   end subroutine test_rmf
@@ -238,7 +238,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) * 2.0_r8
     end function func
   end subroutine test_fmr
@@ -255,7 +255,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) / f2(x)
     end function func
   end subroutine test_fdf
@@ -272,7 +272,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = 5.0_r8 / f2(x)
     end function func
   end subroutine test_rdf
@@ -289,7 +289,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x)/5.0_r8
     end function func
   end subroutine test_fdr
@@ -306,7 +306,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) + f2(x)
     end function func
   end subroutine test_faf
@@ -323,7 +323,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) + 1.0e3_r8
     end function func
   end subroutine test_raf
@@ -340,7 +340,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) + 1.0e3_r8
     end function func
   end subroutine test_far
@@ -357,7 +357,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) - f2(x)
     end function func
   end subroutine test_fsf
@@ -374,7 +374,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) - 4.323_r8
     end function func
   end subroutine test_fsr
@@ -391,7 +391,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = 10.2_r8 - f1(x)
     end function func
   end subroutine test_rsf
@@ -408,7 +408,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f2(x) ** 5.2_r8
     end function func
   end subroutine test_fpr
@@ -425,7 +425,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f2(x) ** 3.5
     end function func
   end subroutine test_fpr4
@@ -442,7 +442,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = f1(x) ** 3
     end function func
   end subroutine test_fpi
@@ -459,7 +459,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = sin(f1(x))
     end function func
   end subroutine test_sin
@@ -476,7 +476,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = cos(f1(x))
     end function func
   end subroutine test_cos
@@ -493,7 +493,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = tan(f1(x))
     end function func
   end subroutine test_tan
@@ -510,7 +510,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = asin(f1(x))
     end function func
   end subroutine test_asin
@@ -527,7 +527,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = acos(f1(x))
     end function func
   end subroutine test_acos
@@ -544,7 +544,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = atan(f1(x))
     end function func
   end subroutine test_atan
@@ -561,7 +561,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = sinh(f1(x))
     end function func
   end subroutine test_sinh
@@ -578,7 +578,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = cosh(f1(x))
     end function func
   end subroutine test_cosh
@@ -595,7 +595,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = tanh(f1(x))
     end function func
   end subroutine test_tanh
@@ -612,7 +612,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = asinh(f1(x))
     end function func
   end subroutine test_asinh
@@ -629,7 +629,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = acosh(f2(x))
     end function func
   end subroutine test_acosh
@@ -646,7 +646,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = atanh(f1(x))
     end function func
   end subroutine test_atanh
@@ -663,7 +663,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = log(f2(x))
     end function func
   end subroutine test_log
@@ -680,7 +680,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = log10(f2(x))
     end function func
   end subroutine test_log10
@@ -697,7 +697,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = exp(f1(x))
     end function func
   end subroutine test_exp
@@ -714,7 +714,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = abs(f1(x))
     end function func
   end subroutine test_abs
@@ -731,7 +731,7 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = sqrt(f2(x))
     end function func
   end subroutine test_sqrt
@@ -739,15 +739,15 @@ contains
 @Test
   subroutine test_minval(this)
     class(test_field), intent(inout) :: this
-    @assertEqual(f1(this%lower1),minval(this%field1),message='Error calculating minval(field)')
-    @assertEqual(f2(this%lower2),minval(this%field2),message='Error calculating minval(field)')
+    @assertEqual(f1([this%lower1]),minval(this%field1),message='Error calculating minval(field)')
+    @assertEqual(f2([this%lower2]),minval(this%field2),message='Error calculating minval(field)')
   end subroutine test_minval
   
 @Test
   subroutine test_maxval(this)
     class(test_field), intent(inout) :: this
-    @assertEqual(f1(this%upper1),maxval(this%field1),message='Error calculating maxval(field)')
-    @assertEqual(f2(this%upper2),maxval(this%field2),message='Error calculating maxval(field)')
+    @assertEqual(f1([this%upper1]),maxval(this%field1),message='Error calculating maxval(field)')
+    @assertEqual(f2([this%upper2]),maxval(this%field2),message='Error calculating maxval(field)')
   end subroutine test_maxval
   
 @Test
@@ -771,15 +771,15 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = df2(x)
     end function func
     real(r8) pure function func2(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func2 = d2f2(x)
     end function func2
     real(r8) pure function zeros(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       zeros = 0.0_r8
     end function zeros
   end subroutine test_d_dx
@@ -796,7 +796,7 @@ contains
     @assertEqual(field2%dimensions(),field1%dimensions(),message='Result has wrong number of dimensions')
   contains
     pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       real(r8), dimension(:), allocatable :: func
       allocate(func(1))
       func = df1(x)
@@ -816,9 +816,10 @@ contains
     @assertEqual(this%field2%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
   contains
     real(r8) pure function func(x)
-      real(r8), intent(in) :: x
+      real(r8), dimension(:), intent(in) :: x
       func = d2f1(x)
     end function func
   end subroutine test_lap
 
 end module cheb1d_scalar_test
+
