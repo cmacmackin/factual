@@ -1,0 +1,47 @@
+!
+!  chebyshev_test.f90
+!  This file is part of FIAT.
+!
+!  Copyright 2016 Christopher MacMackin <cmacmackin@gmail.com>
+!  
+!  This program is free software; you can redistribute it and/or modify
+!  it under the terms of the GNU Lesser General Public License as
+!  published by the Free Software Foundation; either version 3 of the 
+!  License, or (at your option) any later version.
+!  
+!  This program is distributed in the hope that it will be useful,
+!  but WITHOUT ANY WARRANTY; without even the implied warranty of
+!  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!  GNU Lesser General Public License for more details.
+!  
+!  You should have received a copy of the GNU Lesser General Public
+!  License along with this program; if not, write to the Free Software
+!  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+!  MA 02110-1301, USA.
+!  
+
+module utils_test
+  use iso_fortran_env, only: r8 => real64
+  use pfunit_mod
+  use utils_mod
+  implicit none
+  
+contains
+
+@Test
+  subroutine test_is_nan
+    real(r8) :: arg
+    arg = -1.0_r8
+    @assertFalse(is_nan(1.0_r8),message="Non-NAN mistakenly taken to be NAN.")
+    @assertTrue(is_nan(sqrt(arg)),message="NAN not detected.")    
+  end subroutine test_is_nan
+
+  subroutine test_elements_in_slice
+    integer, dimension(50) :: test_array
+    @assertEqual(size(test_array(1:10:1)),elements_in_slice(1,10,1),message='Wrong number of elements calculated.')
+    @assertEqual(size(test_array(2:11:1)),elements_in_slice(2,11,1),message='Wrong number of elements calculated.')
+    @assertEqual(size(test_array(1:15:2)),elements_in_slice(1,15,2),message='Wrong number of elements calculated.')
+    @assertEqual(size(test_array(4:29:3)),elements_in_slice(4,29,3),message='Wrong number of elements calculated.')
+  end subroutine test_elements_in_slice
+  
+end module utils_test

@@ -20,6 +20,13 @@
 !  MA 02110-1301, USA.
 !  
 
+! Make procedures non-pure for debugging, so that messages can be
+! printed to the screen.
+#ifdef DEBUG
+#define pure 
+#define elemental 
+#endif
+
 module array_fields_mod
   !* Author: Chris MacMackin
   !  Date: September 2016
@@ -658,7 +665,7 @@ contains
     class is(array_vector_field)
       allocate(local, mold=rhs)
       call local%assign_meta_data(rhs)
-      do concurrent (i=1:this%numpoints+1)
+      do concurrent (i=1:this%numpoints)
         local%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
       end do
     end select
@@ -1324,7 +1331,7 @@ contains
         iseq = .false.
         return
       end if
-      do i=1,this%numpoints+1
+      do i=1,this%numpoints
         normalization = abs(this%field_data(i))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
         iseq = iseq .and.( ((this%field_data(i)-rhs%field_data(i))/normalization < &
@@ -1563,9 +1570,9 @@ contains
     end if
     do concurrent (i = 1:size(counts))
       start = sum(counts(1:i-1)) + 1
-      finish = start + counts(i) - 1 
+      finish = start + counts(i) - 1
       this%field_data(slices(1,i):slices(2,i):slices(3,i),:) = reshape(raw(start:finish), &
-           [counts(i),this%vector_dims])
+           [counts(i)/this%vector_dims,this%vector_dims])
     end do
   end subroutine array_vector_set_from_raw
 
@@ -1717,15 +1724,15 @@ contains
     call local%assign_meta_data(rhs,.false.)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data(local%numpoints + 1, max_dims))
-    do concurrent (i=1:local%numpoints+1)
+    allocate(local%field_data(local%numpoints, max_dims))
+    do concurrent (i=1:local%numpoints)
       local%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
     end do
     if (rhs%vector_dims > size(lhs)) then
       local%field_data(:,min_dims+1:) = -rhs%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(lhs)
-      do concurrent (i=1:local%numpoints+1)
+      do concurrent (i=1:local%numpoints)
         local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
       end do
     end if
@@ -1747,15 +1754,15 @@ contains
     call local%assign_meta_data(this,.false.)
     min_dims = min(this%vector_dims, size(rhs))
     max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data(local%numpoints + 1, max_dims))
-    do concurrent (i=1:local%numpoints+1)
+    allocate(local%field_data(local%numpoints, max_dims))
+    do concurrent (i=1:local%numpoints)
       local%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
     end do
     if (this%vector_dims > size(rhs)) then
       local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(rhs)
-      do concurrent (i=1:local%numpoints+1)
+      do concurrent (i=1:local%numpoints)
         local%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
       end do
     end if
@@ -1812,15 +1819,15 @@ contains
     call local%assign_meta_data(rhs,.false.)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data(local%numpoints + 1, max_dims))
-    do concurrent (i=1:local%numpoints+1)
+    allocate(local%field_data(local%numpoints, max_dims))
+    do concurrent (i=1:local%numpoints)
       local%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
     end do
     if (rhs%vector_dims > size(lhs)) then
       local%field_data(:,min_dims+1:) = rhs%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(lhs)
-      do concurrent (i=1:local%numpoints+1)
+      do concurrent (i=1:local%numpoints)
         local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
       end do
     end if
@@ -1842,15 +1849,15 @@ contains
     call local%assign_meta_data(this,.false.)
     min_dims = min(this%vector_dims, size(rhs))
     max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data(local%numpoints + 1, max_dims))
-    do concurrent (i=1:local%numpoints+1)
+    allocate(local%field_data(local%numpoints, max_dims))
+    do concurrent (i=1:local%numpoints)
       local%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
     end do
     if (this%vector_dims > size(rhs)) then
       local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(rhs)
-      do concurrent (i=1:local%numpoints+1) 
+      do concurrent (i=1:local%numpoints) 
         local%field_data(i,min_dims+1:) = rhs(min_dims+1:)
       end do
     end if
@@ -2025,7 +2032,7 @@ contains
     select type(res)
     class is(array_vector_field)
       res%vector_dims = 3
-      allocate(res%field_data(res%numpoints+1,3))
+      allocate(res%field_data(res%numpoints,3))
       if (this%dimensions() >= 3) then
         res%field_data(:,2) = this%array_component_dx(this%field_data(:,1),3)
         been_set(2) = .true.
@@ -2059,9 +2066,9 @@ contains
         end if
         if (been_set(2)) then
           res%field_data(:,2) = res%field_data(:,2) &
-                             + this%array_component_dx(this%field_data(:,3),1)
+                             - this%array_component_dx(this%field_data(:,3),1)
         else
-          res%field_data(:,2) = this%array_component_dx(this%field_data(:,3),1)
+          res%field_data(:,2) = -this%array_component_dx(this%field_data(:,3),1)
           been_set(2) = .true.
         end if
       end if
@@ -2095,14 +2102,14 @@ contains
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     local%vector_dims = 3
-    allocate(local%field_data(this%numpoints+1,3))
+    allocate(local%field_data(this%numpoints,3))
     vec1 = 0
     vec2 = 0
     select type(rhs)
     class is(array_vector_field)
       dims1 = min(3,this%vector_dims)
       dims2 = min(3,rhs%vector_dims)
-      do i=1,this%numpoints+1
+      do i=1,this%numpoints
         vec1(:dims1) = this%field_data(i,:dims1)
         vec2(:dims2) = rhs%field_data(i,:dims2)
         local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
@@ -2174,7 +2181,7 @@ contains
       else
         dims = this%vector_dims
       end if
-      do i=1,this%numpoints+1
+      do i=1,this%numpoints
         normalization = norm2(this%field_data(i,:dims))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
         iseq = iseq .and. ( (norm2(this%field_data(i,this%dimensions()+1:dims) &

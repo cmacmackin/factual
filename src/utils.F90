@@ -20,6 +20,12 @@
 !  MA 02110-1301, USA.
 !  
 
+! Make procedures non-pure for debugging, so that messages can be
+! printed to the screen.
+#ifdef DEBUG
+#define pure 
+#endif
+
 module utils_mod
   !* Author: Chris MacMackin
   !  Date: September 2016
@@ -76,7 +82,7 @@ contains
     integer :: expected
     expected = field%raw_size(provide_lower_bound,provide_upper_bound)
     if (expected /= size(raw)) then
-      error stop('array_vector_field: Error, setting from raw array of '//&
+      error stop('check_set_from_raw: Error, setting from raw array of '//&
                  'wrong size')
     end if
 #endif

@@ -20,6 +20,13 @@
 !  MA 02110-1301, USA.
 !  
 
+! Make procedures non-pure for debugging, so that messages can be
+! printed to the screen.
+#ifdef DEBUG
+#define pure 
+#define elemental 
+#endif
+
 module abstract_fields_mod
   !* Author: Chris MacMackin
   !  Date: March 2016
@@ -80,15 +87,15 @@ module abstract_fields_mod
     procedure(f_eq_meta), deferred :: assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
-    procedure(scalar_factory), public, deferred :: allocate_scalar_field
+    procedure(scalar_factory), deferred :: allocate_scalar_field
       !! Allocates a scalar field to be of the same concrete type as
       !! those returned by type-bound procedures of this field which
       !! produce scalar fields.
-    procedure(vector_factory), public, deferred :: allocate_vector_field
+    procedure(vector_factory), deferred :: allocate_vector_field
       !! Allocates a vector field to be of the same concrete type as
       !! those returned by type-bound procedures of this field which
       !! produce vector fields.
-    procedure(id_pos), public, deferred :: id_to_position
+    procedure(id_pos), deferred :: id_to_position
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
   end type abstract_field

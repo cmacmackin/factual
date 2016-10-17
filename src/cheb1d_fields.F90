@@ -20,6 +20,13 @@
 !  MA 02110-1301, USA.
 !  
 
+! Make procedures non-pure for debugging, so that messages can be
+! printed to the screen.
+#ifdef DEBUG
+#define pure 
+#define elemental 
+#endif
+
 module cheb1d_fields_mod
   !* Author: Chris MacMackin
   !  Date: March 2016
@@ -167,7 +174,7 @@ contains
     if (present(lower_bound)) then
       field%extent(1) = lower_bound
     else
-      field%extent(1) = 0.0_r8
+      field%extent(1) = -1.0_r8
     end if
     if (present(upper_bound)) then
       field%extent(2) = upper_bound
@@ -299,11 +306,13 @@ contains
       !! Order of the derivative, default = 1
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
+    integer :: i
     if (dir==1) then
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
     else
-      res = 0.0
+      allocate(res(size(data_array)))
+      res = 0.0_r8
     end if
   end function cheb1d_scalar_array_dx
 
@@ -319,16 +328,16 @@ contains
     class(abstract_field), intent(in) :: other
       !! The field being checked against this one
     character(len=70), parameter :: err_message = 'cheb1d_scalar_field: '//&
-         'Error, operation with incompatible fields due to'//new_line('a')
+         'Error, operation with incompatible fields due to '
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')
+           error stop(err_message//'different domains.')
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')
+           error stop(err_message//'different domains.')
     class default
-      error stop(err_message//'    incompatible types.')
+      error stop(err_message//'incompatible types.')
     end select
   end subroutine cheb1d_scalar_check_compatible
 
@@ -432,7 +441,7 @@ contains
     if (present(lower_bound)) then
        field%extent(1) = lower_bound
     else
-       field%extent(1) = 0.0_r8
+       field%extent(1) = -1.0_r8
     end if
     if (present(upper_bound)) then
        field%extent(2) = upper_bound
@@ -574,6 +583,7 @@ contains
         call differentiate_1d(res(:,i),this%colloc_points,order)
       end do
     else
+      allocate(res, mold=data_array)
       res = 0.0_r8
     end if
   end function cheb1d_vector_array_dx
@@ -615,16 +625,16 @@ contains
     class(abstract_field), intent(in) :: other
       !! The field being checked against this one
     character(len=70), parameter :: err_message = 'cheb1d_vector_field: '//&
-         'Error, operation with incompatible fields due to'//new_line('a')
+         'Error, operation with incompatible fields due to '
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')
+           error stop(err_message//'different domains.')
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'    domains.')
+           error stop(err_message//'different domains.')
     class default
-      error stop(err_message//'    incompatible types.')
+      error stop(err_message//'incompatible types.')
     end select
   end subroutine cheb1d_vector_check_compatible
 

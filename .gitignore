@@ -15,3 +15,4 @@ a.out
 gmon.out
 gprof.log
 massif.out.*
+tests/*.F90

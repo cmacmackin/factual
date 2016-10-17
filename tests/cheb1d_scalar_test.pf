@@ -23,6 +23,7 @@
 module cheb1d_scalar_test
   use iso_fortran_env, only: r8 => real64
   use pfunit_mod
+  use abstract_fields_mod, only: scalar_field, vector_field
   use chebyshev_mod
   use cheb1d_fields_mod
   implicit none
@@ -103,10 +104,10 @@ contains
 @Test
   subroutine test_raw_size(this)
     class(test_field), intent(inout) :: this
-    @assertEqual(this%nodes+1,this%field1%raw_size(),message='Wrong raw size returned.')
-    @assertEqual(this%nodes,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
-    @assertEqual(this%nodes,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
-    @assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes,this%field1%raw_size(),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-1,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-2,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
   end subroutine test_raw_size
 
 @Test
@@ -115,36 +116,36 @@ contains
     real(r8), allocatable, dimension(:) :: raw, expected
     integer :: i
     raw = this%field1%raw()
-    expected = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) expected(i) = f1([expected(i)])
+    expected = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    forall (i = 1:this%nodes) expected(i) = f1([expected(i)])
     @assertEqual(expected,raw,message='Wrong raw contents returned')
     raw = this%field1%raw([.false.])
-    @assertEqual(expected(:this%nodes),raw,message='Wrong raw contents returned')
+    @assertEqual(expected(:this%nodes-1),raw,message='Wrong raw contents returned')
     raw = this%field1%raw([.true.],[.false.])
     @assertEqual(expected(2:),raw,message='Wrong raw contents returned')
     raw = this%field1%raw([.false.],[.false.])
-    @assertEqual(expected(2:this%nodes),raw,message='Wrong raw contents returned')
+    @assertEqual(expected(2:this%nodes-1),raw,message='Wrong raw contents returned')
   end subroutine test_raw
 
 @Test
   subroutine test_assign_raw(this)
     class(test_field), intent(inout) :: this
-    real(r8), dimension(this%nodes+1) :: raw, xvals
+    real(r8), dimension(this%nodes) :: raw, xvals
     integer :: i
-    xvals = collocation_points(this%nodes,this%lower1,this%upper1)
-    forall (i = 1:this%nodes+1) raw(i) = f2([xvals(i)])
+    xvals = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    forall (i = 1:this%nodes) raw(i) = f2([xvals(i)])
     call this%field1%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1([xvals(i)])
+    forall (i = 1:this%nodes) raw(i) = f1([xvals(i)])
     call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
     @assertEqual(raw(2:),this%field2%raw([.false.],[.true.]))
-    forall (i = 1:this%nodes+1) raw(i) = f2([xvals(i)])
-    call this%field2%set_from_raw(raw(:this%nodes),[.true.],[.false.])
-    @assertEqual(raw(:this%nodes),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1([xvals(i)])
-    call this%field2%set_from_raw(raw(2:this%nodes),[.false.],[.false.])
-    @assertEqual(raw(2:this%nodes),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.')
-    forall (i = 1:this%nodes+1) raw(i) = f1([xvals(i)])
+    forall (i = 1:this%nodes) raw(i) = f2([xvals(i)])
+    call this%field2%set_from_raw(raw(:this%nodes-1),[.true.],[.false.])
+    @assertEqual(raw(:this%nodes-1),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
+    forall (i = 1:this%nodes) raw(i) = f1([xvals(i)])
+    call this%field2%set_from_raw(raw(2:this%nodes-1),[.false.],[.false.])
+    @assertEqual(raw(2:this%nodes-1),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.')
+    forall (i = 1:this%nodes) raw(i) = f1([xvals(i)])
     call this%field2%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw')
   end subroutine test_assign_raw
@@ -165,6 +166,45 @@ contains
     res = this%field1%elements()
     @assertEqual(this%nodes,res,message='Incorrect number of elements returned')
   end subroutine test_elements
+
+@Test
+  subroutine test_allocate_scalar(this)
+    class(test_field), intent(inout) :: this
+    class(scalar_field), allocatable :: scalar
+    call this%field1%allocate_scalar_field(scalar)
+    select type(scalar)
+    type is(cheb1d_scalar_field)
+      @assertTrue(.true.)
+    class default
+      @assertTrue(.false., message='Type other than cheb1d_scalar_field returned')
+    end select
+  end subroutine test_allocate_scalar
+
+@Test
+  subroutine test_allocate_vector(this)
+    class(test_field), intent(inout) :: this
+    class(vector_field), allocatable :: vector
+    call this%field1%allocate_vector_field(vector)
+    select type(vector)
+    type is(cheb1d_vector_field)
+      @assertTrue(.true.)
+    class default
+      @assertTrue(.false., message='Type other than cheb1d_vector_field returned')
+    end select
+  end subroutine test_allocate_vector
+
+@Test
+  subroutine test_id_to_position(this)
+    class(test_field), intent(inout) :: this
+    real(r8), dimension(this%nodes)  :: xvals
+    real(r8), dimension(:), allocatable :: actual
+    integer :: i
+    xvals = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    do i = 1,this%nodes
+      actual = this%field1%id_to_position(i)
+      @assertEqual(xvals(i),actual(1),message='Wrong location returned for this ID')
+    end do
+  end subroutine test_id_to_position
 
 @Test
   subroutine test_fmf(this)
