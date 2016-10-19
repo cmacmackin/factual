@@ -26,7 +26,7 @@ PFUNIT = $(HOME)/Code/pfunit-$(F90)
 # Output
 EXEC := 
 TEXEC := tests.x
-LIB := isoft.a
+LIB := factual.a
 PREFIX := $(HOME)/.local
 LIBDIR := $(PREFIX)/lib
 INCDIR := $(PREFIX)/include
