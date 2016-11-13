@@ -22,10 +22,12 @@
 
 ! Make procedures non-pure for debugging, so that messages can be
 ! printed to the screen.
-#ifdef DEBUG
+#:if defined('DEBUG')
 #define pure 
 #define elemental 
-#endif
+#:endif
+
+#:include 'fypp_utils.fpp'
 
 module cheb1d_fields_mod
   !* Author: Chris MacMackin
@@ -46,9 +48,10 @@ module cheb1d_fields_mod
   implicit none
   private
 
-  public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
-            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
-
+$:public_unary()
+  public :: minval
+  public :: maxval
+  
   type, extends(array_scalar_field), public :: cheb1d_scalar_field
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -134,12 +137,9 @@ module cheb1d_fields_mod
     procedure :: check_subtype_compatible => cheb1d_vector_check_compatible
       !! Tests whether two fields are suitable for binary operations
       !! together
-    procedure :: array_component_dx => cheb1d_vector_component_array_dx
+    procedure :: array_dx => cheb1d_vector_array_dx
       !! Takes the derivative of particular vector component of the
       !! field, using a 1-D array of data passed to it.
-    procedure :: array_dx => cheb1d_vector_array_dx
-      !! Takes the derivative of the field using a 1-D array of data
-      !! passed as an argument.
     procedure, public :: allocate_scalar_field => cheb1d_vector_allocate_scalar
       !! Allocates a scalar field with concrete type [[cheb1d_scalar_field]]
     procedure, public :: allocate_vector_field => cheb1d_vector_allocate_vector
@@ -556,39 +556,8 @@ contains
       error stop('cheb1d_vector_field: Invalid ID number provided.')
     end if
   end function cheb1d_vector_id_to_position
-  
-  function cheb1d_vector_array_dx(this, data_array, dir, order) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}\vec{\rm field}\)
-    !
-    class(cheb1d_vector_field), intent(in) :: this
-      real(r8), dimension(:,:), intent(in)  :: data_array
-        !! An array holding the datapoints for the vectors in this
-        !! field, with identical in layout to the storage in the field
-        !! itself. Each row represents a different spatial location,
-        !! while each column represents a different component of the
-        !! vector.
-    integer, intent(in) :: dir
-      !! Direction in which to differentiate
-    integer, optional, intent(in) :: order
-      !! Order of the derivative, default = 1
-    real(r8), dimension(:,:), allocatable :: res
-      !! The spatial derivative of order `order` taken in direction `dir`
-    integer :: i
-    if (dir==1) then
-      res = data_array
-      do i=1,this%vector_dimensions()
-        call differentiate_1d(res(:,i),this%colloc_points,order)
-      end do
-    else
-      allocate(res, mold=data_array)
-      res = 0.0_r8
-    end if
-  end function cheb1d_vector_array_dx
 
-  function cheb1d_vector_component_array_dx(this, data_array, dir, order) &
+  function cheb1d_vector_array_dx(this, data_array, dir, order) &
                                                               result(res)
     !* Author: Chris MacMackin
     !  Date: October 2016
@@ -609,9 +578,10 @@ contains
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
     else
+      allocate(res, mold=data_array)
       res = 0.0
     end if
-  end function cheb1d_vector_component_array_dx
+  end function cheb1d_vector_array_dx
 
   pure subroutine cheb1d_vector_check_compatible(this,other)
     !* Author: Chris MacMackin

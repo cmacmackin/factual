@@ -22,10 +22,12 @@
 
 ! Make procedures non-pure for debugging, so that messages can be
 ! printed to the screen.
-#ifdef DEBUG
+#:if defined('DEBUG')
 #define pure 
 #define elemental 
-#endif
+#:endif
+
+#:include 'fypp_utils.fpp'
 
 module array_fields_mod
   !* Author: Chris MacMackin
@@ -118,40 +120,9 @@ module array_fields_mod
       !! \({\rm field}^{\rm real}\)
     procedure :: field_pow_int => array_scalar_sf_p_i
       !! \({\rm field}^{\rm int}\)
-    procedure :: sin => array_scalar_sin
-      !! \(\sin({\rm field})\)
-    procedure :: cos => array_scalar_cos
-      !! \(\cos({\rm field})\)
-    procedure :: tan => array_scalar_tan
-      !! \(\tan({\rm field})\)
-    procedure :: asin => array_scalar_asin
-      !! \(\sin^{-1}({\rm field})\)
-    procedure :: acos => array_scalar_acos
-      !! \(\cos^{-1}({\rm field})\)
-    procedure :: atan => array_scalar_atan
-      !! \(\tan^{-1}({\rm field})\)
-    procedure :: sinh => array_scalar_sinh
-      !! \(\sinh({\rm field})\)
-    procedure :: cosh => array_scalar_cosh
-      !! \(\cosh({\rm field})\)
-    procedure :: tanh => array_scalar_tanh
-      !! \(\tanh({\rm field})\)
-    procedure :: asinh => array_scalar_asinh
-      !! \(\sinh^{-1}({\rm field})\)
-    procedure :: acosh => array_scalar_acosh
-      !! \(\cosh^{-1}({\rm field})\)
-    procedure :: atanh => array_scalar_atanh
-      !! \(\tanh^{-1}({\rm field})\)
-    procedure :: log => array_scalar_log
-      !! \(\ln ({\rm field})\)
-    procedure :: log10 => array_scalar_log10
-      !! \(\log ({\rm field})\)
-    procedure :: exp => array_scalar_exp
-      !! \(\e^{\rm field})\)
-    procedure :: abs => array_scalar_abs
-      !! \(\|{\rm field}|\)
-    procedure :: sqrt => array_scalar_sqrt
-      !! \(\sqrt{\rm field}\)
+#:for FUNC, TEX in UNARY_FUNCTIONS
+    $:unary_binding(FUNC, TEX, 'array_scalar')
+#:endfor
     procedure :: minval => array_scalar_minval
       !! \(\min({\rm field})\)
     procedure :: maxval => array_scalar_maxval
@@ -365,12 +336,9 @@ module array_fields_mod
       !! Tests whether two fields are suitable for binary operations
       !! together, checking that any properties of subtypes of
       !! [[array_vector_field(type)]] are compatible.
-    procedure(vf_scalar_dx), deferred :: array_component_dx
+    procedure(vf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of particular vector component of the
       !! field, using a 1-D array of data passed to it.
-    procedure(vf_vector_dx), deferred :: array_dx
-      !! Takes the derivative of the vector field using a 1-D array of
-      !! data passed to it.
   end type array_vector_field
 
   interface array_vector_field
@@ -635,9 +603,9 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this)
     select type(rhs)
@@ -658,9 +626,9 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     select type(rhs)
     class is(array_vector_field)
       allocate(local, mold=rhs)
@@ -714,9 +682,9 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this)
     select type(rhs)
@@ -768,9 +736,9 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this)
     select type(rhs)
@@ -822,9 +790,9 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this)
     select type(rhs)
@@ -914,294 +882,10 @@ contains
     call move_alloc(local,res)
   end function array_scalar_sf_p_i
 
-  pure function array_scalar_sin(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\sin({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = sin(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_sin
+#:for FUNC, TEX in UNARY_FUNCTIONS
+  $:unary_func(FUNC, TEX, 'array_scalar')
 
-  pure function array_scalar_cos(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\cos({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = cos(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_cos
-
-  pure function array_scalar_tan(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\tan({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = tan(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_tan
-
-  pure function array_scalar_asin(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\sin^{-1}({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = asin(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_asin
-
-  pure function array_scalar_acos(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\cos^{-1}({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = acos(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_acos
-
-  pure function array_scalar_atan(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\tan^{-1}({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = atan(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_atan
-
-  pure function array_scalar_sinh(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\sinh({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = sinh(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_sinh
-
-  pure function array_scalar_cosh(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\cosh({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = cosh(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_cosh
-
-  pure function array_scalar_tanh(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\tanh({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = tanh(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_tanh
-
-  pure function array_scalar_asinh(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\sinh^{-1}({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = asinh(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_asinh
-
-  pure function array_scalar_acosh(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\cosh^{-1}({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = acosh(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_acosh
-
-  pure function array_scalar_atanh(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\tanh^{-1}({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = atanh(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_atanh
-
-  pure function array_scalar_log(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\ln({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = log(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_log
-
-  pure function array_scalar_log10(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\log({\rm field})\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = log10(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_log10
-
-  pure function array_scalar_exp(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(e^{\rm field}\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = exp(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_exp
-
-  pure function array_scalar_abs(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(|{\rm field}|\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = abs(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_abs
-
-  pure function array_scalar_sqrt(this) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! \(\sqrt{{\rm field}}\)
-    !
-    class(array_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(array_scalar_field), allocatable :: local
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = sqrt(this%field_data)
-    end if
-    call move_alloc(local, res)
-  end function array_scalar_sqrt
+#:endfor
 
   pure function array_scalar_minval(this) result(res)
     !* Author: Chris MacMackin
@@ -1232,7 +916,7 @@ contains
       res = 0.0_r8
     end if
   end function array_scalar_maxval
-  
+
   function array_scalar_d_dx(this, dir, order) result(res)
     !* Author: Chris MacMackin
     !  Date: October 2016
@@ -1587,9 +1271,9 @@ contains
     class(vector_field), allocatable :: res !! The restult of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this)
     select type(rhs)
@@ -1644,9 +1328,9 @@ contains
     class(vector_field), allocatable :: res !! The restult of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this)
     select type(rhs)
@@ -1685,9 +1369,9 @@ contains
     class(vector_field), allocatable :: res !! The restult of this operation
     class(array_vector_field), allocatable :: local
     integer :: min_dims, max_dims
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     select type(rhs)
     class is(array_vector_field)
@@ -1780,9 +1464,9 @@ contains
     class(vector_field), allocatable :: res !! The restult of this operation
     class(array_vector_field), allocatable :: local
     integer :: max_dims, min_dims
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     select type(rhs)
     class is(array_vector_field)
@@ -1934,9 +1618,14 @@ contains
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(vector_field), allocatable :: res
     class(array_vector_field), allocatable :: local
+    integer :: i
     allocate(local, mold=this)
+    allocate(local%field_data, mold=this%field_data)
     call local%assign_meta_data(this)
-    local%field_data = this%array_dx(this%field_data, dir, order)
+    do i = 1, this%vector_dims
+      local%field_data(:,i) = this%array_dx(this%field_data(:,i), &
+                                                     dir, order)
+    end do
     call move_alloc(local, res)
   end function array_vector_d_dx
 
@@ -1955,7 +1644,7 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
-      res%field_data(:) = this%array_component_dx(this%field_data(:,component), &
+      res%field_data(:) = this%array_dx(this%field_data(:,component), &
                                                  dir, order)
     class default
       error stop('Non-array_scalar_field type allocated by '//&
@@ -1978,10 +1667,10 @@ contains
     class is(array_vector_field)
       allocate(res%field_data(size(this%field_data,1),this%vector_dims))
       do i = 1, this%vector_dims
-        res%field_data(:,i) = this%array_component_dx(this%field_data(:,i),1,2)
+        res%field_data(:,i) = this%array_dx(this%field_data(:,i),1,2)
         do j = 2, this%dimensions()
           res%field_data(:,i) = res%field_data(:,i) + &
-                              this%array_component_dx(this%field_data(:,i),j,2)
+                              this%array_dx(this%field_data(:,i),j,2)
         end do
       end do
     class default
@@ -2005,10 +1694,10 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
-      res%field_data = this%array_component_dx(this%field_data(:,1),1,1)
+      res%field_data = this%array_dx(this%field_data(:,1),1,1)
       do i = 2, this%dimensions()
         res%field_data = res%field_data + &
-                         this%array_component_dx(this%field_data(:,i),i,1)
+                         this%array_dx(this%field_data(:,i),i,1)
       end do
     class default
       error stop('Non-array_scalar_field type allocated by '//&
@@ -2034,23 +1723,23 @@ contains
       res%vector_dims = 3
       allocate(res%field_data(res%numpoints,3))
       if (this%dimensions() >= 3) then
-        res%field_data(:,2) = this%array_component_dx(this%field_data(:,1),3)
+        res%field_data(:,2) = this%array_dx(this%field_data(:,1),3)
         been_set(2) = .true.
       end if
       if (this%dimensions() >= 2) then
-        res%field_data(:,3) = -this%array_component_dx(this%field_data(:,1),2)
+        res%field_data(:,3) = -this%array_dx(this%field_data(:,1),2)
         been_set(3) = .true.
       end if
       if (this%vector_dims >= 2) then
         if (this%dimensions() >= 3) then
-          res%field_data(:,1) = -this%array_component_dx(this%field_data(:,2),3)
+          res%field_data(:,1) = -this%array_dx(this%field_data(:,2),3)
           been_set(1) = .true.
         end if
         if (been_set(3)) then
           res%field_data(:,3) = res%field_data(:,3) &
-                             + this%array_component_dx(this%field_data(:,2),1)
+                             + this%array_dx(this%field_data(:,2),1)
         else
-          res%field_data(:,3) = this%array_component_dx(this%field_data(:,2),1)
+          res%field_data(:,3) = this%array_dx(this%field_data(:,2),1)
           been_set(3) = .true.
         end if
       end if
@@ -2058,17 +1747,17 @@ contains
         if (this%dimensions() >= 2) then
           if (been_set(1)) then
             res%field_data(:,1) = res%field_data(:,1) &
-                               + this%array_component_dx(this%field_data(:,3),2)
+                               + this%array_dx(this%field_data(:,3),2)
           else
-            res%field_data(:,1) = this%array_component_dx(this%field_data(:,3),2)
+            res%field_data(:,1) = this%array_dx(this%field_data(:,3),2)
             been_set(1) = .true.
           end if
         end if
         if (been_set(2)) then
           res%field_data(:,2) = res%field_data(:,2) &
-                             - this%array_component_dx(this%field_data(:,3),1)
+                             - this%array_dx(this%field_data(:,3),1)
         else
-          res%field_data(:,2) = -this%array_component_dx(this%field_data(:,3),1)
+          res%field_data(:,2) = -this%array_dx(this%field_data(:,3),1)
           been_set(2) = .true.
         end if
       end if
@@ -2096,9 +1785,9 @@ contains
     real(r8), dimension(3) :: vec1, vec2
     integer :: i, dims1, dims2
     class(array_vector_field), allocatable :: local
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     local%vector_dims = 3
@@ -2130,9 +1819,9 @@ contains
     class(vector_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     integer :: min_dims
-#ifdef DEBUG
+#:if defined('DEBUG')
     call this%check_compatible(rhs)
-#endif
+#:endif
     call this%allocate_scalar_field(res)
     call res%assign_meta_data(this)
     select type(res)

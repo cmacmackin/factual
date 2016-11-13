@@ -19,8 +19,10 @@
 
 # Directories
 SDIR := ./src
+FDIR := ./fsrc
 TDIR := ./tests
 MDIR := ./mod
+ODIR := ./objs
 PFUNIT = $(HOME)/Code/pfunit-$(F90)
 
 # Output
@@ -45,11 +47,14 @@ ifeq ($(VENDOR_),intel)
   LDFLAGS  := -O0 -g -traceback
   COVFLAGS := 
 else
-  F90      := gfortran
-  FCFLAGS  := -O0 -g -fcheck=all -DDEBUG -J$(MDIR)
+  F90      := gfortran-6
+  FCFLAGS  := -O0 -g -fcheck=all -J$(MDIR)
   LDFLAGS  := -O0 -g 
   COVFLAGS := -fprofile-arcs -ftest-coverage
 endif
+
+FPP := fypp
+FPP_FLAGS := -DDEBUG -n
 
 # Include paths
 FCFLAGS += $(PROJECT_INCDIRS:%=-I%) -I$(INCDIR) -I/usr/include -I$(PFUNIT)/mod
@@ -63,7 +68,7 @@ LDFLAGS += $(LIBS)
 EXTERNAL_MODS := ^iso_(fortran_env|c_binding)|ieee_(exceptions|arithmetic|features)|openacc|omp_lib(_kinds)?|mpi|pfunit_mod$$
 
 # Extensions of Fortran files, case insensitive
-F_EXT := f for fpp f90 f95 f03 f08 f15
+F_EXT := f for f90 f95 f03 f08 f15
 
 # Temporary work variables
 _F_EXT := $(F_EXT) $(shell echo $(F_EXT) | tr a-z A-Z)
@@ -71,10 +76,15 @@ null :=
 space := $(null) $(null)
 EXT_PATTERN_GREP := '.*\.\($(subst $(space),\|,$(_F_EXT))\)'
 EXT_PATTERN_SED := 's/([^ ]*)\.($(subst $(space),|,$(_F_EXT)))/\1.o/g;'
+FPP_PATTERN_GREP := '.*\.\(fpp\|FPP\)'
+FPP_PATTERN_SED := 's/([^ ]*)\.(fpp|FPP)/\1.o/g;'
 
 # Objects to compile
 OBJS := $(shell find $(SDIR) -iregex $(EXT_PATTERN_GREP) | sed -r $(EXT_PATTERN_SED))
+OBJS += $(shell find $(SDIR) -iregex $(FPP_PATTERN_GREP) | sed -r $(FPP_PATTERN_SED))
 TOBJS := $(patsubst %.pf,%.o,$(wildcard $(TDIR)/*.pf))
+
+.PRECIOUS: %.F90
 
 # "make" builds all
 all: all_objects tests
@@ -114,6 +124,12 @@ endif
 %.d: %.pf get_deps
 	./get_deps $< $$\(MDIR\) "$(EXTERNAL_MODS)" $(PROJECT_INCDIRS) > $@
 
+%.d: %.fpp get_deps
+	./get_deps $< \$$\(MDIR\) "$(EXTERNAL_MODS)" $(PROJECT_INCDIRS) > $@
+
+%.d: %.FPP get_deps
+	./get_deps $< \$$\(MDIR\) "$(EXTERNAL_MODS)" $(PROJECT_INCDIRS) > $@
+
 # General rule for building Fortran files, where $(1) is the file extension
 define fortran_rule
 %.o: %.$(1) $(FMOD) | $(MDIR)
@@ -127,7 +143,13 @@ endef
 $(foreach EXT,$(_F_EXT),$(eval $(call fortran_rule,$(EXT))))
 
 %.F90: %.pf
-	$(PFUNIT)/bin/pFUnitParser.py $<  $@
+	$(PFUNIT)/bin/pFUnitParser.py $< $@
+
+%.F90: %.fpp
+	$(FPP) $(FPP_FLAGS) $< $@
+
+%.F90: %.FPP
+	$(FPP) $(FPP_FLAGS) $< $@
 
 $(MDIR):
 	@mkdir -p $@

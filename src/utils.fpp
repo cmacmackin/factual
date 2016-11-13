@@ -22,9 +22,9 @@
 
 ! Make procedures non-pure for debugging, so that messages can be
 ! printed to the screen.
-#ifdef DEBUG
+#:if defined('DEBUG')
 #define pure 
-#endif
+#:endif
 
 module utils_mod
   !* Author: Chris MacMackin

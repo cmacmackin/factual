@@ -22,10 +22,12 @@
 
 ! Make procedures non-pure for debugging, so that messages can be
 ! printed to the screen.
-#ifdef DEBUG
+#:if defined('DEBUG')
 #define pure 
 #define elemental 
-#endif
+#:endif
+
+#:include 'fypp_utils.fpp'
 
 module abstract_fields_mod
   !* Author: Chris MacMackin
@@ -157,40 +159,10 @@ module abstract_fields_mod
     !~ procedure(sf_elem), public, deferred :: get_element
       !! Returns one of the constituent values of the field, i.e. the 
       !! field's value at a particular location
-    procedure(sf_ret_sf), deferred :: sin
-      !! \(\sin({\rm field})\)
-    procedure(sf_ret_sf), deferred :: cos
-      !! \(\cos({\rm field})\)
-    procedure(sf_ret_sf), deferred :: tan
-      !! \(\tan({\rm field})\)
-    procedure(sf_ret_sf), deferred :: asin
-      !! \(\sin^{-1}({\rm field})\)
-    procedure(sf_ret_sf), deferred :: acos
-      !! \(\cos^{-1}({\rm field})\)
-    procedure(sf_ret_sf), deferred :: atan
-      !! \(\tan^{-1}({\rm field})\)
-    procedure(sf_ret_sf), deferred :: sinh
-      !! \(\sinh({\rm field})\)
-    procedure(sf_ret_sf), deferred :: cosh
-      !! \(\cosh({\rm field})\)
-    procedure(sf_ret_sf), deferred :: tanh
-      !! \(\tanh({\rm field})\)
-    procedure(sf_ret_sf), deferred :: asinh
-      !! \(\sinh^{-1}({\rm field})\)
-    procedure(sf_ret_sf), deferred :: acosh
-      !! \(\cosh^{-1}({\rm field})\)
-    procedure(sf_ret_sf), deferred :: atanh
-      !! \(\tanh^{-1}({\rm field})\)
-    procedure(sf_ret_sf), deferred :: log
-      !! \(\ ({\rm field})\)
-    procedure(sf_ret_sf), deferred :: log10
-      !! \(\ ({\rm field})\)
-    procedure(sf_ret_sf), deferred :: exp
-      !! \(\ ({\rm field})\)
-    procedure(sf_ret_sf), deferred :: abs
-      !! \(\ ({\rm field})\)
-    procedure(sf_ret_sf), deferred :: sqrt
-      !! \(\ ({\rm field})\)
+#:for FUNC, TEX in UNARY_FUNCTIONS
+    procedure(sf_ret_sf), deferred :: ${FUNC}$
+      !! \(${TEX}$({\rm field})\)
+#:endfor
     procedure(sf_ret_r), deferred :: minval
       !! \(\ ({\rm field})\)
     procedure(sf_ret_r), deferred :: maxval
@@ -847,73 +819,12 @@ module abstract_fields_mod
     end function vf_is_equal
   end interface
 
-  interface sin
-    module procedure :: scalar_field_sin
-  end interface
+#:for FUNC, TEX in UNARY_FUNCTIONS
+  interface ${FUNC}$
+    module procedure :: scalar_field_${FUNC}$
+  end interface ${FUNC}$
 
-  interface cos
-    module procedure :: scalar_field_cos
-  end interface
-
-  interface tan
-    module procedure :: scalar_field_tan
-  end interface
-
-  interface asin
-    module procedure :: scalar_field_asin
-  end interface
-
-  interface acos
-    module procedure :: scalar_field_acos
-  end interface
-
-  interface atan
-    module procedure :: scalar_field_atan
-  end interface
-
-  interface sinh
-    module procedure :: scalar_field_sinh
-  end interface
-
-  interface cosh
-    module procedure :: scalar_field_cosh
-  end interface
-
-  interface tanh
-    module procedure :: scalar_field_tanh
-  end interface
-
-  interface asinh
-    module procedure :: scalar_field_asinh
-  end interface
-
-  interface acosh
-    module procedure :: scalar_field_acosh
-  end interface
-
-  interface atanh
-    module procedure :: scalar_field_atanh
-  end interface
-
-  interface log
-    module procedure :: scalar_field_log
-  end interface
-
-  interface log10
-    module procedure :: scalar_field_log10
-  end interface
-
-  interface exp
-    module procedure :: scalar_field_exp
-  end interface
-
-  interface abs
-    module procedure :: scalar_field_abs
-  end interface
-
-  interface sqrt
-    module procedure :: scalar_field_sqrt
-  end interface
+#:endfor
 
   interface minval
     module procedure :: scalar_field_minval
@@ -922,10 +833,11 @@ module abstract_fields_mod
   interface maxval
     module procedure :: scalar_field_maxval
   end interface
-    
-  public :: sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, &
-            acosh, atanh, log, log10, exp, abs, sqrt, minval, maxval
 
+$:public_unary()
+  public :: minval
+  public :: maxval
+  
 contains
 
   pure function elements(this)
@@ -938,240 +850,22 @@ contains
     integer :: elements
     elements = product(this%resolution())
   end function elements
+
+#:for FUNC, TEX in UNARY_FUNCTIONS
+  pure function scalar_field_${FUNC}$(field) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! Computes and returns \(${TEX}$({\rm field})\) for a scalar field.
+    !
+    class(scalar_field), intent(in) :: field
+    class(scalar_field), allocatable :: res 
+    class(scalar_field), allocatable :: tmp
+    allocate(res, mold=field)
+    res = field%${FUNC}$()
+  end function scalar_field_${FUNC}$
   
-  pure function scalar_field_sin(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the sine of the values in a scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%sin()
-  end function scalar_field_sin
-
-  pure function scalar_field_cos(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the cosine of the values in a scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%cos()
-  end function scalar_field_cos
-
-  pure function scalar_field_tan(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the tangent of the values in a scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%tan()
-  end function scalar_field_tan
-
-  pure function scalar_field_asin(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the inverse sine of the values in a scalar
-    ! field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%asin()
-  end function scalar_field_asin
-
-  pure function scalar_field_acos(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the inverse cosine of the values in a scalar
-    ! field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%acos()
-  end function scalar_field_acos
-
-  pure function scalar_field_atan(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the inverse tangent of the values in a scalar
-    ! field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%atan()
-  end function scalar_field_atan
-
-  pure function scalar_field_sinh(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the hyperbolic sine of the values in a scalar
-    ! field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%sinh()
-  end function scalar_field_sinh
-
-  pure function scalar_field_cosh(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the hyperbolic cosine of the values in a
-    ! scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%cosh()
-  end function scalar_field_cosh
-
-  pure function scalar_field_tanh(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the hyperbolic tangent of the values in a
-    ! scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%tanh()
-  end function scalar_field_tanh
-
-  pure function scalar_field_asinh(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the inverse byperbolic sine of the values in
-    ! a scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%asinh()
-  end function scalar_field_asinh
-
-  pure function scalar_field_acosh(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the inverse hyperbolic cosine of the values
-    ! in a scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%acosh()
-  end function scalar_field_acosh
-
-  pure function scalar_field_atanh(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the inverse hyperbolic tangent of the values
-    ! in a scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%atanh()
-  end function scalar_field_atanh
-
-  pure function scalar_field_log(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the natural logarithm of the values in a
-    ! scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%log()
-  end function scalar_field_log
-
-  pure function scalar_field_log10(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the base-10 logarithm of the values in a
-    ! scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%log10()
-  end function scalar_field_log10
-
-  pure function scalar_field_exp(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the exponent (base e) of the values in a
-    ! scalar field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%exp()
-  end function scalar_field_exp
-
-  pure function scalar_field_abs(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the absolute value of the values in a scalar
-    ! field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    allocate(res, mold=field)
-    res = field%abs()
-  end function scalar_field_abs
-
-  pure function scalar_field_sqrt(field) result(res)
-    !* Author: Chris MacMackin
-    !  Date: March 2016
-    !
-    ! Computes and returns the squar root of the values in a scalar
-    ! field.
-    !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
-    res = field%sqrt()
-  end function scalar_field_sqrt
+#:endfor
 
   pure function scalar_field_minval(field) result(res)
     !* Author: Chris MacMackin
