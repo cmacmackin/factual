@@ -81,14 +81,14 @@ module abstract_fields_mod
     procedure(f_raw), deferred :: raw
       !! Returns array of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
-    procedure(f_res), deferred :: resolution
-      !! Returns array containing number of datapoints in each dimension.
     procedure(f_eq_raw), deferred :: set_from_raw
       !! Set the field's values from raw data, such as that produced by 
       !! [[abstract_field:raw]]
-    procedure(f_eq_meta), deferred :: assign_meta_data
-      !! Copies all data other than values stored in field from another
-      !! field object to this one.
+    procedure(f_res), deferred :: resolution
+      !! Returns array containing number of datapoints in each dimension.
+    !procedure(f_eq_meta), deferred :: assign_meta_data
+    !  !! Copies all data other than values stored in field from another
+    !  !! field object to this one.
     procedure(scalar_factory), deferred :: allocate_scalar_field
       !! Allocates a scalar field to be of the same concrete type as
       !! those returned by type-bound procedures of this field which
@@ -130,12 +130,18 @@ module abstract_fields_mod
       !! \({\rm field} \times {\rm \vec{field}}\)
     procedure(r_sf), pass(rhs), deferred :: real_multiply_field
       !! \({\rm real}  \times {\rm field}\)
+    procedure(r1d_sf), pass(rhs), deferred :: real_array_multiply_field
+      !! \(\vec{\rm real}  \times {\rm field}\)
     procedure(sf_r), deferred :: field_multiply_real
       !! \({\rm field} \times {\rm real}\)
+    procedure(sf_r1d), deferred :: field_multiply_real_array
+      !! \( {\rm field}  \times \vec{\rm real} \)
     procedure(sf_sf), deferred :: field_divide_field
       !! \(\frac{\rm field}{\rm field}\)
     procedure(r_sf), pass(rhs), deferred :: real_divide_field
       !! \(\frac{\rm real}{\rm field}\)
+    procedure(r1d_sf), pass(rhs), deferred :: real_array_divide_field
+      !! \(\frac{\vec{\rm real}}{\rm field}\)
     procedure(sf_r), deferred :: field_divide_real
       !! \(\frac{\rm field}{\rm real}\)
     procedure(sf_sf), deferred :: field_add_field
@@ -177,9 +183,10 @@ module abstract_fields_mod
       !! \({\rm field} = {\rm field}\)
     generic, public :: operator(*) => field_multiply_field, &
         field_multiply_vecfield, real_multiply_field, &
-        field_multiply_real
+        field_multiply_real, real_array_multiply_field, &
+        field_multiply_real_array
     generic, public :: operator(/) => field_divide_field, &
-        field_divide_real, real_divide_field
+        field_divide_real, real_divide_field, real_array_divide_field
     generic, public :: operator(+) => field_add_field, field_add_real, &
         real_add_field
     generic, public :: operator(-) => field_sub_field, field_sub_real, &
@@ -264,10 +271,18 @@ module abstract_fields_mod
       !! \(\nabla\times {\rm \vec{field}}\)
     procedure(impure_vf_ret_vf), deferred :: laplacian
       !! \(\nabla^2 {\rm \vec{field}}\)
-    procedure(vf_vf_ret_sf), deferred :: dot_prod
+    procedure(vf_vf_ret_sf), deferred :: field_dot_field
       !! \({\rm \vec{field}} \cdot {\rm \vec{field}}\)
-    procedure(vf_vf), deferred :: cross_prod
+    procedure(vf_vr_ret_sf), deferred :: field_dot_real
+      !! \({\rm \vec{field}} \cdot {\rm \vec{real}}\)
+    procedure(vr_vf_ret_sf), pass(rhs), deferred :: real_dot_field
+      !! \({\rm \vec{real}} \cdot {\rm \vec{field}}\)
+    procedure(vf_vf), deferred :: field_cross_field
       !! \({\rm\vec{field}} \times {\rm\vec{field}}\)
+    procedure(vf_vr), deferred :: field_cross_real
+      !! \({\rm\vec{field}} \times {\rm\vec{real}}\)
+    procedure(vr_vf), pass(rhs), deferred :: real_cross_field
+      !! \({\rm\vec{real}} \times {\rm\vec{field}}\)
     procedure(vf_eq_vf), deferred :: assign_field
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
     generic, public :: operator(*) => field_multiply_field, &
@@ -280,8 +295,10 @@ module abstract_fields_mod
     generic, public :: operator(.div.) => divergence
     generic, public :: operator(.curl.) => curl
     generic, public :: operator(.laplacian.) => laplacian
-    generic, public :: operator(.dot.) => dot_prod
-    generic, public :: operator(.cross.) => cross_prod
+    generic, public :: operator(.dot.) => field_dot_field, &
+         real_dot_field, field_dot_real
+    generic, public :: operator(.cross.) => field_cross_field, &
+         real_cross_field, field_cross_real
     generic, public :: assignment(=) => assign_field
     procedure(vf_is_equal), deferred :: is_equal
       !! Checks fields are equal within a tolerance
@@ -463,6 +480,16 @@ module abstract_fields_mod
       class(scalar_field), intent(in) :: rhs
       class(scalar_field), allocatable :: r_sf !! The result of this operation
     end function r_sf
+
+    pure function r1d_sf(lhs,rhs)
+      !! \(\vec{\rm real} [{\rm operator}] {\rm field}\)
+      import :: scalar_field
+      import :: vector_field
+      import :: r8
+      real(r8), dimension(:), intent(in) :: lhs
+      class(scalar_field), intent(in) :: rhs
+      class(vector_field), allocatable :: r1d_sf !! The result of this operation
+    end function r1d_sf
   
     pure function sf_r(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm real}\)
@@ -472,6 +499,16 @@ module abstract_fields_mod
       real(r8), intent(in) :: rhs
       class(scalar_field), allocatable :: sf_r !! The result of this operation
     end function sf_r
+  
+    pure function sf_r1d(this,rhs)
+      !! \({\rm field} [{\rm operator}] \vec{\rm real}\)
+      import :: scalar_field
+      import :: vector_field
+      import :: r8
+      class(scalar_field), intent(in) :: this
+      real(r8), dimension(:), intent(in) :: rhs
+      class(vector_field), allocatable :: sf_r1d !! The result of this operation
+    end function sf_r1d
   
     pure function sf_r4(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm real}\)
@@ -668,6 +705,26 @@ module abstract_fields_mod
       class(vector_field), intent(in) :: this, rhs
       class(scalar_field), allocatable :: vf_vf_ret_sf !! The result of this operation
     end function vf_vf_ret_sf
+
+    pure function vr_vf_ret_sf(lhs,rhs)
+      !! \({\rm \vec{real}} [{\rm operator}] {\rm \vec{field}}\)
+      import :: scalar_field
+      import :: vector_field
+      import :: r8
+      real(r8), dimension(:), intent(in) :: lhs
+      class(vector_field), intent(in) :: rhs
+      class(scalar_field), allocatable :: vr_vf_ret_sf !! The result of this operation
+    end function vr_vf_ret_sf
+
+    pure function vf_vr_ret_sf(this,rhs)
+      !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{real}}\)
+      import :: scalar_field
+      import :: vector_field
+      import :: r8
+      class(vector_field), intent(in) :: this
+      real(r8), dimension(:), intent(in) :: rhs
+      class(scalar_field), allocatable :: vf_vr_ret_sf !! The result of this operation
+    end function vf_vr_ret_sf
 
     function sf_dx(this, dir, order)
       !! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}{\rm field}\)

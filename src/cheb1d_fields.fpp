@@ -40,7 +40,7 @@ module cheb1d_fields_mod
   ! collocation nodes and uses a pseudospectral approach to 
   ! differentiate.
   !
-  use iso_fortran_env, only: r8 => real64, stderr => error_unit
+  use iso_fortran_env, only: r8 => real64
   use abstract_fields_mod
   use array_fields_mod, only: array_scalar_field, array_vector_field, &
                               scalar_init, vector_init

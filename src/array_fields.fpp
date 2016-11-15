@@ -316,7 +316,7 @@ module array_fields_mod
       !! \(\nabla\times {\rm field}\)
     procedure :: laplacian => array_vector_laplacian
       !! \(\nabla^2 {\rm field}\)
-    procedure :: dot_prod => array_vector_dot_prod
+    procedure :: field_dot_field => array_vector_dot_prod
       !! \({\rm \vec{field}} \cdot {\rm \vec{field}}\)
     procedure :: cross_prod => array_vector_cross_prod
       !! \({\rm\vec{field}} \times {\rm\vec{field}}\)
@@ -408,24 +408,6 @@ module array_fields_mod
       real(r8), dimension(:), allocatable   :: res
         !! The spatial derivative of order `order` taken in direction `dir`
     end function vf_scalar_dx
-
-    function vf_vector_dx(this, data_array, dir, order) result(res)
-      import :: array_vector_field
-      import :: r8
-      class(array_vector_field), intent(in) :: this
-      real(r8), dimension(:,:), intent(in)  :: data_array
-        !! An array holding the datapoints for the vectors in this
-        !! field, with identical in layout to the storage in the field
-        !! itself. Each row represents a different spatial location,
-        !! while each column represents a different component of the
-        !! vector.
-      integer, intent(in)                   :: dir
-        !! Direction in which to differentiate
-      integer, intent(in), optional         :: order
-        !! Order of the derivative, default = 1
-      real(r8), dimension(:,:), allocatable :: res
-        !! The spatial derivative of order `order` taken in direction `dir`
-    end function vf_vector_dx
     
     pure function vector_init(x) result(vector)
       !! Function used to specify value held by a vector field at
@@ -784,7 +766,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \({\rm field} - {\rm field}\)
+    ! \({\rm field} + {\rm field}\)
     !
     class(array_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
@@ -806,7 +788,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \({\rm real} - {\rm field}\)
+    ! \({\rm real} + {\rm field}\)
     !
     real(r8), intent(in) :: lhs
     class(array_scalar_field), intent(in) :: rhs
@@ -822,7 +804,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \({\rm field} - {\rm real}\)
+    ! \({\rm field} + {\rm real}\)
     !
     class(array_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
@@ -1103,7 +1085,7 @@ contains
     !  Date: October 2016
     !
     ! Creates a new field with the same concrete type as the template
-    ! argument. The array of values will be allocated an initiated.
+    ! argument. The array of values will be allocated and initiated.
     !
     class(array_vector_field), intent(in)  :: template
     !! A scalar field object which will act as a mold for the concrete
@@ -1457,7 +1439,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \(\vec{\rm field} - \vec{\rm field}\)
+    ! \(\vec{\rm field} + \vec{\rm field}\)
     !
     class(array_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
@@ -1492,7 +1474,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \(\vec{\rm real} - \vec{\rm field}\)
+    ! \(\vec{\rm real} + \vec{\rm field}\)
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(array_vector_field), intent(in) :: rhs
@@ -1522,7 +1504,7 @@ contains
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
-    ! \(\vec{\rm field} - \vec{\rm real}\)
+    ! \(\vec{\rm field} + \vec{\rm real}\)
     !
     class(array_vector_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
@@ -1828,9 +1810,6 @@ contains
     class is(array_scalar_field)
       select type(rhs)
       class is(array_vector_field)
-        min_dims = min(this%vector_dims,rhs%vector_dims)
-        res%field_data = &
-          sum(this%field_data(:,1:min_dims)*rhs%field_data(:,1:min_dims),2)
         min_dims = min(this%vector_dims,rhs%vector_dims)
         res%field_data = &
           sum(this%field_data(:,1:min_dims)*rhs%field_data(:,1:min_dims),2)
