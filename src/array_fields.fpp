@@ -926,9 +926,9 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     integer :: i
     call this%allocate_scalar_field(res)
-    call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%assign_meta_data(this)
       res%field_data = this%array_dx(this%field_data,1,2)
       do i = 2, this%dimensions()
         res%field_data = res%field_data + this%array_dx(this%field_data,i,2)
@@ -950,9 +950,9 @@ contains
     class(array_vector_field), allocatable :: local
     integer :: i
     call this%allocate_vector_field(res)
-    call res%assign_meta_data(this, .false.)
     select type(res)
     class is(array_vector_field)
+      call res%assign_meta_data(this, .false.)
       allocate(res%field_data(size(this%field_data),this%dimensions()))
       do i = 1, this%dimensions()
         res%field_data(:,i) = this%array_dx(this%field_data,i,1)
@@ -977,7 +977,6 @@ contains
       if (allocated(rhs%field_data)) this%field_data = rhs%field_data
     end select
   end subroutine array_scalar_assign
-
 
   pure logical function array_scalar_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
@@ -1555,9 +1554,9 @@ contains
     class(scalar_field), allocatable :: res
     class(array_scalar_field), allocatable :: local
     call this%allocate_scalar_field(res)
-    call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%assign_meta_data(this)
       res%field_data = sqrt(sum(this%field_data**2,2))
     class default
       error stop('Non-array_scalar_field type allocated by '//&
@@ -1575,9 +1574,9 @@ contains
     integer, intent(in) :: comp
     class(scalar_field), allocatable :: res
     call this%allocate_scalar_field(res)
-    call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%assign_meta_data(this)
       if (comp <= this%vector_dims) then
         res%field_data = this%field_data(:,comp)
       else
@@ -1623,11 +1622,11 @@ contains
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(scalar_field), allocatable :: res
     call this%allocate_scalar_field(res)
-    call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%assign_meta_data(this)
       res%field_data(:) = this%array_dx(this%field_data(:,component), &
-                                                 dir, order)
+                                        dir, order)
     class default
       error stop('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -1644,9 +1643,9 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     integer :: i, j
     call this%allocate_vector_field(res)
-    call res%assign_meta_data(this, .false.)
     select type(res)
     class is(array_vector_field)
+      call res%assign_meta_data(this, .false.)
       allocate(res%field_data(size(this%field_data,1),this%vector_dims))
       do i = 1, this%vector_dims
         res%field_data(:,i) = this%array_dx(this%field_data(:,i),1,2)
@@ -1659,8 +1658,6 @@ contains
       error stop('Non-array_vector_field type allocated by '//&
                  '`allocate_vector_field` routine.')
     end select
-    call this%allocate_vector_field(res)
-    call res%assign_meta_data(this)
   end function array_vector_laplacian
   
   function array_vector_divergence(this) result(res)
@@ -1673,9 +1670,9 @@ contains
     class(scalar_field), allocatable :: res !! The result of this operation
     integer :: i
     call this%allocate_scalar_field(res)
-    call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%assign_meta_data(this)
       res%field_data = this%array_dx(this%field_data(:,1),1,1)
       do i = 2, this%dimensions()
         res%field_data = res%field_data + &
@@ -1699,9 +1696,9 @@ contains
     integer :: i
     been_set = .false.
     call this%allocate_vector_field(res)
-    call res%assign_meta_data(this,.false.)
     select type(res)
     class is(array_vector_field)
+      call res%assign_meta_data(this,.false.)
       res%vector_dims = 3
       allocate(res%field_data(res%numpoints,3))
       if (this%dimensions() >= 3) then
@@ -1805,9 +1802,9 @@ contains
     call this%check_compatible(rhs)
 #:endif
     call this%allocate_scalar_field(res)
-    call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%assign_meta_data(this)
       select type(rhs)
       class is(array_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dims)
