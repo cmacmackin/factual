@@ -78,6 +78,8 @@ module uniform_fields_mod
     procedure, public :: raw => uniform_scalar_raw
       !! Returns uniform of data representing state of field. Can be
       !! useful for passing to nonlinear solvers
+    procedure, non_overridable, public :: get_value => uniform_scalar_get_value
+      !! Returns the scalar value held in the uniform field
     procedure, public :: set_from_raw => uniform_scalar_set_from_raw
       !! Assigns raw data, such as that produced by 
       !! [[uniform_scalar_field:raw]], to the field
@@ -189,6 +191,8 @@ module uniform_fields_mod
     procedure, public :: raw => uniform_vector_raw
       !! Returns uniform of data representing state of field. Can be
       !! useful for passing to nonlinear solvers.
+    procedure, non_overridable, public :: get_value => uniform_vector_get_value
+      !! Returns the vector value held in the uniform field
     procedure, public :: set_from_raw => uniform_vector_set_from_raw
       !! Assigns raw data, such as that produced by 
       !! [[uniform_vector_field:raw]], to the field
@@ -323,7 +327,7 @@ contains
   pure function uniform_scalar_raw_size(this,return_lower_bound, &
                                        return_upper_bound) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Compute how many elements are in the raw representation of this
     ! field. For a uniform field this is 1.
@@ -344,7 +348,7 @@ contains
   pure function uniform_scalar_raw(this,return_lower_bound, &
                                   return_upper_bound) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Returns a representation of this field in the form of a 1D uniform
     ! of real numbers this allows, e.g. for manipulation by solver
@@ -369,11 +373,34 @@ contains
     allocate(res(1))
     res(1) = this%field_data
   end function uniform_scalar_raw
-  
+
+#:if defined('DEBUG')
+#undef pure 
+#undef elemental 
+#:endif
+
+  pure function uniform_scalar_get_value(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns the scalar value of the field. This is useful for
+    ! implementing the interactions of other field types with the
+    ! uniform field.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+    real(r8) :: res
+    res = this%field_data
+  end function uniform_scalar_get_value
+
+#:if defined('DEBUG')
+#define pure 
+#define elemental 
+#:endif
+
   pure subroutine uniform_scalar_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Assigns raw data, such as that produced by 
     ! [[uniform_scalar_field:raw]], to the field. The routine will
@@ -396,7 +423,7 @@ contains
 
   pure function uniform_scalar_resolution(this) result(resolution)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Returns an array specifying the number of data-points in each
     ! dimension. This is not a particularly meaningful quantity for a
@@ -410,7 +437,7 @@ contains
   
   pure function uniform_scalar_sf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} \times {\rm field}\)
     !
@@ -423,7 +450,7 @@ contains
 
   pure function uniform_scalar_sf_m_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} \times {\rm \vec{field}}\)
     !
@@ -436,7 +463,7 @@ contains
 
   pure function uniform_scalar_r_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm real} \times {\rm field}\)
     !
@@ -451,7 +478,7 @@ contains
 
   pure function uniform_scalar_vr_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm real} \times {\rm field}\)
     !
@@ -468,7 +495,7 @@ contains
 
   pure function uniform_scalar_sf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} \times {\rm real}\)
     !
@@ -483,7 +510,7 @@ contains
 
   pure function uniform_scalar_sf_m_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} \times \vec{\rm real}\)
     !
@@ -500,7 +527,7 @@ contains
   
   pure function uniform_scalar_sf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} / {\rm field}\)
     !
@@ -513,7 +540,7 @@ contains
 
   pure function uniform_scalar_r_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm real} / {\rm field}\)
     !
@@ -528,7 +555,7 @@ contains
 
   pure function uniform_scalar_vr_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm real} / {\rm field}\)
     !
@@ -545,7 +572,7 @@ contains
 
   pure function uniform_scalar_sf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} / {\rm real}\)
     !
@@ -560,7 +587,7 @@ contains
   
   pure function uniform_scalar_sf_s_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} - {\rm field}\)
     !
@@ -573,7 +600,7 @@ contains
 
   pure function uniform_scalar_r_s_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm real} - {\rm field}\)
     !
@@ -588,7 +615,7 @@ contains
 
   pure function uniform_scalar_sf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} - {\rm real}\)
     !
@@ -603,7 +630,7 @@ contains
   
   pure function uniform_scalar_sf_a_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} + {\rm field}\)
     !
@@ -616,7 +643,7 @@ contains
 
   pure function uniform_scalar_r_a_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm real} + {\rm field}\)
     !
@@ -631,7 +658,7 @@ contains
 
   pure function uniform_scalar_sf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} + {\rm real}\)
     !
@@ -646,7 +673,7 @@ contains
 
   pure function uniform_scalar_sf_p_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field}^{\rm real}\)
     !
@@ -661,7 +688,7 @@ contains
 
   pure function uniform_scalar_sf_p_r4(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field}^{\rm real}\)
     !
@@ -676,7 +703,7 @@ contains
 
   pure function uniform_scalar_sf_p_i(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field}^{\rm integer}\)
     !
@@ -692,7 +719,7 @@ contains
 #:for FUNC, TEX in UNARY_FUNCTIONS
   pure function uniform_scalar_${FUNC}$(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(${TEX}$({\rm field})\)
     !
@@ -708,7 +735,7 @@ contains
 
   pure function uniform_scalar_minval(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\min({\rm field})\)
     !
@@ -719,7 +746,7 @@ contains
 
   pure function uniform_scalar_maxval(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\max({\rm field})\)
     !
@@ -746,7 +773,7 @@ contains
 
   function uniform_scalar_laplacian(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\nabla^2 {\rm field}\)
     !
@@ -760,7 +787,7 @@ contains
   
   function uniform_scalar_gradient(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\nabla{\rm field}\)
     !
@@ -775,7 +802,7 @@ contains
   
   elemental subroutine uniform_scalar_assign(this,rhs)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm field} = {\rm field}\)
     !
@@ -791,17 +818,22 @@ contains
 
   pure logical function uniform_scalar_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
-    !  Date: April 2016
+    !  Date: November 2016
     !
     ! Evaluates whether two scalar fields are equal within a tolerance,
     ! specified by [[set_tol]].
     !
     class(uniform_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
+    real(r8) :: normalization
     iseq = .true.
     select type(rhs)
     class is(uniform_scalar_field)
-      iseq = (this%field_data == rhs%field_data)
+      normalization = abs(this%field_data)
+      if (normalization < get_tol()) normalization = 1.0_r8
+      iseq = iseq .and.( ((this%field_data-rhs%field_data)/normalization < &
+                           get_tol()) .or. (is_nan(this%field_data).and. &
+                                            is_nan(rhs%field_data)) )
     class default
       iseq = (rhs == this)
     end select
@@ -930,7 +962,7 @@ contains
   pure function uniform_vector_raw_size(this,return_lower_bound, &
                                        return_upper_bound) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Compute how many elements are in the raw representation of this
     ! field. This would be the number of data points, adjusted based on
@@ -958,7 +990,7 @@ contains
   pure function uniform_vector_raw(this,return_lower_bound, &
                                   return_upper_bound) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Returns a representation of this field in the form of a 1D uniform
     ! of real numbers this allows, e.g. for manipulation by solver
@@ -988,11 +1020,34 @@ contains
       allocate(res(0))
     end if
   end function uniform_vector_raw
+
+#:if defined('DEBUG')
+#undef pure 
+#undef elemental 
+#:endif
+
+  pure function uniform_vector_get_value(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns the vector value of the field. This is useful for
+    ! implementing the interactions of other field types with the
+    ! uniform field.
+    !
+    class(uniform_vector_field), intent(in) :: this
+    real(r8), dimension(:), allocatable :: res
+    res = this%field_data
+  end function uniform_vector_get_value
+
+#:if defined('DEBUG')
+#define pure 
+#define elemental 
+#:endif
   
   pure subroutine uniform_vector_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Assigns raw data, such as that produced by 
     ! [[uniform_scalar_field:raw]], to the field. The routine will
@@ -1018,7 +1073,7 @@ contains
 
   pure function uniform_vector_resolution(this) result(resolution)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Returns an array specifying the number of data-points in each
     ! dimension. This is not a particularly meaningful quantity for a
@@ -1032,7 +1087,7 @@ contains
 
   pure function uniform_vector_vf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} \times {\rm field}\)
     !
@@ -1045,7 +1100,7 @@ contains
 
   pure function uniform_vector_r_m_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \({\rm real} \times \vec{\rm field}\)
     !
@@ -1061,7 +1116,7 @@ contains
 
   pure function uniform_vector_vf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} \times {\rm real}\)
     !
@@ -1077,7 +1132,7 @@ contains
   
   pure function uniform_vector_vf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} / {\rm field}\)
     !
@@ -1090,7 +1145,7 @@ contains
 
   pure function uniform_vector_vf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} / {\rm real}\)
     !
@@ -1106,7 +1161,7 @@ contains
   
   pure function uniform_vector_vf_s_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} - \vec{\rm field}\)
     !
@@ -1119,7 +1174,7 @@ contains
 
   pure function uniform_vector_r_s_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm real} - \vec{\rm field}\)
     !
@@ -1144,7 +1199,7 @@ contains
 
   pure function uniform_vector_vf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} - \vec{\rm real}\)
     !
@@ -1169,7 +1224,7 @@ contains
   
   pure function uniform_vector_vf_a_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} - \vec{\rm field}\)
     !
@@ -1183,7 +1238,7 @@ contains
 
   pure function uniform_vector_r_a_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm real} + \vec{\rm field}\)
     !
@@ -1208,7 +1263,7 @@ contains
 
   pure function uniform_vector_vf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} + \vec{\rm real}\)
     !
@@ -1233,7 +1288,7 @@ contains
 
   elemental subroutine uniform_vector_assign(this,rhs)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} = \vec{\rm field}\)
     !
@@ -1254,7 +1309,7 @@ contains
 
   pure function uniform_vector_norm(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\lVert \vec{\rm field} \rVert\)
     !
@@ -1268,7 +1323,7 @@ contains
 
   pure function uniform_vector_component(this,comp) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! Returns a calar field containing specified component of the vector field
     !
@@ -1287,7 +1342,7 @@ contains
 
   function uniform_vector_d_dx(this, dir, order) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}\vec{\rm field}\)
     !
@@ -1304,7 +1359,7 @@ contains
 
   function uniform_vector_component_d_dx(this, dir, component, order) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\frac{\partial^{\rm order}}{\partial x_{\rm dir}^{\rm order}}{\rm field_{component}}\)
     !
@@ -1321,7 +1376,7 @@ contains
 
   function uniform_vector_laplacian(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\nabla^2 \vec{\rm field}\)
     !
@@ -1336,7 +1391,7 @@ contains
   
   function uniform_vector_divergence(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\nabla\cdot \vec{\rm field}\)
     !
@@ -1349,7 +1404,7 @@ contains
   
   function uniform_vector_curl(this) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\nabla\times \vec{\rm field}\)
     !
@@ -1364,7 +1419,7 @@ contains
 
   pure function uniform_vector_vf_cross_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} \times \vec{\rm field}\)
     !
@@ -1380,7 +1435,7 @@ contains
 
   pure function uniform_vector_vf_cross_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} \times \vec{\rm real}\)
     !
@@ -1410,7 +1465,7 @@ contains
 
   pure function uniform_vector_vr_cross_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm real} \times \vec{\rm field}\)
     !
@@ -1440,7 +1495,7 @@ contains
   
   pure function uniform_vector_vf_dot_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} \cdot \vec{\rm field}\)
     !
@@ -1453,7 +1508,7 @@ contains
 
   pure function uniform_vector_vf_dot_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm field} \cdot \vec{\rm real}\)
     !
@@ -1470,7 +1525,7 @@ contains
 
   pure function uniform_vector_vr_dot_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
-    !  Date: March 2016
+    !  Date: November 2016
     !
     ! \(\vec{\rm real} \cdot \vec{\rm field}\)
     !
@@ -1487,19 +1542,35 @@ contains
 
   pure logical function uniform_vector_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
-    !  Date: April 2016
+    !  Date: November 2016
     !
     ! Evaluates whether two vector fields are equal within a tolerance,
     ! specified by [[set_tol]].
     !
     class(uniform_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
+    integer :: dims
+    real(r8) :: normalization
     iseq = .true.
     select type(rhs)
     class is(uniform_vector_field)
-      iseq = (this%vector_dims == rhs%vector_dims)
+      if (this%vector_dims > rhs%vector_dims) then
+        dims = rhs%vector_dims
+        iseq = all(abs(this%field_data(dims:)) < get_tol())
+      else if (this%vector_dims < rhs%vector_dims) then
+        dims = this%vector_dims
+        iseq = all(abs(rhs%field_data(dims:)) < get_tol())
+      else
+        dims = this%vector_dims
+      end if
       if (.not. iseq) return
-      iseq = (all(this%field_data == rhs%field_data))
+      iseq = (norm2(this%field_data(:dims) - rhs%field_data(:dims))/ &
+              normalization < get_tol()) .or. &
+             all(is_nan(this%field_data(1:dims)) .eqv. &
+                 is_nan(rhs%field_data(1:dims)))
+        ! FIXME: This handling of NaNs will claim that things are
+        ! equal when they aren't, just because they have a NAN in the
+        ! same location.
     class default
       iseq = (rhs == this)
     end select
