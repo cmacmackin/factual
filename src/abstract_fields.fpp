@@ -332,40 +332,48 @@ module abstract_fields_mod
       integer :: vf_ret_i
     end function vf_ret_i
 
-    pure function f_rawsize(this,return_lower_bound,return_upper_bound)
+    pure function f_rawsize(this,exclude_lower_bound,exclude_upper_bound)
       import :: abstract_field
       class(abstract_field), intent(in) :: this
-      logical, dimension(:), optional, intent(in) :: return_lower_bound
-        !! Specifies whether to return the values at the lower boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
-      logical, dimension(:), optional, intent(in) :: return_upper_bound
-        !! Specifies whether to return the values at the upper boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the lower boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the lower boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
+      integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the upper boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the upper boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
       integer :: f_rawsize
         !! The number of elements in the array returned by `this%raw()`
         !! when given these values of `return_lower_bound` and 
         !! `return_upper_bound`.
     end function f_rawsize
     
-    pure function f_raw(this,return_lower_bound,return_upper_bound)
+    pure function f_raw(this,exclude_lower_bound,exclude_upper_bound)
       !* @BUG The returned value has length `this%raw_size()`, but
       !  a bug in gfortran 4.8 (fixed by version 5) caused the compiler
       !  to segfault if it was declared as such. As a workaround, it is
-      !  allocatable isntead.
+      !  allocatable instead.
       !
       import :: abstract_field
       import :: r8
       class(abstract_field), intent(in) :: this
-      logical, dimension(:), optional, intent(in) :: return_lower_bound
-        !! Specifies whether to return the values at the lower boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
-      logical, dimension(:), optional, intent(in) :: return_upper_bound
-        !! Specifies whether to return the values at the upper boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the lower boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the lower boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
+      integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the upper boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the upper boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
       real(r8), dimension(:), allocatable :: f_raw
         !! Array containing data needed to describe field
     end function f_raw
@@ -381,7 +389,7 @@ module abstract_fields_mod
 !~      ! @BUG The returned value has shape `(this%raw_size(),
 !~      ! this%raw_size())`, but a bug in gfortran 4.8 (fixed by version
 !~      ! 5) caused the compiler to segfault if it was declared as such.
-!~      ! As a workaround, it is allocatable isntead.
+!~      ! As a workaround, it is allocatable instead.
 !~      !
 !~      import :: abstract_field
 !~      import :: r8
@@ -408,14 +416,18 @@ module abstract_fields_mod
       class(abstract_field), intent(inout) :: this
       real(r8), dimension(:), intent(in) :: raw
         !! The raw data to be stored in this array.
-      logical, dimension(:), optional, intent(in) :: provide_lower_bound
-        !! Specifies whether raw data contains values at the lower
-        !! boundary, for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
-      logical, dimension(:), optional, intent(in) :: provide_upper_bound
-        !! Specifies whether raw data contains values at the upper
-        !! boundary, for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:), optional, intent(in) :: provide_lower_bound
+        !! Specifies how many layers of data points are excluded
+        !! from the raw data at the lower boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the lower boundary normal to
+        !! dimension `n` are missed. Defaults to 0 for all.
+      integer, dimension(:), optional, intent(in) :: provide_upper_bound
+        !! Specifies how many layers of data points are excluded
+        !! from the raw data at the upper boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the upper boundary normal to
+        !! dimension `n` are missed. Defaults to 0 for all.
     end subroutine f_eq_raw
     
     pure subroutine f_eq_meta(this, rhs, alloc)

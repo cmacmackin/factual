@@ -158,7 +158,7 @@ module uniform_fields_mod
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
-    ! An abstract data type representing a mathematical field of
+     ! An abstract data type representing a mathematical field of
     ! vector values, in which the field is uniform across all of
     ! space. This allows for reduced memory usage and avoiding having
     ! to apply a differentiation algorithm, compared to using another
@@ -324,8 +324,8 @@ contains
     dims = 0
   end function uniform_scalar_dimensions
 
-  pure function uniform_scalar_raw_size(this,return_lower_bound, &
-                                       return_upper_bound) result(res)
+  pure function uniform_scalar_raw_size(this,exclude_lower_bound, &
+                                        exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -333,20 +333,24 @@ contains
     ! field. For a uniform field this is 1.
     !
     class(uniform_scalar_field), intent(in)      :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the upper boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
     integer :: res
     res = 1
   end function uniform_scalar_raw_size
   
-  pure function uniform_scalar_raw(this,return_lower_bound, &
-                                  return_upper_bound) result(res)
+  pure function uniform_scalar_raw(this,exclude_lower_bound, &
+                                   exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -360,14 +364,18 @@ contains
     ! allocatable isntead.
     !
     class(uniform_scalar_field), intent(in) :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the upper boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
     real(r8), dimension(:), allocatable :: res
       !! Uniform containing data needed to describe field
     allocate(res(1))
@@ -410,14 +418,19 @@ contains
     class(uniform_scalar_field), intent(inout) :: this
     real(r8), dimension(:), intent(in) :: raw
       !! The raw data to be stored in this uniform.
-    logical, dimension(:), optional, intent(in) :: provide_lower_bound
-      !! Specifies whether raw data contains values at the lower
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: provide_upper_bound
-      !! Specifies whether raw data contains values at the upper
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: provide_lower_bound
+      !! Specifies how many layers of data points are excluded from
+      !! the raw data at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` are
+      !! missed. For a uniform field, this argument has no effect.
+    integer, dimension(:), optional, intent(in) :: provide_upper_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` are missed. Defaults to 0 for all.
+    call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     this%field_data = raw(1)
   end subroutine uniform_scalar_set_from_raw
 
@@ -959,8 +972,8 @@ contains
     domain(1,2) = 0.0_r8
   end function uniform_vector_domain
 
-  pure function uniform_vector_raw_size(this,return_lower_bound, &
-                                       return_upper_bound) result(res)
+  pure function uniform_vector_raw_size(this,exclude_lower_bound, &
+                                        exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -969,14 +982,18 @@ contains
     ! how boundary conditions are accounted for.
     !
     class(uniform_vector_field), intent(in)       :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the upper boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
     integer :: res
     integer, dimension(:,:), allocatable :: slices
     integer :: i
@@ -987,8 +1004,8 @@ contains
     end if
   end function uniform_vector_raw_size
   
-  pure function uniform_vector_raw(this,return_lower_bound, &
-                                  return_upper_bound) result(res)
+  pure function uniform_vector_raw(this,exclude_lower_bound, &
+                                   exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1002,18 +1019,20 @@ contains
     ! allocatable isntead.
     !
     class(uniform_vector_field), intent(in) :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the upper boundary normal to dimension `n` will
+      !! be ignored. For a uniform field, this argument has no effect.
     real(r8), dimension(:), allocatable :: res
       !! Uniform containing data needed to describe field
-    integer, dimension(:,:), allocatable :: slices
-    integer :: i
     if (allocated(this%field_data)) then
       res = this%field_data
     else
@@ -1057,17 +1076,19 @@ contains
     class(uniform_vector_field), intent(inout) :: this
     real(r8), dimension(:), intent(in) :: raw
       !! The raw data to be stored in this uniform.
-    logical, dimension(:), optional, intent(in) :: provide_lower_bound
-      !! Specifies whether raw data contains values at the lower
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: provide_upper_bound
-      !! Specifies whether raw data contains values at the upper
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    integer, dimension(:,:), allocatable :: slices
-    integer, dimension(:), allocatable :: counts
-    integer :: i, start, finish
+    integer, dimension(:), optional, intent(in) :: provide_lower_bound
+      !! Specifies how many layers of data points are excluded from
+      !! the raw data at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` are
+      !! missed. For a uniform field, this argument has no effect.
+    integer, dimension(:), optional, intent(in) :: provide_upper_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` are missed. Defaults to 0 for all.
+    call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     this%field_data = raw
   end subroutine uniform_vector_set_from_raw
 

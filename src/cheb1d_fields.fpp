@@ -42,6 +42,8 @@ module cheb1d_fields_mod
   !
   use iso_fortran_env, only: r8 => real64
   use abstract_fields_mod
+  use uniform_fields_mod, only: uniform_scalar_field, &
+                                uniform_vector_field
   use array_fields_mod, only: array_scalar_field, array_vector_field, &
                               scalar_init, vector_init
   use chebyshev_mod
@@ -226,17 +228,21 @@ contains
     res(1) = this%elements()
   end function cheb1d_scalar_resolution
 
-  pure function cheb1d_scalar_raw_slices(this,return_lower_bound,return_upper_bound) &
-                                                                      result(slices)
+  pure function cheb1d_scalar_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+                                                                        result(slices)
     class(cheb1d_scalar_field), intent(in)      :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
     integer, dimension(:,:), allocatable        :: slices
       !! An array containing array slice data which can be used to
       !! construct the raw representation of a field, with the given
@@ -248,21 +254,13 @@ contains
       !! ```
     allocate(slices(3,1))
     ! Remember that Chebyshev collocation nodes end up in reverse order
-    if (present(return_upper_bound)) then
-      if (return_upper_bound(1)) then
-        slices(1,1) = 1
-      else
-        slices(1,1) = 2
-      end if
+    if (present(exclude_upper_bound)) then
+      slices(1,1) = 1 + exclude_upper_bound(1)
     else
       slices(1,1) = 1
     end if
-    if (present(return_lower_bound)) then
-      if (return_lower_bound(1)) then
-        slices(2,1) = this%elements()
-      else
-        slices(2,1) = this%elements() - 1
-      end if
+    if (present(exclude_lower_bound)) then
+      slices(2,1) = this%elements() - exclude_lower_bound(1)
     else
       slices(2,1) = this%elements()
     end if
@@ -336,6 +334,10 @@ contains
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
            error stop(err_message//'different domains.')
+    class is(uniform_scalar_field)
+      continue
+    class is(uniform_vector_field)
+      continue
     class default
       error stop(err_message//'incompatible types.')
     end select
@@ -493,17 +495,21 @@ contains
     res(1) = this%elements()
   end function cheb1d_vector_resolution
 
-  pure function cheb1d_vector_raw_slices(this,return_lower_bound,return_upper_bound) &
-                                                                      result(slices)
+  pure function cheb1d_vector_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+                                                                        result(slices)
     class(cheb1d_vector_field), intent(in)      :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
     integer, dimension(:,:), allocatable        :: slices
       !! An array containing array slice data which can be used to
       !! construct the raw representation of a field, with the given
@@ -515,21 +521,13 @@ contains
       !! ```
     allocate(slices(3,1))
     ! Remember that Chebyshev collocation nodes end up in reverse order
-    if (present(return_upper_bound)) then
-      if (return_upper_bound(1)) then
-        slices(1,1) = 1
-      else
-        slices(1,1) = 2
-      end if
+    if (present(exclude_upper_bound)) then
+      slices(1,1) = 1 + exclude_upper_bound(1)
     else
       slices(1,1) = 1
     end if
-    if (present(return_lower_bound)) then
-      if (return_lower_bound(1)) then
-        slices(2,1) = this%elements()
-      else
-        slices(2,1) = this%elements() - 1
-      end if
+    if (present(exclude_lower_bound)) then
+      slices(2,1) = this%elements() - exclude_lower_bound(1)
     else
       slices(2,1) = this%elements()
     end if
@@ -603,6 +601,10 @@ contains
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
            error stop(err_message//'different domains.')
+    class is(uniform_scalar_field)
+      continue
+    class is(uniform_vector_field)
+      continue
     class default
       error stop(err_message//'incompatible types.')
     end select

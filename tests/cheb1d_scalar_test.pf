@@ -105,9 +105,9 @@ contains
   subroutine test_raw_size(this)
     class(test_field), intent(inout) :: this
     @assertEqual(this%nodes,this%field1%raw_size(),message='Wrong raw size returned.')
-    @assertEqual(this%nodes-1,this%field1%raw_size([.true.],[.false.]),message='Wrong raw size returned.')
-    @assertEqual(this%nodes-1,this%field1%raw_size([.false.],[.true.]),message='Wrong raw size returned.')
-    @assertEqual(this%nodes-2,this%field1%raw_size([.false.],[.false.]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-1,this%field1%raw_size([0],[1]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-1,this%field1%raw_size([1],[0]),message='Wrong raw size returned.')
+    @assertEqual(this%nodes-2,this%field1%raw_size([1],[1]),message='Wrong raw size returned.')
   end subroutine test_raw_size
 
 @Test
@@ -119,11 +119,11 @@ contains
     expected = collocation_points(this%nodes-1,this%lower1,this%upper1)
     forall (i = 1:this%nodes) expected(i) = f1([expected(i)])
     @assertEqual(expected,raw,message='Wrong raw contents returned')
-    raw = this%field1%raw([.false.])
+    raw = this%field1%raw([1])
     @assertEqual(expected(:this%nodes-1),raw,message='Wrong raw contents returned')
-    raw = this%field1%raw([.true.],[.false.])
+    raw = this%field1%raw([0],[1])
     @assertEqual(expected(2:),raw,message='Wrong raw contents returned')
-    raw = this%field1%raw([.false.],[.false.])
+    raw = this%field1%raw([1],[1])
     @assertEqual(expected(2:this%nodes-1),raw,message='Wrong raw contents returned')
   end subroutine test_raw
 
@@ -137,14 +137,14 @@ contains
     call this%field1%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw.')
     forall (i = 1:this%nodes) raw(i) = f1([xvals(i)])
-    call this%field2%set_from_raw(raw(2:),[.false.],[.true.])
-    @assertEqual(raw(2:),this%field2%raw([.false.],[.true.]))
+    call this%field2%set_from_raw(raw(2:),[1],[0])
+    @assertEqual(raw(2:),this%field2%raw([1],[0]))
     forall (i = 1:this%nodes) raw(i) = f2([xvals(i)])
-    call this%field2%set_from_raw(raw(:this%nodes-1),[.true.],[.false.])
-    @assertEqual(raw(:this%nodes-1),this%field2%raw([.true.],[.false.]),message='Error setting field from raw.')
+    call this%field2%set_from_raw(raw(:this%nodes-1),[0],[1])
+    @assertEqual(raw(:this%nodes-1),this%field2%raw([0],[1]),message='Error setting field from raw.')
     forall (i = 1:this%nodes) raw(i) = f1([xvals(i)])
-    call this%field2%set_from_raw(raw(2:this%nodes-1),[.false.],[.false.])
-    @assertEqual(raw(2:this%nodes-1),this%field2%raw([.false.],[.false.]),message='Error setting field from raw.')
+    call this%field2%set_from_raw(raw(2:this%nodes-1),[1],[1])
+    @assertEqual(raw(2:this%nodes-1),this%field2%raw([1],[1]),message='Error setting field from raw.')
     forall (i = 1:this%nodes) raw(i) = f1([xvals(i)])
     call this%field2%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw')

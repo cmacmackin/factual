@@ -166,18 +166,22 @@ module array_fields_mod
   end interface array_scalar_field
 
   abstract interface
-    pure function sf_raw_slices(this,return_lower_bound,return_upper_bound) &
+    pure function sf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                              result(slices)
       import array_scalar_field
       class(array_scalar_field), intent(in)       :: this
-      logical, dimension(:), optional, intent(in) :: return_lower_bound
-        !! Specifies whether to return the values at the lower boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
-      logical, dimension(:), optional, intent(in) :: return_upper_bound
-        !! Specifies whether to return the values at the upper boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the lower boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the lower boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
+      integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the upper boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the upper boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
       integer, dimension(:,:), allocatable        :: slices
         !! An array containing array slice data which can be used to
         !! construct the raw representation of a field, with the given
@@ -361,18 +365,22 @@ module array_fields_mod
   end interface array_vector_field
 
   abstract interface
-    pure function vf_raw_slices(this,return_lower_bound,return_upper_bound) &
+    pure function vf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                              result(slices)
       import array_vector_field
       class(array_vector_field), intent(in)       :: this
-      logical, dimension(:), optional, intent(in) :: return_lower_bound
-        !! Specifies whether to return the values at the lower boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
-      logical, dimension(:), optional, intent(in) :: return_upper_bound
-        !! Specifies whether to return the values at the upper boundary
-        !! for each dimension, with the index of the element
-        !! corresponding to the dimension. Defaults to all `.true.`.
+      integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the lower boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the lower boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
+      integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+        !! Specifies how many layers of data points should be excluded
+        !! from the result at the upper boundary for each
+        !! dimension. The number in element `n` of the array indicates
+        !! how many layers of cells at the upper boundary normal to
+        !! dimension `n` will be ignored. Defaults to 0 for all.
       integer, dimension(:,:), allocatable        :: slices
         !! An array containing array slice data which can be used to
         !! construct the raw representation of a field, with the given
@@ -397,7 +405,7 @@ module array_fields_mod
       class(array_vector_field), intent(in) :: this
       class(abstract_field), intent(in) :: other
         !! The field being checked against this one
-    end subroutine vf_compatible  
+    end subroutine vf_compatible
 
     pure subroutine vf_meta(this, rhs)
       import :: array_vector_field
@@ -488,8 +496,8 @@ contains
     elements = this%numpoints
   end function array_scalar_elements
 
-  pure function array_scalar_raw_size(this,return_lower_bound, &
-                                       return_upper_bound) result(res)
+  pure function array_scalar_raw_size(this,exclude_lower_bound, &
+                                      exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -498,27 +506,31 @@ contains
     ! how boundary conditions are accounted for.
     !
     class(array_scalar_field), intent(in)       :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
     integer :: res
     integer, dimension(:,:), allocatable :: slices
     integer :: i
     if (allocated(this%field_data)) then
-      slices = this%raw_slices(return_lower_bound,return_upper_bound)
+      slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
       res = sum(elements_in_slice(slices(1,:),slices(2,:),slices(3,:)))
     else
       res = 0
     end if
   end function array_scalar_raw_size
   
-  pure function array_scalar_raw(this,return_lower_bound, &
-                                  return_upper_bound) result(res)
+  pure function array_scalar_raw(this,exclude_lower_bound, &
+                                 exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -532,19 +544,23 @@ contains
     ! allocatable isntead.
     !
     class(array_scalar_field), intent(in) :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
     real(r8), dimension(:), allocatable :: res
       !! Array containing data needed to describe field
     integer, dimension(:,:), allocatable :: slices
     integer :: i
-    slices = this%raw_slices(return_lower_bound,return_upper_bound)
+    slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
     if (allocated(this%field_data)) then
       res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), i=1, &
              size(slices,2))]
@@ -566,14 +582,18 @@ contains
     class(array_scalar_field), intent(inout) :: this
     real(r8), dimension(:), intent(in) :: raw
       !! The raw data to be stored in this array.
-    logical, dimension(:), optional, intent(in) :: provide_lower_bound
-      !! Specifies whether raw data contains values at the lower
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: provide_upper_bound
-      !! Specifies whether raw data contains values at the upper
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: provide_lower_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` are missed. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: provide_upper_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` are missed. Defaults to 0 for all.
     integer, dimension(:,:), allocatable :: slices
     integer, dimension(:), allocatable :: counts
     integer :: i, start, finish
@@ -1271,8 +1291,8 @@ contains
     elements = this%numpoints
   end function array_vector_elements
 
-  pure function array_vector_raw_size(this,return_lower_bound, &
-                                       return_upper_bound) result(res)
+  pure function array_vector_raw_size(this,exclude_lower_bound, &
+                                       exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1281,19 +1301,23 @@ contains
     ! how boundary conditions are accounted for.
     !
     class(array_vector_field), intent(in)       :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
     integer :: res
     integer, dimension(:,:), allocatable :: slices
     integer :: i
     if (allocated(this%field_data)) then
-      slices = this%raw_slices(return_lower_bound,return_upper_bound)
+      slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
       res = sum(elements_in_slice(slices(1,:),slices(2,:),slices(3,:))) * &
             this%vector_dims
     else
@@ -1301,8 +1325,8 @@ contains
     end if
   end function array_vector_raw_size
   
-  pure function array_vector_raw(this,return_lower_bound, &
-                                  return_upper_bound) result(res)
+  pure function array_vector_raw(this,exclude_lower_bound, &
+                                  exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1316,19 +1340,23 @@ contains
     ! allocatable isntead.
     !
     class(array_vector_field), intent(in) :: this
-    logical, dimension(:), optional, intent(in) :: return_lower_bound
-      !! Specifies whether to return the values at the lower boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: return_upper_bound
-      !! Specifies whether to return the values at the upper boundary
-      !! for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: exclude_lower_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: exclude_upper_bound
+      !! Specifies how many layers of data points should be excluded
+      !! from the result at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` will be ignored. Defaults to 0 for all.
     real(r8), dimension(:), allocatable :: res
       !! Array containing data needed to describe field
     integer, dimension(:,:), allocatable :: slices
     integer :: i
-    slices = this%raw_slices(return_lower_bound,return_upper_bound)
+    slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
     if (allocated(this%field_data)) then
       res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i),:), i=1, &
              size(slices,2))]
@@ -1350,14 +1378,18 @@ contains
     class(array_vector_field), intent(inout) :: this
     real(r8), dimension(:), intent(in) :: raw
       !! The raw data to be stored in this array.
-    logical, dimension(:), optional, intent(in) :: provide_lower_bound
-      !! Specifies whether raw data contains values at the lower
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: provide_upper_bound
-      !! Specifies whether raw data contains values at the upper
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
+    integer, dimension(:), optional, intent(in) :: provide_lower_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the lower boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the lower boundary normal to
+      !! dimension `n` are missed. Defaults to 0 for all.
+    integer, dimension(:), optional, intent(in) :: provide_upper_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` are missed. Defaults to 0 for all.
     integer, dimension(:,:), allocatable :: slices
     integer, dimension(:), allocatable :: counts
     integer :: i, start, finish
