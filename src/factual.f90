@@ -23,6 +23,7 @@
 module factual_mod
   use abstract_fields_mod
   use cheb1d_fields_mod, only: cheb1d_scalar_field, cheb1d_vector_field
+  use uniform_fields_mod, only: uniform_scalar_field, uniform_vector_field
   implicit none
   public
 end module factual_mod
