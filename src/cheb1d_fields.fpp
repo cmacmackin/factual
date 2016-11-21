@@ -319,12 +319,12 @@ contains
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
     integer :: i
-#:if defined('DEBUG')
-    if (.not. this%differentiable) &
-      error stop('Trying to take derivative of undifferentiable instance of '// &
-                 '`cheb1d_scalar_field`.')
-#:endif
     if (dir==1) then
+#:if defined('DEBUG')
+      if (.not. this%differentiable) &
+        error stop('Trying to take derivative of undifferentiable instance of '// &
+                   '`cheb1d_scalar_field`.')
+#:endif
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
     else
@@ -650,12 +650,12 @@ contains
       !! Order of the derivative, default = 1
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
-#:if defined('DEBUG')
-    if (.not. this%differentiable) &
-      error stop('Trying to take derivative of undifferentiable instance of '// &
-                 '`cheb1d_vector_field`.')
-#:endif
     if (dir==1) then
+#:if defined('DEBUG')
+      if (.not. this%differentiable) &
+        error stop('Trying to take derivative of undifferentiable instance of '// &
+                   '`cheb1d_vector_field`.')
+#:endif
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
     else
