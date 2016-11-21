@@ -70,6 +70,9 @@ $:public_unary()
       !! The start and end values of the domain
     real(r8), dimension(:), allocatable :: colloc_points
       !! The location of the data-points
+    logical                             :: differentiable = .true.
+      !! Indicates whether this is a complete Chebyshev field which
+      !! can be differentiated using the Psuedo-spectral method.
   contains
     private
     procedure, public :: dimensions => cheb1d_scalar_dimensions
@@ -98,6 +101,10 @@ $:public_unary()
       !! Allocates a scalar field with concrete type [[cheb1d_scalar_field]]
     procedure, public :: allocate_vector_field => cheb1d_scalar_allocate_vector
       !! Allocates a vector field with concrete type [[cheb1d_vector_field]]
+    procedure, public :: subtype_boundary => cheb1d_scalar_bound
+      !! Performs whatever operations are needed on the field to get
+      !! a boundary field, including returning the slices needed to
+      !! extract the appropriate data.
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -119,6 +126,9 @@ $:public_unary()
       !! The start and end values of the domain
     real(r8), dimension(:), allocatable :: colloc_points
       !! The location of the data-points
+    logical                             :: differentiable = .true.
+      !! Indicates whether this is a complete Chebyshev field which
+      !! can be differentiated using the Psuedo-spectral method.
   contains
     private
     procedure, public :: dimensions => cheb1d_vector_dimensions
@@ -146,6 +156,10 @@ $:public_unary()
       !! Allocates a scalar field with concrete type [[cheb1d_scalar_field]]
     procedure, public :: allocate_vector_field => cheb1d_vector_allocate_vector
       !! Allocates a vector field with concrete type [[cheb1d_vector_field]]
+    procedure, public :: subtype_boundary => cheb1d_vector_bound
+      !! Performs whatever operations are needed on the field to get
+      !! a boundary field, including returning the slices needed to
+      !! extract the appropriate data.
   end type cheb1d_vector_field
   
   interface cheb1d_vector_field
@@ -305,6 +319,11 @@ contains
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
     integer :: i
+#:if defined('DEBUG')
+    if (.not. this%differentiable) &
+      error stop('Trying to take derivative of undifferentiable instance of '// &
+                 '`cheb1d_scalar_field`.')
+#:endif
     if (dir==1) then
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
@@ -406,6 +425,65 @@ contains
     if (allocated(new_field)) deallocate(new_field)
     allocate(cheb1d_vector_field :: new_field)
   end subroutine cheb1d_scalar_allocate_vector
+
+  pure subroutine cheb1d_scalar_bound(this,src,boundary,depth,slices)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Alters the meta-data of the field to be appropriate for the
+    ! specified boundary. Also computes the slices needed to access
+    ! the field contents for the specified boundary.
+    !
+    class(cheb1d_scalar_field), intent(out)           :: this
+    class(array_scalar_field), intent(in)             :: src
+      !! The field for which the boundary data is to be provided.
+    integer, intent(in)                               :: boundary
+      !! Specifies which boundary is to be returned. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is returned. If positive, then the upper
+      !! boundary is returned.
+    integer, intent(in)                               :: depth
+      !! The number of layers of data-points to return at the
+      !! specified boundary.
+    integer, dimension(:,:), allocatable, intent(out) :: slices
+      !! An array which, on return, contains array slice data which
+      !! can be used to construct extract the data for the given field
+      !! boundary. The form of the array is
+      !! ```
+      !! slices(1,i) = start_index
+      !! slices(2,i) = end_index
+      !! slices(3,i) = stride
+      !! ```
+    integer :: length
+    select type(src)
+    class is(cheb1d_scalar_field)
+      length = size(src%colloc_points)
+      select case(boundary)
+      case(-1)
+        this%colloc_points = src%colloc_points(length+1-depth:)
+        this%extent = [this%colloc_points(length+1-depth), &
+                      this%colloc_points(length)]
+        this%differentiable = .false.
+        allocate(slices(3,1))
+        slices(:,1) = [length+1-depth,length,1]
+      case(1)
+        this%colloc_points = src%colloc_points(1:depth)
+        this%extent = [this%colloc_points(depth), this%colloc_points(1)]
+        this%differentiable = .false.
+        allocate(slices(3,1))
+        slices(:,1) = [1,depth,1]
+      case default
+        this%colloc_points = src%colloc_points
+        this%extent = src%extent
+        allocate(slices(3,1))
+        slices(:,1) = [1,length,1]
+      end select
+    class default
+      error stop('Trying to compute boundary metadata for type other '// &
+                 'than `cheb1d_scalar_field`.')
+    end select
+  end subroutine cheb1d_scalar_bound
 
 
   !=====================================================================
@@ -572,6 +650,11 @@ contains
       !! Order of the derivative, default = 1
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
+#:if defined('DEBUG')
+    if (.not. this%differentiable) &
+      error stop('Trying to take derivative of undifferentiable instance of '// &
+                 '`cheb1d_vector_field`.')
+#:endif
     if (dir==1) then
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
@@ -673,5 +756,64 @@ contains
     if (allocated(new_field)) deallocate(new_field)
     allocate(cheb1d_vector_field :: new_field)
   end subroutine cheb1d_vector_allocate_vector
+
+  pure subroutine cheb1d_vector_bound(this,src,boundary,depth,slices)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Alters the meta-data of the field to be appropriate for the
+    ! specified boundary. Also computes the slices needed to access
+    ! the field contents for the specified boundary.
+    !
+    class(cheb1d_vector_field), intent(out)           :: this
+    class(array_vector_field), intent(in)             :: src
+      !! The field for which the boundary data is to be provided.
+    integer, intent(in)                               :: boundary
+      !! Specifies which boundary is to be returned. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is returned. If positive, then the upper
+      !! boundary is returned.
+    integer, intent(in)                               :: depth
+      !! The number of layers of data-points to return at the
+      !! specified boundary.
+    integer, dimension(:,:), allocatable, intent(out) :: slices
+      !! An array which, on return, contains array slice data which
+      !! can be used to construct extract the data for the given field
+      !! boundary. The form of the array is
+      !! ```
+      !! slices(1,i) = start_index
+      !! slices(2,i) = end_index
+      !! slices(3,i) = stride
+      !! ```
+    integer :: length
+    select type(src)
+    class is(cheb1d_vector_field)
+      length = size(src%colloc_points)
+      select case(boundary)
+      case(-1)
+        this%colloc_points = src%colloc_points(length+1-depth:)
+        this%extent = [this%colloc_points(length+1-depth), &
+                      this%colloc_points(length)]
+        this%differentiable = .false.
+        allocate(slices(3,1))
+        slices(:,1) = [length+1-depth,length,1]
+      case(1)
+        this%colloc_points = src%colloc_points(1:depth)
+        this%extent = [this%colloc_points(depth), this%colloc_points(1)]
+        this%differentiable = .false.
+        allocate(slices(3,1))
+        slices(:,1) = [1,depth,1]
+      case default
+        this%colloc_points = src%colloc_points
+        this%extent = src%extent
+        allocate(slices(3,1))
+        slices(:,1) = [1,length,1]
+      end select
+    class default
+      error stop('Trying to compute boundary metadata for type other '// &
+                 'than `cheb1d_vector_field`.')
+    end select
+  end subroutine cheb1d_vector_bound
 
 end module cheb1d_fields_mod

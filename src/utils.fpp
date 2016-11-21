@@ -70,14 +70,18 @@ contains
       !! The field being checked to see if it is compatible with the raw array.
     real(r8), dimension(:), intent(in) :: raw
       !! The raw data to be stored in this array.
-    logical, dimension(:), optional, intent(in) :: provide_lower_bound
-      !! Specifies whether raw data contains values at the lower
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.
-    logical, dimension(:), optional, intent(in) :: provide_upper_bound
-      !! Specifies whether raw data contains values at the upper
-      !! boundary, for each dimension, with the index of the element
-      !! corresponding to the dimension. Defaults to all `.true.`.    
+    integer, dimension(:), optional, intent(in) :: provide_lower_bound
+      !! Specifies how many layers of data points are excluded from
+      !! the raw data at the lower boundary for each dimension. The
+      !! number in element `n` of the array indicates how many layers
+      !! of cells at the lower boundary normal to dimension `n` are
+      !! missed.
+    integer, dimension(:), optional, intent(in) :: provide_upper_bound
+      !! Specifies how many layers of data points are excluded
+      !! from the raw data at the upper boundary for each
+      !! dimension. The number in element `n` of the array indicates
+      !! how many layers of cells at the upper boundary normal to
+      !! dimension `n` are missed.
 #ifdef DEBUG
     integer :: expected
     expected = field%raw_size(provide_lower_bound,provide_upper_bound)

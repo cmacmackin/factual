@@ -147,6 +147,9 @@ module uniform_fields_mod
     procedure, public :: id_to_position => uniform_scalar_id_to_pos
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure, public :: get_boundary => uniform_scalar_get_bound
+      !! Returns a field of the same type, containing only the
+      !! specified ammount of data at the specified boundary.
   end type uniform_scalar_field
 
   interface uniform_scalar_field
@@ -258,6 +261,9 @@ module uniform_fields_mod
     procedure, public :: id_to_position => uniform_vector_id_to_pos
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure, public :: get_boundary => uniform_vector_get_bound
+      !! Returns a field of the same type, containing only the
+      !! specified ammount of data at the specified boundary.
   end type uniform_vector_field
 
   interface uniform_vector_field
@@ -899,6 +905,32 @@ contains
       !! The coordinates for this location in the field
     pos = [0.0_r8]
   end function uniform_scalar_id_to_pos
+
+  pure function uniform_scalar_get_bound(this,boundary,depth) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns a field containing the specified boundary
+    ! information. For a uniform field this just means that a copy is
+    ! returned.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be returned. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is returned. If positive, then the upper
+      !! boundary is returned.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to return at the
+      !! specified boundary.
+    class(scalar_field), allocatable :: res
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary.
+    allocate(res, source=this)
+  end function uniform_scalar_get_bound
 
 
   !=====================================================================
@@ -1644,5 +1676,31 @@ contains
       !! The coordinates for this location in the field
     pos = [0.0_r8]
   end function uniform_vector_id_to_pos
+
+  pure function uniform_vector_get_bound(this,boundary,depth) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns a field containing the specified boundary
+    ! information. For a uniform field this just means that a copy is
+    ! returned.
+    !
+    class(uniform_vector_field), intent(in) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be returned. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is returned. If positive, then the upper
+      !! boundary is returned.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to return at the
+      !! specified boundary.
+    class(vector_field), allocatable :: res
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary.
+    allocate(res, source=this)
+  end function uniform_vector_get_bound
 
 end module uniform_fields_mod

@@ -159,6 +159,13 @@ module array_fields_mod
     procedure(sf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of the scalar field using a 1-D array of
       !! data passed to it.
+    procedure, public :: get_boundary => array_scalar_get_bound
+      !! Returns a field of the same type, containing only the
+      !! specified ammount of data at the specified boundary.
+    procedure(sf_bound), deferred :: subtype_boundary
+      !! Performs whatever operations are needed on the subtype to get
+      !! a boundary field, including returning the slices needed to
+      !! extract the appropriate data.
   end type array_scalar_field
 
   interface array_scalar_field
@@ -207,6 +214,31 @@ module array_fields_mod
       class(abstract_field), intent(in) :: other
         !! The field being checked against this one
     end subroutine sf_compatible
+
+    pure subroutine sf_bound(this,src,boundary,depth,slices)
+      import :: array_scalar_field
+      class(array_scalar_field), intent(out)            :: this
+      class(array_scalar_field), intent(in)             :: src
+        !! The field for which the boundary data is to be provided.
+      integer, intent(in)                               :: boundary
+        !! Specifies which boundary is to be returned. The boundary
+        !! will be the one normal to dimension of number
+        !! `abs(boundary)`. If the argument is negative, then the
+        !! lower boundary is returned. If positive, then the upper
+        !! boundary is returned.
+      integer, intent(in)                               :: depth
+        !! The number of layers of data-points to return at the
+        !! specified boundary.
+      integer, dimension(:,:), allocatable, intent(out) :: slices
+        !! An array containing array slice data which can be used to
+        !! construct extract the data for the given field
+        !! boundary. The form of the array is
+        !! ```
+        !! slices(1,i) = start_index
+        !! slices(2,i) = end_index
+        !! slices(3,i) = stride
+        !! ```
+    end subroutine sf_bound
 
     pure subroutine sf_meta(this, rhs)
       import :: array_scalar_field
@@ -358,6 +390,13 @@ module array_fields_mod
     procedure(vf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of particular vector component of the
       !! field, using a 1-D array of data passed to it.
+    procedure, public :: get_boundary => array_vector_get_bound
+      !! Returns a field of the same type, containing only the
+      !! specified ammount of data at the specified boundary.
+    procedure(vf_bound), deferred :: subtype_boundary
+      !! Performs whatever operations are needed by the subtype to get
+      !! a boundary field, including returning the slices needed to
+      !! extract the appropriate data.
   end type array_vector_field
 
   interface array_vector_field
@@ -391,6 +430,31 @@ module array_fields_mod
         !! slices(3,i) = stride
         !! ```
     end function vf_raw_slices
+
+    pure subroutine vf_bound(this,src,boundary,depth,slices)
+      import :: array_vector_field
+      class(array_vector_field), intent(out)            :: this
+      class(array_vector_field), intent(in)             :: src
+        !! The field for which the boundary data is to be provided.
+      integer, intent(in)                               :: boundary
+        !! Specifies which boundary is to be returned. The boundary
+        !! will be the one normal to dimension of number
+        !! `abs(boundary)`. If the argument is negative, then the
+        !! lower boundary is returned. If positive, then the upper
+        !! boundary is returned.
+      integer, intent(in)                               :: depth
+        !! The number of layers of data-points to return at the
+        !! specified boundary.
+      integer, dimension(:,:), allocatable, intent(out) :: slices
+        !! An array containing array slice data which can be used to
+        !! construct extract the data for the given field
+        !! boundary. The form of the array is
+        !! ```
+        !! slices(1,i) = start_index
+        !! slices(2,i) = end_index
+        !! slices(3,i) = stride
+        !! ```
+    end subroutine vf_bound
 
     pure subroutine vf_compatible(this,other)
       !* Author: Chris MacMackin
@@ -482,6 +546,8 @@ contains
       do i = 1, numpoints
         this%field_data(i) = initializer(this%id_to_position(i))
       end do
+    else
+      this%field_data = 0
     end if
   end function array_scalar_constructor
 
@@ -1227,6 +1293,43 @@ contains
     end select
   end subroutine array_scalar_compatible
 
+  pure function array_scalar_get_bound(this,boundary,depth) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns a field containing the specified boundary
+    ! information.
+    !
+    class(array_scalar_field), intent(in) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be returned. The boundary will
+      !! be the one normal to dimension of number `abs(boundary)`. If
+      !! the argument is negative, then the lower boundary is
+      !! returned. If positive, then the upper boundary is
+      !! returned. If 0 then the whole field is returned.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to return at the
+      !! specified boundary.
+    class(scalar_field), allocatable :: res
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary.
+    class(array_scalar_field), allocatable :: local
+    integer, dimension(:,:), allocatable :: slices
+    integer :: i
+    if (boundary == 0) then
+      allocate(res, source=this)
+      return
+    end if
+    allocate(local, mold=this)
+    call local%subtype_boundary(this,boundary,depth,slices)
+    local%field_data = [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), i=1, &
+                      size(slices,2))]
+    local%numpoints = size(local%field_data)
+    call move_alloc(local, res)
+  end function array_scalar_get_bound
+
 
   !=====================================================================
   ! Vector Field Methods
@@ -1241,20 +1344,20 @@ contains
     ! argument. The array of values will be allocated and initiated.
     !
     class(array_vector_field), intent(in)  :: template
-    !! A scalar field object which will act as a mold for the concrete
-    !! type of the returned type.
+      !! A scalar field object which will act as a mold for the concrete
+      !! type of the returned type.
     integer, intent(in)                    :: numpoints
-    !! The number of data points needed in the array when modelling this
-    !! field.
+      !! The number of data points needed in the array when modelling this
+      !! field.
     integer, intent(in)                    :: vector_dims
-    !! The number of components of vectors in this field
+      !! The number of components of vectors in this field
     procedure(vector_init), optional       :: initializer
-    !! An elemental procedure taking which takes the position in the
-    !! fields domain (an 8-byte real) as an argument and returns the
-    !! fields value at that position. Default is for field to be zero
-    !! everywhere.
+      !! An elemental procedure taking which takes the position in the
+      !! fields domain (an 8-byte real) as an argument and returns the
+      !! fields value at that position. Default is for field to be zero
+      !! everywhere.
     class(array_vector_field), allocatable :: this
-    !! A scalar field initiated based on the arguments to this function.
+      !! A scalar field initiated based on the arguments to this function.
     integer :: i
     allocate(this, source=template)
     if (allocated(this%field_data)) deallocate(this%field_data)
@@ -1265,6 +1368,8 @@ contains
       do i = 1, numpoints
         this%field_data(i,:) = initializer(this%id_to_position(i))
       end do
+    else
+      this%field_data = 0.0_r8
     end if
   end function array_vector_constructor
 
@@ -2325,5 +2430,47 @@ contains
       error stop(err_message//'    incompatible types.')
     end select
   end subroutine array_vector_compatible
+
+  pure function array_vector_get_bound(this,boundary,depth) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns a field containing the specified boundary
+    ! information. For a array field this just means that a copy is
+    ! returned.
+    !
+    class(array_vector_field), intent(in) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be returned. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is returned. If positive, then the upper
+      !! boundary is returned.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to return at the
+      !! specified boundary.
+    class(vector_field), allocatable :: res
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary.
+    class(array_vector_field), allocatable :: local
+    integer, dimension(:,:), allocatable :: slices
+    integer :: i, j, k
+    if (boundary == 0) then
+      allocate(res, source=this)
+      return
+    end if
+    allocate(local, mold=this)
+    call local%subtype_boundary(this,boundary,depth,slices)
+    local%vector_dims = this%vector_dims
+    local%numpoints = size(local%field_data)
+    allocate(local%field_data(local%numpoints,local%vector_dims))
+    do concurrent (j=1:local%vector_dims)
+      local%field_data(:,j) = [(this%field_data(slices(1,i):slices(2,i):slices(3,i),j), &
+                              i=1, size(slices,2))]
+    end do
+    call move_alloc(local, res)
+  end function array_vector_get_bound
 
 end module array_fields_mod

@@ -181,6 +181,9 @@ module abstract_fields_mod
       !! \(\nabla^2 {\rm field}\)
     procedure(sf_eq_sf), deferred :: assign_field
       !! \({\rm field} = {\rm field}\)
+    procedure(sf_bound), public, deferred :: get_boundary
+      !! Returns a field of the same type, containing only the
+      !! specified ammount of data at the specified boundary.
     generic, public :: operator(*) => field_multiply_field, &
         field_multiply_vecfield, real_multiply_field, &
         field_multiply_real, real_array_multiply_field, &
@@ -285,6 +288,9 @@ module abstract_fields_mod
       !! \({\rm\vec{real}} \times {\rm\vec{field}}\)
     procedure(vf_eq_vf), deferred :: assign_field
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
+    procedure(vf_bound), public, deferred :: get_boundary
+      !! Returns a field of the same type, containing only the
+      !! specified ammount of data at the specified boundary.
     generic, public :: operator(*) => field_multiply_field, &
         real_multiply_field, field_multiply_real
     generic, public :: operator(/) => field_divide_field, field_divide_real
@@ -598,6 +604,26 @@ module abstract_fields_mod
       class(scalar_field), intent(inout) :: this
       class(scalar_field), intent(in) :: rhs
     end subroutine sf_eq_sf
+
+    pure function sf_bound(this,boundary,depth)
+      import :: scalar_field
+      class(scalar_field), intent(in) :: this
+      integer, intent(in) :: boundary
+        !! Specifies which boundary is to be returned. The boundary
+        !! will be the one normal to dimension of number
+        !! `abs(boundary)`. If the argument is negative, then the
+        !! lower boundary is returned. If positive, then the upper
+        !! boundary is returned. If 0, then the whole field is
+        !! returned.
+      integer, intent(in) :: depth
+        !! The number of layers of data-points to return at the
+        !! specified boundary.
+      class(scalar_field), allocatable :: sf_bound
+        !! A field, of the same type as `this` and with the same
+        !! resolution, number of dimensions etc., but containing only
+        !! the points within the specified number of layers of cells
+        !! adjecent to the specified boundary.
+    end function sf_bound
     
     pure function vf_sf(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm field}\)
@@ -801,75 +827,25 @@ module abstract_fields_mod
       class(scalar_field), allocatable :: vf_comp !! Component number `comp`
     end function vf_comp
 
-!~     subroutine sf_bound(this,direction,lower,free_bound,bound_val, &
-!~                         bound_deriv)
-!~       !* Sets boundary conditions and values. If a boundary is not
-!~       !  explicitly set by calling this subroutine then it defaults to
-!~       !  being free.
-!~       !
-!~       import :: scalar_field
-!~       import :: r8
-!~       class(scalar_field), intent(inout) :: this
-!~       integer, intent(in) :: direction
-!~         !! The number corresponding to the direction/dimension whose
-!~         !! boundary condition is to be set
-!~       logical, optional, intent(in) :: lower
-!~         !! Sets lower boundary if true (default), upper if false
-!~       logical, optional, intent(in) :: free_bound
-!~         !! If true, makes this a free boundary. Any boundary values 
-!~         !! passed will be ignored. Default is `.false.`.
-!~       real(r8), optional, intent(in) :: bound_val
-!~         !! Value of the field at the boundary. Default is 0.
-!~       real(r8), optional, intent(in) :: bound_deriv
-!~         !! Value of the first derivative of the field at the boundary.
-!~         !! Default is 0.
-!~     end subroutine sf_bound
-!~ 
-!~     subroutine vf_bound(this,direction,lower,free_bound,bound_val, &
-!~                         bound_deriv)
-!~       !* Sets boundary conditions and values. If a boundary is not
-!~       !  explicitly set by calling this subroutine then it defaults to
-!~       !  being free.
-!~       !
-!~       import :: vector_field
-!~       import :: r8
-!~       class(vector_field), intent(inout) :: this
-!~       integer, intent(in) :: direction
-!~         !! The number corresponding to the direction/dimension whose
-!~         !! boundary condition is to be set
-!~       logical, optional, intent(in) :: lower
-!~         !! Sets lower boundary if true (default), upper if false
-!~       logical, optional, intent(in) :: free_bound
-!~         !! If true, makes this a free boundary. Any boundary values 
-!~         !! passed will be ignored. Default is `.false.`.
-!~       real(r8), dimension(:), optional, intent(in) :: bound_val
-!~         !! Value of the field at the boundary. Default is 0.
-!~       real(r8), dimension(:), optional, intent(in) :: bound_deriv
-!~         !! Value of the first derivative of the field at the boundary.
-!~         !! Default is 0.
-!~     end subroutine vf_bound
-!~     
-!~     function sf_same_bounds(this,other)
-!~       import :: scalar_field
-!~       class(scalar_field), intent(in) :: this
-!~       class(scalar_field), intent(in) :: other
-!~         !! The fields whose boundary conditions are being compared to
-!~         !! those of this one
-!~       logical :: sf_same_bounds
-!~         !! `.true.` if boundary conditions agree within tolerance,
-!~         !! `.false.` otherwise
-!~     end function sf_same_bounds
-!~     
-!~     function vf_same_bounds(this,other)
-!~       import :: vector_field
-!~       class(vector_field), intent(in) :: this
-!~       class(vector_field), intent(in) :: other
-!~         !! The fields whose boundary conditions are being compared to
-!~         !! those of this one
-!~       logical :: vf_same_bounds
-!~         !! `.true.` if boundary conditions agree within tolerance,
-!~         !! `.false.` otherwise
-!~     end function vf_same_bounds
+    pure function vf_bound(this,boundary,depth)
+      import :: vector_field
+      class(vector_field), intent(in) :: this
+      integer, intent(in) :: boundary
+        !! Specifies which boundary is to be returned. The boundary
+        !! will be the one normal to dimension of number
+        !! `abs(boundary)`. If the argument is negative, then the
+        !! lower boundary is returned. If positive, then the upper
+        !! boundary is returned. If 0, then the whole field is
+        !! returned.
+      integer, intent(in) :: depth
+        !! The number of layers of data-points to return at the
+        !! specified boundary.
+      class(vector_field), allocatable :: vf_bound
+        !! A field, of the same type as `this` and with the same
+        !! resolution, number of dimensions etc., but containing only
+        !! the points within the specified number of layers of cells
+        !! adjecent to the specified boundary.
+    end function vf_bound
 
     pure function sf_is_equal(this,rhs) result(iseq)
       import :: scalar_field
