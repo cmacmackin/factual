@@ -298,7 +298,7 @@ contains
     if (id <= this%elements()) then
       pos(1) = this%colloc_points(id)
     else
-      error stop('cheb1d_scalar_field: Invalid ID number provided.')
+      error stop ('cheb1d_scalar_field: Invalid ID number provided.')
     end if
   end function cheb1d_scalar_id_to_position
 
@@ -322,7 +322,7 @@ contains
     if (dir==1) then
 #:if defined('DEBUG')
       if (.not. this%differentiable) &
-        error stop('Trying to take derivative of undifferentiable instance of '// &
+        error stop ('Trying to take derivative of undifferentiable instance of '// &
                    '`cheb1d_scalar_field`.')
 #:endif
       res = data_array
@@ -349,16 +349,16 @@ contains
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'different domains.')
+           error stop (err_message//'different domains.')
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'different domains.')
+           error stop (err_message//'different domains.')
     class is(uniform_scalar_field)
       continue
     class is(uniform_vector_field)
       continue
     class default
-      error stop(err_message//'incompatible types.')
+      error stop (err_message//'incompatible types.')
     end select
   end subroutine cheb1d_scalar_check_compatible
 
@@ -480,7 +480,7 @@ contains
         slices(:,1) = [1,length,1]
       end select
     class default
-      error stop('Trying to compute boundary metadata for type other '// &
+      error stop ('Trying to compute boundary metadata for type other '// &
                  'than `cheb1d_scalar_field`.')
     end select
   end subroutine cheb1d_scalar_bound
@@ -629,7 +629,7 @@ contains
     if (id <= this%elements()) then
       pos(1) = this%colloc_points(id)
     else
-      error stop('cheb1d_vector_field: Invalid ID number provided.')
+      error stop ('cheb1d_vector_field: Invalid ID number provided.')
     end if
   end function cheb1d_vector_id_to_position
 
@@ -653,7 +653,7 @@ contains
     if (dir==1) then
 #:if defined('DEBUG')
       if (.not. this%differentiable) &
-        error stop('Trying to take derivative of undifferentiable instance of '// &
+        error stop ('Trying to take derivative of undifferentiable instance of '// &
                    '`cheb1d_vector_field`.')
 #:endif
       res = data_array
@@ -680,16 +680,16 @@ contains
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'different domains.')
+           error stop (err_message//'different domains.')
     class is(cheb1d_vector_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
-           error stop(err_message//'different domains.')
+           error stop (err_message//'different domains.')
     class is(uniform_scalar_field)
       continue
     class is(uniform_vector_field)
       continue
     class default
-      error stop(err_message//'incompatible types.')
+      error stop (err_message//'incompatible types.')
     end select
   end subroutine cheb1d_vector_check_compatible
 
@@ -811,7 +811,7 @@ contains
         slices(:,1) = [1,length,1]
       end select
     class default
-      error stop('Trying to compute boundary metadata for type other '// &
+      error stop ('Trying to compute boundary metadata for type other '// &
                  'than `cheb1d_vector_field`.')
     end select
   end subroutine cheb1d_vector_bound

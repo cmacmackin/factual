@@ -831,7 +831,7 @@ contains
     class is(uniform_scalar_field)
       this%field_data = rhs%field_data
     class default
-      error stop('Assigning incompatible type to uniform_scalar_field')
+      error stop ('Assigning incompatible type to uniform_scalar_field')
     end select
   end subroutine uniform_scalar_assign
 
@@ -1356,7 +1356,7 @@ contains
         this%vector_dims = 0
       end if
     class default
-      error stop('Assigning incompatible type to uniform_vector_field')
+      error stop ('Assigning incompatible type to uniform_vector_field')
     end select
   end subroutine uniform_vector_assign
 

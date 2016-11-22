@@ -733,7 +733,7 @@ contains
           res%field_data(i,:) = this%field_data(i) * rhs%get_value()
         end do
       class default
-        error stop('Non-array_scalar_field type allocated by '//&
+        error stop ('Non-array_scalar_field type allocated by '//&
                    '`allocate_scalar_field` routine.')
       end select
     end select
@@ -775,7 +775,7 @@ contains
         res%field_data(i,:) = rhs%field_data(i) * lhs
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_scalar_vr_m_sf
@@ -816,7 +816,7 @@ contains
         res%field_data(i,:) = this%field_data(i) * rhs
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_scalar_sf_m_vr
@@ -881,7 +881,7 @@ contains
         res%field_data(i,:) = lhs / rhs%field_data(i)
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_scalar_vr_d_sf
@@ -1132,7 +1132,7 @@ contains
         res%field_data = res%field_data + this%array_dx(this%field_data,i,2)
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_scalar_laplacian
@@ -1156,7 +1156,7 @@ contains
         res%field_data(:,i) = this%array_dx(this%field_data,i,1)
       end do
     class default
-      error stop('Non-array_vector_field type allocated by '//&
+      error stop ('Non-array_vector_field type allocated by '//&
                  '`allocate_vector_field` routine.')
     end select
   end function array_scalar_gradient
@@ -1177,7 +1177,7 @@ contains
       if (allocated(this%field_data)) then
         this%field_data = rhs%get_value()
       else
-        error stop('Trying to assign `uniform_scalar_field` to '// &
+        error stop ('Trying to assign `uniform_scalar_field` to '// &
                    '`array_scalar_field` with unallocated contents.')
       end if
     end select
@@ -1274,22 +1274,22 @@ contains
     select type(other)
     class is(array_scalar_field)
       if (this%numpoints /= other%numpoints) &
-           error stop(err_message//'    different resolutions.')
+           error stop (err_message//'    different resolutions.')
       if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class is(array_vector_field)
       if (this%numpoints /= other%numpoints) &
-           error stop(err_message//'    different resolutions.')
+           error stop (err_message//'    different resolutions.')
       if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class is(uniform_scalar_field)
       if (.not.(allocated(this%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class is(uniform_vector_field)
       if (.not.(allocated(this%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class default
-      error stop(err_message//'    incompatible types.')
+      error stop (err_message//'    incompatible types.')
     end select
   end subroutine array_scalar_compatible
 
@@ -1877,7 +1877,7 @@ contains
           this%field_data(:,i) = tmp(i)
         end do
       else
-        error stop('Trying to assign `uniform_vector_field` to '// &
+        error stop ('Trying to assign `uniform_vector_field` to '// &
                    '`array_vector_field` with unallocated contents.')
       end if
     end select
@@ -1898,7 +1898,7 @@ contains
       call res%assign_meta_data(this)
       res%field_data = sqrt(sum(this%field_data**2,2))
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_vector_norm
@@ -1922,7 +1922,7 @@ contains
         res%field_data = 0.0_r8
       end if
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_vector_component
@@ -1967,7 +1967,7 @@ contains
       res%field_data(:) = this%array_dx(this%field_data(:,component), &
                                         dir, order)
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_vector_component_d_dx
@@ -1994,7 +1994,7 @@ contains
         end do
       end do
     class default
-      error stop('Non-array_vector_field type allocated by '//&
+      error stop ('Non-array_vector_field type allocated by '//&
                  '`allocate_vector_field` routine.')
     end select
   end function array_vector_laplacian
@@ -2018,7 +2018,7 @@ contains
                          this%array_dx(this%field_data(:,i),i,1)
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
   end function array_vector_divergence
@@ -2083,7 +2083,7 @@ contains
         if (.not. been_set(i)) res%field_data(:,i) = 0.0_r8
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
   end function array_vector_curl
@@ -2235,7 +2235,7 @@ contains
         end do
       end select
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
   end function array_vector_vf_dot_vf
@@ -2259,7 +2259,7 @@ contains
         res%field_data(i) = sum(this%field_data(i,1:min_dims)*rhs(1:min_dims))
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
   end function array_vector_vf_dot_vr
@@ -2283,7 +2283,7 @@ contains
         res%field_data(i) = sum(lhs(1:min_dims)*rhs%field_data(i,1:min_dims))
       end do
     class default
-      error stop('Non-array_scalar_field type allocated by '//&
+      error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
   end function array_vector_vr_dot_vf
@@ -2412,22 +2412,22 @@ contains
     select type(other)
     class is(array_scalar_field)
       if (this%numpoints /= other%numpoints) &
-           error stop(err_message//'    different resolutions.')
+           error stop (err_message//'    different resolutions.')
       if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class is(array_vector_field)
       if (this%numpoints /= other%numpoints) &
-           error stop(err_message//'    different resolutions.')
+           error stop (err_message//'    different resolutions.')
       if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class is(uniform_scalar_field)
       if (.not.(allocated(this%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class is(uniform_vector_field)
       if (.not.(allocated(this%field_data))) &
-           error stop(err_message//'    uninitialised fields.')
+           error stop (err_message//'    uninitialised fields.')
     class default
-      error stop(err_message//'    incompatible types.')
+      error stop (err_message//'    incompatible types.')
     end select
   end subroutine array_vector_compatible
 
