@@ -461,15 +461,16 @@ contains
       length = size(src%colloc_points)
       select case(boundary)
       case(-1)
+         
         this%colloc_points = src%colloc_points(length+1-depth:)
-        this%extent = [this%colloc_points(length+1-depth), &
-                      this%colloc_points(length)]
+        this%extent = [src%colloc_points(length+1-depth), &
+                      src%colloc_points(length)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [length+1-depth,length,1]
       case(1)
         this%colloc_points = src%colloc_points(1:depth)
-        this%extent = [this%colloc_points(depth), this%colloc_points(1)]
+        this%extent = [src%colloc_points(depth), src%colloc_points(1)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [1,depth,1]
@@ -793,14 +794,14 @@ contains
       select case(boundary)
       case(-1)
         this%colloc_points = src%colloc_points(length+1-depth:)
-        this%extent = [this%colloc_points(length+1-depth), &
-                      this%colloc_points(length)]
+        this%extent = [src%colloc_points(length+1-depth), &
+                      src%colloc_points(length)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [length+1-depth,length,1]
       case(1)
         this%colloc_points = src%colloc_points(1:depth)
-        this%extent = [this%colloc_points(depth), this%colloc_points(1)]
+        this%extent = [src%colloc_points(depth), src%colloc_points(1)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [1,depth,1]
