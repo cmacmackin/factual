@@ -44,6 +44,7 @@ module array_fields_mod
                                  get_tol
   use uniform_fields_mod, only: uniform_scalar_field, uniform_vector_field
   use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
+  use h5lt, only: hid_t, hsize_t, h5ltmake_dataset_double_f
   implicit none
   private
 
@@ -147,6 +148,8 @@ module array_fields_mod
     procedure, public :: assign_meta_data => array_scalar_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
+    procedure, non_overridable :: write_hdf_array => array_scalar_write_hdf
+      !! Writes the array of field data to an HDF file
     procedure(sf_meta), deferred :: assign_subtype_meta_data
       !! Copies all data stored in a subtype of [[array_scalar_field(type)]]
       !! from another field object to this one.
@@ -378,6 +381,8 @@ module array_fields_mod
     procedure, public :: assign_meta_data => array_vector_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
+    procedure, non_overridable :: write_hdf_array => array_vector_write_hdf
+      !! Writes the array of field data to an HDF file
     procedure(vf_meta), deferred :: assign_subtype_meta_data
       !! Copies all data stored in a subtype of [[array_vector_field(type)]]
       !! from another field object to this one.
@@ -1256,6 +1261,36 @@ contains
       end if
     end select
   end subroutine array_scalar_assign_meta_data
+
+  subroutine array_scalar_write_hdf(this, hdf_id, dataset_name, dims &
+                                    error)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Writes the contents of the field to a dataset in an HDF file.
+    !
+    class(array_scalar_field), intent(in) :: this
+    integer(hid_t), intent(in)            :: hdf_id
+      !! The identifier for the HDF file/group in which the field
+      !! data is to be written.
+    character(len=*), intent(in)          :: dataset_name
+      !! The name of the dataset to be created in the HDF file
+      !! containing this field's data.
+    integer, dimension(:), intent(in)     :: dims
+      !! The number of elements in each dimension of the fields
+    integer, intent(out)                  :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    error = 0
+#:if defined('DEBUG')
+    if (product(dims) /= this%numpoints) &
+      error stop('Dimensions in requested output array do not match '// &
+                 'number of data-points in the field.')
+#:endif
+    call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims), &
+                                   int(dims,hsize_t), this%field_data, error)
+  end subroutine array_scalar_write_hdf
 
   pure subroutine array_scalar_compatible(this,other)
     !* Author: Chris MacMackin
@@ -2395,6 +2430,37 @@ contains
     end select
   end subroutine array_vector_assign_meta_data
 
+  subroutine array_vector_write_hdf(this, hdf_id, dataset_name, dims &
+                                    error)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Writes the contents of the field to a dataset in an HDF file.
+    !
+    class(array_vector_field), intent(in) :: this
+    integer(hid_t), intent(in)            :: hdf_id
+      !! The identifier for the HDF file/group in which the field
+      !! data is to be written.
+    character(len=*), intent(in)          :: dataset_name
+      !! The name of the dataset to be created in the HDF file
+      !! containing this field's data.
+    integer, dimension(:), intent(in)     :: dims
+      !! The number of elements in each dimension of the fields
+    integer, intent(out)                  :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+#:if defined('DEBUG')
+    if (product(dims) /= this%numpoints) &
+      error stop('Dimensions in requested output array do not match '// &
+                 'number of data-points in the field.')
+#:endif
+    error = 0
+    call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims)+1, &
+                                   int([dims,this%vector_dims],hsize_t), &
+                                   this%field_data, error)
+  end subroutine array_vector_write_hdf
+  
   pure subroutine array_vector_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: October 2016

@@ -47,8 +47,13 @@ module cheb1d_fields_mod
   use array_fields_mod, only: array_scalar_field, array_vector_field, &
                               scalar_init, vector_init
   use chebyshev_mod
+  use h5lt, only: hid_t, size_t, h5ltmake_dataset_double_f, &
+                  h5ltset_attribute_string_f, h5ltset_attribute_int_f
   implicit none
   private
+
+  character(len=19), parameter, public :: hdf_scalar_name = 'cheb1d_scalar_field'
+  character(len=19), parameter, public :: hdf_vector_name = 'cheb1d_vector_field'
 
 $:public_unary()
   public :: minval
@@ -105,6 +110,8 @@ $:public_unary()
       !! Performs whatever operations are needed on the field to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, public :: write_hdf => cheb1d_scalar_write_hdf
+      !! Write field data to a new dataset in an HDF5 file.
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -160,6 +167,8 @@ $:public_unary()
       !! Performs whatever operations are needed on the field to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, public :: write_hdf => cheb1d_vector_write_hdf
+      !! Write field data to a new dataset in an HDF5 file.
   end type cheb1d_vector_field
   
   interface cheb1d_vector_field
@@ -484,6 +493,40 @@ contains
                  'than `cheb1d_scalar_field`.')
     end select
   end subroutine cheb1d_scalar_bound
+
+  subroutine cheb1d_scalar_field_write_hdf(this, hdf_id, dataset_name, &
+                                           error)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Writes the contents of the field to a dataset in an HDF
+    ! file. The dataset will have an attribute specifying the name of
+    ! the field type and an attribute with a zero value, indicating
+    ! that this is not a vector field.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    integer(hid_t), intent(in)             :: hdf_id
+      !! The identifier for the HDF file/group in which the field
+      !! data is to be written.
+    character(len=*), intent(in)           :: dataset_name
+      !! The name of the dataset to be created in the HDF file
+      !! containing this field's data.
+    integer, intent(out)                   :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    error = 0
+    call this%write_hdf_array(hdf_id, dataset_name, [this%numpoints], error)
+    if (error /= 0) return
+    call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    hdf_scalar_type, error)
+    if (error /= 0) return
+    call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
+                                 1_size_t, error)
+    if (error /= 0) return
+    call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
+                                    int(this%colloc_points,size_t), error)
+  end subroutine cheb1d_scalar_field_write_hdf
 
 
   !=====================================================================
@@ -815,5 +858,39 @@ contains
                  'than `cheb1d_vector_field`.')
     end select
   end subroutine cheb1d_vector_bound
+  
+  subroutine cheb1d_vector_field_write_hdf(this, hdf_id, dataset_name, &
+                                           error)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Writes the contents of the field to a dataset in an HDF
+    ! file. The dataset will have an attribute specifying the name of
+    ! the field type and an attribute with a non-zero value,
+    ! indicating that this is a vector field.
+    !
+    class(cheb1d_vector_field), intent(in) :: this
+    integer(hid_t), intent(in)             :: hdf_id
+      !! The identifier for the HDF file/group in which the field
+      !! data is to be written.
+    character(len=*), intent(in)           :: dataset_name
+      !! The name of the dataset to be created in the HDF file
+      !! containing this field's data.
+    integer, intent(out)                   :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    error = 0
+    call this%write_hdf_array(hdf_id, dataset_name, [this%numpoints], error)
+    if (error /= 0) return
+    call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    hdf_vector_type, error)
+    if (error /= 0) return
+    call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
+                                 1_size_t, error)
+    if (error /= 0) return
+    call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
+                                    int(this%colloc_points,size_t), error)
+  end subroutine cheb1d_vector_field_write_hdf
 
 end module cheb1d_fields_mod

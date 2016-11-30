@@ -41,10 +41,19 @@ module uniform_fields_mod
   !
   use iso_fortran_env, only: r8 => real64
   use abstract_fields_mod, only: abstract_field, scalar_field, vector_field, &
-                                 get_tol
+                                 get_tol, hdf_grid_attr, hdf_field_type_attr
   use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
+  use h5lt, only: hid_t, size_t, hsize_t, h5ltmake_dataset_double_f, &
+                  h5ltset_attribute_string_f, h5ltset_attribute_int_f
   implicit none
   private
+
+  character(len=20), parameter, public :: hdf_scalar_name = 'uniform_scalar_field'
+  character(len=20), parameter, public :: hdf_vector_name = 'uniform_vector_field'
+
+  $:public_unary()
+  public :: minval
+  public :: maxval
 
   type, extends(scalar_field), public :: uniform_scalar_field
     !* Author: Chris MacMackin
@@ -147,6 +156,8 @@ module uniform_fields_mod
     procedure, public :: id_to_position => uniform_scalar_id_to_pos
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure, public :: write_hdf => uniform_scalar_write_hdf
+      !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: get_boundary => uniform_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -261,6 +272,8 @@ module uniform_fields_mod
     procedure, public :: id_to_position => uniform_vector_id_to_pos
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure, public :: write_hdf => uniform_vector_write_hdf
+      !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -905,6 +918,38 @@ contains
       !! The coordinates for this location in the field
     pos = [0.0_r8]
   end function uniform_scalar_id_to_pos
+  
+  subroutine uniform_scalar_field_write_hdf(this, hdf_id, dataset_name, &
+                                            error)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Writes the contents of the uniform field to a dataset in an HDF
+    ! file. The dataset will have an attribute specifying the name of
+    ! the field type and an attribute with a zero value, indicating
+    ! that this is not a vector field.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+    integer(hid_t), intent(in)              :: hdf_id
+      !! The identifier for the HDF file/group in which the field
+      !! data is to be written.
+    character(len=*), intent(in)            :: dataset_name
+      !! The name of the dataset to be created in the HDF file
+      !! containing this field's data.
+    integer, intent(out)                    :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    error = 0
+    call h5ltmake_dataset_double_f(hdf_id, dataset_name, 1, [1_hsize_t], &
+                                   [this%field_data], error)
+    if (error /= 0) return
+    call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    hdf_scalar_type, error)
+    if (error /= 0) return
+    call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
+                                 1_size_t, error)
+  end subroutine uniform_scalar_field_write_hdf
 
   pure function uniform_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
@@ -1676,6 +1721,39 @@ contains
       !! The coordinates for this location in the field
     pos = [0.0_r8]
   end function uniform_vector_id_to_pos
+  
+  subroutine uniform_vector_write_hdf(this, hdf_id, dataset_name, &
+                                      error)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Writes the contents of the uniform field to a dataset in an HDF
+    ! file. The dataset will have an attribute specifying the name of
+    ! the field type and an attribute with a non-zero value,
+    ! indicating that this is a vector field.
+    !
+    class(uniform_vector_field), intent(in) :: this
+    integer(hid_t), intent(in)              :: hdf_id
+      !! The identifier for the HDF file/group in which the field
+      !! data is to be written.
+    character(len=*), intent(in)            :: dataset_name
+      !! The name of the dataset to be created in the HDF file
+      !! containing this field's data.
+    integer, intent(out)                    :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    error = 0
+    call h5ltmake_dataset_double_f(hdf_id, dataset_name, 1, &
+                                   [int(this%vector_dims,hsize_t)], &
+                                   [this%field_data], error)
+    if (error /= 0) return
+    call h5ltset_attribute_string_f(hdf_id, dataset_name, &
+                                    hdf_fiield_type_attr, hdf_vector_type)
+    if (error /= 0) return
+    call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
+                                 1_size_t, error)
+  end subroutine uniform_vector_write_hdf
 
   pure function uniform_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
