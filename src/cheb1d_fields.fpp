@@ -48,7 +48,8 @@ module cheb1d_fields_mod
                               scalar_init, vector_init
   use chebyshev_mod
   use h5lt, only: hid_t, size_t, h5ltmake_dataset_double_f, &
-                  h5ltset_attribute_string_f, h5ltset_attribute_int_f
+                  h5ltset_attribute_string_f, h5ltset_attribute_int_f, &
+                  h5ltset_attribute_double_f
   implicit none
   private
 
@@ -495,8 +496,7 @@ contains
     end select
   end subroutine cheb1d_scalar_bound
 
-  subroutine cheb1d_scalar_field_write_hdf(this, hdf_id, dataset_name, &
-                                           error)
+  subroutine cheb1d_scalar_write_hdf(this, hdf_id, dataset_name, error)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -517,17 +517,18 @@ contains
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
     error = 0
-    call this%write_hdf_array(hdf_id, dataset_name, [this%numpoints], error)
+    call this%write_hdf_array(hdf_id, dataset_name, [this%elements()], error)
     if (error /= 0) return
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
-                                    hdf_scalar_type, error)
+                                    hdf_scalar_name, error)
     if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
                                  1_size_t, error)
     if (error /= 0) return
     call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
-                                    int(this%colloc_points,size_t), error)
-  end subroutine cheb1d_scalar_field_write_hdf
+                                    this%colloc_points, int(this%elements(),size_t), &
+                                    error)
+  end subroutine cheb1d_scalar_write_hdf
 
 
   !=====================================================================
@@ -860,8 +861,7 @@ contains
     end select
   end subroutine cheb1d_vector_bound
   
-  subroutine cheb1d_vector_field_write_hdf(this, hdf_id, dataset_name, &
-                                           error)
+  subroutine cheb1d_vector_write_hdf(this, hdf_id, dataset_name, error)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -882,16 +882,17 @@ contains
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
     error = 0
-    call this%write_hdf_array(hdf_id, dataset_name, [this%numpoints], error)
+    call this%write_hdf_array(hdf_id, dataset_name, [this%elements()], error)
     if (error /= 0) return
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
-                                    hdf_vector_type, error)
+                                    hdf_vector_name, error)
     if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
                                  1_size_t, error)
     if (error /= 0) return
     call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
-                                    int(this%colloc_points,size_t), error)
-  end subroutine cheb1d_vector_field_write_hdf
+                                    this%colloc_points, int(this%elements(),size_t), &
+                                    error)
+  end subroutine cheb1d_vector_write_hdf
 
 end module cheb1d_fields_mod

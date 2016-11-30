@@ -49,7 +49,7 @@ ifeq ($(VENDOR_),intel)
 else
   F90      := gfortran-6
   FCFLAGS  := -O0 -g -fcheck=all -J$(MDIR)
-  LDFLAGS  := -O0 -g 
+  LDFLAGS  := -O0 -g
   COVFLAGS := -fprofile-arcs -ftest-coverage
 endif
 
@@ -60,12 +60,12 @@ FPP_FLAGS := -DDEBUG -n
 FCFLAGS += $(PROJECT_INCDIRS:%=-I%) -I$(INCDIR) -I/usr/include -I$(PFUNIT)/mod
 
 # Libraries for use at link-time
-LIBS := -L$(LIBDIR) -lfftw3
+LIBS := -L$(LIBDIR) -lfftw3 -lhdf5hl_fortran
 LDFLAGS += $(LIBS)
 
 # A regular expression for names of modules provided by external libraries
 # and which won't be contained in the module directory of this codebase
-EXTERNAL_MODS := ^iso_(fortran_env|c_binding)|ieee_(exceptions|arithmetic|features)|openacc|omp_lib(_kinds)?|mpi|pfunit_mod$$
+EXTERNAL_MODS := ^iso_(fortran_env|c_binding)|ieee_(exceptions|arithmetic|features)|openacc|omp_lib(_kinds)?|mpi|pfunit_mod|h5lt$$
 
 # Extensions of Fortran files, case insensitive
 F_EXT := f for f90 f95 f03 f08 f15

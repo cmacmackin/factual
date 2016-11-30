@@ -148,7 +148,7 @@ module array_fields_mod
     procedure, public :: assign_meta_data => array_scalar_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
-    procedure, non_overridable :: write_hdf_array => array_scalar_write_hdf
+    procedure, non_overridable, public :: write_hdf_array => array_scalar_write_hdf
       !! Writes the array of field data to an HDF file
     procedure(sf_meta), deferred :: assign_subtype_meta_data
       !! Copies all data stored in a subtype of [[array_scalar_field(type)]]
@@ -381,7 +381,7 @@ module array_fields_mod
     procedure, public :: assign_meta_data => array_vector_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
-    procedure, non_overridable :: write_hdf_array => array_vector_write_hdf
+    procedure, non_overridable, public :: write_hdf_array => array_vector_write_hdf
       !! Writes the array of field data to an HDF file
     procedure(vf_meta), deferred :: assign_subtype_meta_data
       !! Copies all data stored in a subtype of [[array_vector_field(type)]]
@@ -1262,7 +1262,7 @@ contains
     end select
   end subroutine array_scalar_assign_meta_data
 
-  subroutine array_scalar_write_hdf(this, hdf_id, dataset_name, dims &
+  subroutine array_scalar_write_hdf(this, hdf_id, dataset_name, dims, &
                                     error)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -2430,7 +2430,7 @@ contains
     end select
   end subroutine array_vector_assign_meta_data
 
-  subroutine array_vector_write_hdf(this, hdf_id, dataset_name, dims &
+  subroutine array_vector_write_hdf(this, hdf_id, dataset_name, dims, &
                                     error)
     !* Author: Chris MacMackin
     !  Date: November 2016

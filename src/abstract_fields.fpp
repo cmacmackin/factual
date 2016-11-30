@@ -45,7 +45,7 @@ module abstract_fields_mod
   ! Cambridge University Press, New York, NY, USA.
   !
   use iso_fortran_env, only: r8 => real64
-  use hdf5, only: hid_t
+  use h5lt, only: hid_t
   implicit none
   private
 
@@ -483,6 +483,7 @@ module abstract_fields_mod
 
     subroutine hdf_out(this, hdf_id, dataset_name, error)
       import :: abstract_field
+      import :: hid_t
       class(abstract_field), intent(in) :: this
       integer(hid_t), intent(in)        :: hdf_id
         !! The identifier for the HDF file/group in which the field

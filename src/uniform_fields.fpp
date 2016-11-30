@@ -40,8 +40,7 @@ module uniform_fields_mod
   ! without having to change interfaces to use scalar real values.
   !
   use iso_fortran_env, only: r8 => real64
-  use abstract_fields_mod, only: abstract_field, scalar_field, vector_field, &
-                                 get_tol, hdf_grid_attr, hdf_field_type_attr
+  use abstract_fields_mod
   use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
   use h5lt, only: hid_t, size_t, hsize_t, h5ltmake_dataset_double_f, &
                   h5ltset_attribute_string_f, h5ltset_attribute_int_f
@@ -919,7 +918,7 @@ contains
     pos = [0.0_r8]
   end function uniform_scalar_id_to_pos
   
-  subroutine uniform_scalar_field_write_hdf(this, hdf_id, dataset_name, &
+  subroutine uniform_scalar_write_hdf(this, hdf_id, dataset_name, &
                                             error)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -945,11 +944,11 @@ contains
                                    [this%field_data], error)
     if (error /= 0) return
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
-                                    hdf_scalar_type, error)
+                                    hdf_scalar_name, error)
     if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
                                  1_size_t, error)
-  end subroutine uniform_scalar_field_write_hdf
+  end subroutine uniform_scalar_write_hdf
 
   pure function uniform_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
@@ -1749,7 +1748,7 @@ contains
                                    [this%field_data], error)
     if (error /= 0) return
     call h5ltset_attribute_string_f(hdf_id, dataset_name, &
-                                    hdf_fiield_type_attr, hdf_vector_type)
+                                    hdf_field_type_attr, hdf_vector_name, error)
     if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
                                  1_size_t, error)
