@@ -107,6 +107,11 @@ module abstract_fields_mod
       !! coordinates of that position
     procedure(hdf_out), deferred :: write_hdf
       !! Write field data in an HDF5 file.
+    procedure(grid), deferred :: grid_spacing
+      !! Returns a vector field where the values are the size of cells
+      !! in the grid of the field at each point, in each
+      !! direction. This can be useful, e.g., when calculating time
+      !! steps for integration.
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -496,6 +501,16 @@ module abstract_fields_mod
         !! routine, is 0. Otherwise, contains the error code returned
         !! by the HDF library.
     end subroutine hdf_out
+
+    pure function grid(this)
+      import :: abstract_field
+      import :: vector_field
+      class(abstract_field), intent(in) :: this
+      class(vector_field), allocatable   :: grid
+        !! A field where the values indicate the grid spacing that
+        !! point. Each vector dimension representes the spacing of the
+        !! grid in that direction.
+    end function grid
     
     pure function sf_sf(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm field}\)

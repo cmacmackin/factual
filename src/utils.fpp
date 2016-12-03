@@ -38,7 +38,7 @@ module utils_mod
   implicit none
   private
 
-  public :: is_nan, check_set_from_raw, elements_in_slice
+  public :: is_nan, check_set_from_raw, elements_in_slice, grid_to_spacing
 
 contains
 
@@ -110,5 +110,27 @@ contains
     integer :: res
     res = (finish - start + 1)/stride
   end function elements_in_slice
+
+  function grid_to_spacing(grid) result(space)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! For a given specification of the location of grid-points,
+    ! calculates the width of each grid cell. Grid cells are taken to
+    ! be centred on the grid points.
+    !
+    real(r8), dimension(:), intent(in) :: grid
+    real(r8), dimension(size(grid),1)  :: space
+    integer :: i
+    do concurrent (i=1:size(grid))
+      if (i==1) then
+        space(i,1) = abs(grid(2) - grid(1))
+      else if (i==size(grid)) then
+        space(i,1) = abs(grid(i) - grid(i-1))
+      else
+        space(i,1) = abs(grid(i+1) - grid(i-1))/2._r8
+      end if
+    end do
+  end function grid_to_spacing
 
 end module utils_mod

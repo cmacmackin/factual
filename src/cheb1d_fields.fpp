@@ -41,6 +41,7 @@ module cheb1d_fields_mod
   ! differentiate.
   !
   use iso_fortran_env, only: r8 => real64
+  use utils_mod, only: grid_to_spacing
   use abstract_fields_mod
   use uniform_fields_mod, only: uniform_scalar_field, &
                                 uniform_vector_field
@@ -113,6 +114,11 @@ $:public_unary()
       !! extract the appropriate data.
     procedure, public :: write_hdf => cheb1d_scalar_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
+    procedure, public :: grid_spacing => cheb1d_scalar_grid_spacing
+      !! Returns a vector field where the values are the size of cells
+      !! in the grid of the field at each point, in each
+      !! direction. This can be useful, e.g., when calculating time
+      !! steps for integration.
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -170,6 +176,11 @@ $:public_unary()
       !! extract the appropriate data.
     procedure, public :: write_hdf => cheb1d_vector_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
+    procedure, public :: grid_spacing => cheb1d_vector_grid_spacing
+      !! Returns a vector field where the values are the size of cells
+      !! in the grid of the field at each point, in each
+      !! direction. This can be useful, e.g., when calculating time
+      !! steps for integration.
   end type cheb1d_vector_field
   
   interface cheb1d_vector_field
@@ -530,9 +541,26 @@ contains
                                     error)
   end subroutine cheb1d_scalar_write_hdf
 
+  pure function cheb1d_scalar_grid_spacing(this) result(grid)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Returns a field containing the grid spacing at each point.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    class(vector_field), allocatable       :: grid
+      !! A field where the values indicate the grid spacing that
+      !! point. Each vector dimension representes the spacing of the
+      !! grid in that direction.
+    type(cheb1d_vector_field) :: local
+    call local%assign_subtype_meta_data(this)
+    allocate(grid, source=array_vector_field(local, &
+                          grid_to_spacing(this%colloc_points)))
+  end function cheb1d_scalar_grid_spacing
+
 
   !=====================================================================
-  ! Vector Field Methods
+  ! Vector Field Method
   !=====================================================================
 
 
@@ -894,5 +922,20 @@ contains
                                     this%colloc_points, int(this%elements(),size_t), &
                                     error)
   end subroutine cheb1d_vector_write_hdf
+
+  pure function cheb1d_vector_grid_spacing(this) result(grid)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Returns a field containing the grid spacing at each point.
+    !
+    class(cheb1d_vector_field), intent(in) :: this
+    class(vector_field), allocatable       :: grid
+      !! A field where the values indicate the grid spacing that
+      !! point. Each vector dimension representes the spacing of the
+      !! grid in that direction.
+    allocate(grid, source=array_vector_field(this, &
+                          grid_to_spacing(this%colloc_points)))
+  end function cheb1d_vector_grid_spacing
 
 end module cheb1d_fields_mod

@@ -172,7 +172,8 @@ module array_fields_mod
   end type array_scalar_field
 
   interface array_scalar_field
-    module procedure array_scalar_constructor
+    module procedure array_scalar_constructor1
+    module procedure array_scalar_constructor2
   end interface array_scalar_field
 
   abstract interface
@@ -405,8 +406,9 @@ module array_fields_mod
   end type array_vector_field
 
   interface array_vector_field
-    module procedure array_vector_constructor
-  end interface array_vector_field
+    module procedure array_vector_constructor1
+    module procedure array_vector_constructor2
+ end interface array_vector_field
 
   abstract interface
     pure function vf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
@@ -521,13 +523,13 @@ contains
   ! Scalar Field Methods
   !=====================================================================
 
-  function array_scalar_constructor(template,numpoints, &
+  function array_scalar_constructor1(template,numpoints, &
        initializer) result(this)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
     ! Creates a new field with the same concrete type as the template
-    ! argument. The array of values will be allocated an initiated.
+    ! argument. The array of values will be allocated and initiated.
     !
     class(array_scalar_field), intent(in)  :: template
       !! A scalar field object which will act as a mold for the concrete
@@ -554,8 +556,29 @@ contains
     else
       this%field_data = 0
     end if
-  end function array_scalar_constructor
-
+  end function array_scalar_constructor1
+  
+  function array_scalar_constructor2(template, array) result(this)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Creates a new field with the same concrete type as the template
+    ! argument. The field values will be copied from the provided array.
+    !
+    class(array_scalar_field), intent(in)  :: template
+      !! A scalar field object which will act as a mold for the concrete
+      !! type of the returned type, also copying over any metadata.
+    real(r8), dimension(:), intent(in)     :: array
+      !! An array containing the values which this field will be
+      !! initialised with.
+    class(array_scalar_field), allocatable :: this
+      !! A scalar field initiated based on the arguments to this function.
+    allocate(this, source=template)
+    if (allocated(this%field_data)) deallocate(this%field_data)
+    this%numpoints = size(array)
+    this%field_data = array
+  end function array_scalar_constructor2
+  
   pure function array_scalar_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
@@ -1370,7 +1393,7 @@ contains
   ! Vector Field Methods
   !=====================================================================
 
-  function array_vector_constructor(template,numpoints,vector_dims, &
+  function array_vector_constructor1(template,numpoints,vector_dims, &
                                     initializer) result(this)
     !* Author: Chris MacMackin
     !  Date: October 2016
@@ -1406,7 +1429,30 @@ contains
     else
       this%field_data = 0.0_r8
     end if
-  end function array_vector_constructor
+  end function array_vector_constructor1
+
+  function array_vector_constructor2(template,array) result(this)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Creates a new field with the same concrete type as the template
+    ! argument. The array of values will be allocated and initiated.
+    !
+    class(array_vector_field), intent(in)  :: template
+      !! A scalar field object which will act as a mold for the concrete
+      !! type of the returned type.
+    real(r8), dimension(:,:), intent(in)   :: array
+      !! An array containing the values which this field will be
+      !! initialised with.
+    class(array_vector_field), allocatable :: this
+      !! A scalar field initiated based on the arguments to this function.
+    integer :: i
+    allocate(this, source=template)
+    if (allocated(this%field_data)) deallocate(this%field_data)
+    this%numpoints = size(array,1)
+    this%vector_dims = size(array,2)
+    this%field_data = array
+  end function array_vector_constructor2
 
   elemental function array_vector_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin

@@ -50,6 +50,8 @@ module uniform_fields_mod
   character(len=20), parameter, public :: hdf_scalar_name = 'uniform_scalar_field'
   character(len=20), parameter, public :: hdf_vector_name = 'uniform_vector_field'
 
+  integer, parameter :: grid_spacing_size = 10
+  
   $:public_unary()
   public :: minval
   public :: maxval
@@ -58,7 +60,7 @@ module uniform_fields_mod
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
-    ! An abstract data type representing a mathematical field of
+     ! An abstract data type representing a mathematical field of
     ! scalar values, in which the field is uniform across all of
     ! space. This allows for reduced memory usage and avoiding having
     ! to apply a differentiation algorithm, compared to using another
@@ -157,6 +159,11 @@ module uniform_fields_mod
       !! coordinates of that position
     procedure, public :: write_hdf => uniform_scalar_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
+    procedure, public :: grid_spacing => uniform_scalar_grid_spacing
+      !! Returns a vector field where the values are the size of cells
+      !! in the grid of the field at each point, in each
+      !! direction. This can be useful, e.g., when calculating time
+      !! steps for integration.
     procedure, public :: get_boundary => uniform_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -273,6 +280,11 @@ module uniform_fields_mod
       !! coordinates of that position
     procedure, public :: write_hdf => uniform_vector_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
+    procedure, public :: grid_spacing => uniform_vector_grid_spacing
+      !! Returns a vector field where the values are the size of cells
+      !! in the grid of the field at each point, in each
+      !! direction. This can be useful, e.g., when calculating time
+      !! steps for integration.
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -950,6 +962,25 @@ contains
                                  1_size_t, error)
   end subroutine uniform_scalar_write_hdf
 
+  pure function uniform_scalar_grid_spacing(this) result(grid)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Returns a field containing the grid spacing at each point. For a
+    ! uniform field, this is not a meaningful concept
+    !
+    class(uniform_scalar_field), intent(in) :: this
+    class(vector_field), allocatable        :: grid
+      !! A field where the values indicate the grid spacing that
+      !! point. Each vector dimension representes the spacing of the
+      !! grid in that direction.
+    type(uniform_vector_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(grid_spacing_size))
+    local%vector_dims = grid_spacing_size
+    local%field_data = huge(local%field_data)
+  end function uniform_scalar_grid_spacing
+  
   pure function uniform_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -1753,6 +1784,25 @@ contains
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
                                  1_size_t, error)
   end subroutine uniform_vector_write_hdf
+  
+  pure function uniform_vector_grid_spacing(this) result(grid)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Returns a field containing the grid spacing at each point. For a
+    ! uniform field, this is not a meaningful concept
+    !
+    class(uniform_vector_field), intent(in) :: this
+    class(vector_field), allocatable        :: grid
+    !! A field where the values indicate the grid spacing that
+    !! point. Each vector dimension representes the spacing of the
+    !! grid in that direction.
+    type(uniform_vector_field), allocatable :: local
+    allocate(local)
+    allocate(local%field_data(grid_spacing_size))
+    local%vector_dims = grid_spacing_size
+    local%field_data = huge(local%field_data)
+  end function uniform_vector_grid_spacing
 
   pure function uniform_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
