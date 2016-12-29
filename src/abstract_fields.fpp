@@ -91,9 +91,9 @@ module abstract_fields_mod
       !! [[abstract_field:raw]]
     procedure(f_res), deferred :: resolution
       !! Returns array containing number of datapoints in each dimension.
-    !procedure(f_eq_meta), deferred :: assign_meta_data
-    !  !! Copies all data other than values stored in field from another
-    !  !! field object to this one.
+    procedure(f_eq_meta), deferred :: assign_meta_data
+      !! Copies all data other than values stored in field from another
+      !! field object to this one.
     procedure(scalar_factory), deferred :: allocate_scalar_field
       !! Allocates a scalar field to be of the same concrete type as
       !! those returned by type-bound procedures of this field which

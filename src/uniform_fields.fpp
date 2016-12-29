@@ -60,7 +60,7 @@ module uniform_fields_mod
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
-     ! An abstract data type representing a mathematical field of
+    ! An abstract data type representing a mathematical field of
     ! scalar values, in which the field is uniform across all of
     ! space. This allows for reduced memory usage and avoiding having
     ! to apply a differentiation algorithm, compared to using another
@@ -150,6 +150,9 @@ module uniform_fields_mod
       !! Checks fields are equal within a tolerance
     procedure :: assign_field => uniform_scalar_assign
       !! \({\rm field} = {\rm field}\)
+    procedure, public :: assign_meta_data => uniform_scalar_assign_meta_data
+      !! Copies all data other than values stored in field from another
+      !! field object to this one.
     procedure, public :: allocate_scalar_field => uniform_scalar_allocate_scalar
       !! Allocates a scalar field with concrete type [[uniform_scalar_field]]
     procedure, public :: allocate_vector_field => uniform_scalar_allocate_vector
@@ -271,6 +274,9 @@ module uniform_fields_mod
       !! \({\rm field} = {\rm field}\)
     procedure :: is_equal => uniform_vector_is_equal
       !! Checks fields are equal within a tolerance
+    procedure, public :: assign_meta_data => uniform_vector_assign_meta_data
+      !! Copies all data other than values stored in field from another
+      !! field object to this one.
     procedure, public :: allocate_scalar_field => uniform_vector_allocate_scalar
       !! Allocates a scalar field with concrete type [[uniform_scalar_field]]
     procedure, public :: allocate_vector_field => uniform_vector_allocate_vector
@@ -881,6 +887,22 @@ contains
       iseq = (rhs == this)
     end select
   end function uniform_scalar_is_equal
+
+  pure subroutine uniform_scalar_assign_meta_data(this, rhs, alloc)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Assigns all data in `rhs` to `this` except for the actual values
+    ! of the field. For a uniform scalar field, this does not actually
+    ! do anything.
+    !
+    class(uniform_scalar_field), intent(inout) :: this
+    class(abstract_field), intent(in) :: rhs
+      !! The field whose metadata (domain, resolution, etc) is to be
+      !! copied
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array of `this`.
+  end subroutine uniform_scalar_assign_meta_data
 
   pure subroutine uniform_scalar_allocate_scalar(this, new_field)
     !* Author: Chris MacMackin
@@ -1703,6 +1725,27 @@ contains
       iseq = (rhs == this)
     end select
   end function uniform_vector_is_equal
+
+  pure subroutine uniform_vector_assign_meta_data(this, rhs, alloc)
+    !* Author: Chris MacMackin
+    !  Date: December 2016
+    !
+    ! Assigns all data in `rhs` to `this` except for the actual values
+    ! of the field.
+    !
+    class(uniform_vector_field), intent(inout) :: this
+    class(abstract_field), intent(in) :: rhs
+      !! The field whose metadata (domain, resolution, etc) is to be
+      !! copied
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array of `this`.
+    select type(rhs)
+    class is(uniform_scalar_field)
+      this%vector_dims = 1
+    class is(uniform_vector_field)
+      this%vector_dims = rhs%vector_dims
+    end select
+  end subroutine uniform_vector_assign_meta_data
 
   pure subroutine uniform_vector_allocate_scalar(this, new_field)
     !* Author: Chris MacMackin
