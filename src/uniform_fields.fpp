@@ -348,7 +348,7 @@ contains
     domain(1,2) = 0.0_r8
   end function uniform_scalar_domain
 
-  pure function uniform_scalar_dimensions(this) result(dims)
+  elemental function uniform_scalar_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1074,7 +1074,7 @@ contains
     elements = 1
   end function uniform_vector_elements
 
-  pure function uniform_vector_dimensions(this) result(dims)
+  elemental function uniform_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !

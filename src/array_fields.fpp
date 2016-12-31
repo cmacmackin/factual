@@ -221,7 +221,7 @@ module array_fields_mod
 
     pure subroutine sf_bound(this,src,boundary,depth,slices)
       import :: array_scalar_field
-      class(array_scalar_field), intent(out)            :: this
+      class(array_scalar_field), intent(inout)          :: this
       class(array_scalar_field), intent(in)             :: src
         !! The field for which the boundary data is to be provided.
       integer, intent(in)                               :: boundary
@@ -440,7 +440,7 @@ module array_fields_mod
 
     pure subroutine vf_bound(this,src,boundary,depth,slices)
       import :: array_vector_field
-      class(array_vector_field), intent(out)            :: this
+      class(array_vector_field), intent(inout)          :: this
       class(array_vector_field), intent(in)             :: src
         !! The field for which the boundary data is to be provided.
       integer, intent(in)                               :: boundary
@@ -558,7 +558,7 @@ contains
     end if
   end function array_scalar_constructor1
   
-  function array_scalar_constructor2(template, array) result(this)
+  pure function array_scalar_constructor2(template, array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1431,7 +1431,7 @@ contains
     end if
   end function array_vector_constructor1
 
-  function array_vector_constructor2(template,array) result(this)
+  pure function array_vector_constructor2(template,array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !

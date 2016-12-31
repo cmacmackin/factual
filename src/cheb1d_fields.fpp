@@ -455,7 +455,7 @@ contains
     ! specified boundary. Also computes the slices needed to access
     ! the field contents for the specified boundary.
     !
-    class(cheb1d_scalar_field), intent(out)           :: this
+    class(cheb1d_scalar_field), intent(inout)         :: this
     class(array_scalar_field), intent(in)             :: src
       !! The field for which the boundary data is to be provided.
     integer, intent(in)                               :: boundary
@@ -838,7 +838,7 @@ contains
     ! specified boundary. Also computes the slices needed to access
     ! the field contents for the specified boundary.
     !
-    class(cheb1d_vector_field), intent(out)           :: this
+    class(cheb1d_vector_field), intent(inout)         :: this
     class(array_vector_field), intent(in)             :: src
       !! The field for which the boundary data is to be provided.
     integer, intent(in)                               :: boundary

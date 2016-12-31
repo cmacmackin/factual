@@ -111,7 +111,7 @@ contains
     res = (finish - start + 1)/stride
   end function elements_in_slice
 
-  function grid_to_spacing(grid) result(space)
+  pure function grid_to_spacing(grid) result(space)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
