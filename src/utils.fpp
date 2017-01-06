@@ -124,11 +124,11 @@ contains
     integer :: i
     do concurrent (i=1:size(grid))
       if (i==1) then
-        space(i,1) = abs(grid(2) - grid(1))
+        space(i,1) = grid(2) - grid(1)
       else if (i==size(grid)) then
-        space(i,1) = abs(grid(i) - grid(i-1))
+        space(i,1) = grid(i) - grid(i-1)
       else
-        space(i,1) = abs(grid(i+1) - grid(i-1))/2._r8
+        space(i,1) = (grid(i+1) - grid(i-1))/2._r8
       end if
     end do
   end function grid_to_spacing
