@@ -557,7 +557,7 @@ contains
       this%field_data = 0
     end if
   end function array_scalar_constructor1
-  
+
   pure function array_scalar_constructor2(template, array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
@@ -578,7 +578,7 @@ contains
     this%numpoints = size(array)
     this%field_data = array
   end function array_scalar_constructor2
-  
+
   pure function array_scalar_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
@@ -1262,25 +1262,37 @@ contains
     class(abstract_field), intent(in) :: rhs
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
+    logical :: al
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
     call this%assign_subtype_meta_data(rhs)
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      if (allocated(this%field_data)) deallocate(this%field_data)
-      if (present(alloc)) then
-        if (allocated(rhs%field_data) .and. alloc) &
-          allocate(this%field_data(size(rhs%field_data))) !Needed due to compiler bug
-      else
-        allocate(this%field_data(size(rhs%field_data))) !Needed due to compiler bug
+      if (allocated(this%field_data)) then
+        if (.not. allocated(rhs%field_data)) then
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data)/=size(rhs%field_data)) then
+          deallocate(this%field_data)
+          allocate(this%field_data(size(rhs%field_data)))
+        end if
+      else if (allocated(rhs%field_data) .and. al) then
+        allocate(this%field_data(size(rhs%field_data)))
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
-      if (allocated(this%field_data)) deallocate(this%field_data)
-      if (present(alloc)) then
-        if (allocated(rhs%field_data) .and. alloc) &
-          allocate(this%field_data(size(rhs%field_data,1))) !Needed due to compiler bug
-      else
-        allocate(this%field_data(size(rhs%field_data,1))) !Needed due to compiler bug
+      if (allocated(this%field_data)) then
+        if (.not. allocated(rhs%field_data)) then
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data)/=size(rhs%field_data,1)) then
+          deallocate(this%field_data)
+          allocate(this%field_data(size(rhs%field_data,1)))
+        end if
+      else if (allocated(rhs%field_data) .and. al) then
+        allocate(this%field_data(size(rhs%field_data,1)))
       end if
     end select
   end subroutine array_scalar_assign_meta_data
@@ -2449,28 +2461,39 @@ contains
     class(abstract_field), intent(in) :: rhs
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
+    logical :: al
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
     call this%assign_subtype_meta_data(rhs)
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = this%dimensions()
-      if (allocated(this%field_data)) deallocate(this%field_data)
-      if (present(alloc)) then
-      !Needed due to compiler bug:
-        if (allocated(rhs%field_data) .and. alloc) &
+      if (allocated(this%field_data)) then
+        if (.not. allocated(rhs%field_data)) then
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data,1)/=size(rhs%field_data)) then
+          deallocate(this%field_data)
           allocate(this%field_data(size(rhs%field_data),1))
-      else
+        end if
+      else if (allocated(rhs%field_data) .and. al) then
         allocate(this%field_data(size(rhs%field_data),1))
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = rhs%vector_dims
-      if (allocated(this%field_data)) deallocate(this%field_data)
-      if (present(alloc)) then
-        !Needed due to compiler bug:
-        if (allocated(rhs%field_data) .and. alloc) &
+      if (allocated(this%field_data)) then
+        if (.not. allocated(rhs%field_data)) then
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data,1)/=size(rhs%field_data,1) &
+                 .and. size(this%field_data,2)/=size(rhs%field_data,2)) then
+          deallocate(this%field_data)
           allocate(this%field_data(size(rhs%field_data,1),size(rhs%field_data,2)))
-      else
+        end if
+      else if (allocated(rhs%field_data) .and. al) then
         allocate(this%field_data(size(rhs%field_data,1),size(rhs%field_data,2)))
       end if
     end select
