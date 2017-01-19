@@ -174,9 +174,6 @@ module abstract_fields_mod
       !! \({\rm field}^{\rm real}\)
     procedure(sf_i), deferred :: field_pow_int
       !! \({\rm field}^{\rm int}\)
-    !~ procedure(sf_elem), public, deferred :: get_element
-      !! Returns one of the constituent values of the field, i.e. the 
-      !! field's value at a particular location
 #:for FUNC, TEX in UNARY_FUNCTIONS
     procedure(sf_ret_sf), deferred :: ${FUNC}$
       !! \(${TEX}$({\rm field})\)
@@ -193,6 +190,12 @@ module abstract_fields_mod
       !! \(\nabla^2 {\rm field}\)
     procedure(sf_eq_sf), deferred :: assign_field
       !! \({\rm field} = {\rm field}\)
+    procedure(sf_elem), public, deferred :: get_element
+      !! Returns one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location
+    procedure(sf_set_elem), public, deferred :: set_element
+      !! Sets one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location
     procedure(sf_bound), public, deferred :: get_boundary
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -260,17 +263,6 @@ module abstract_fields_mod
       !! \({\rm \vec{real}} - {\rm \vec{field}}\)
     procedure(vf_vr), deferred :: field_sub_real
       !! \({\rm \vec{field}} - {\rm \vec{real}}\)
-!~     procedure(vf_elem_vec), deferred :: get_element_vector
-!~       !! Returns ones of the constituent vectors of the field, i.e. the 
-!~       !! field's value at a particular location
-!~     procedure(vf_elem_comp), deferred :: get_element_component
-!~       !! Returns one of the components of a constituent vector of the 
-!~       !! field, i.e. the component of the field's value at a particular 
-!~       !! location
-!~     generic, public :: get_element => get_element_vector, get_element_component
-!~       !! Returns a constituent value of the field, i.e. the vector or 
-!~       !! vector component giving the field's value at a particular 
-!~       !! location
     procedure(vf_norm), public, deferred :: norm
       !! \(\lVert {\rm \vec{field}} \rVert\)
     procedure(vf_comp), public, deferred :: component
@@ -300,6 +292,28 @@ module abstract_fields_mod
       !! \({\rm\vec{real}} \times {\rm\vec{field}}\)
     procedure(vf_eq_vf), deferred :: assign_field
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
+    procedure(vf_elem_vec), deferred :: get_element_vector
+      !! Returns ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location
+    procedure(vf_elem_comp), deferred :: get_element_component
+      !! Returns one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location
+    procedure(vf_set_elem_vec), deferred :: set_element_vector
+      !! Sets ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location
+    procedure(vf_set_elem_comp), deferred :: set_element_component
+      !! Sets one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location
+    generic, public :: get_element => get_element_vector, get_element_component
+      !! Returns a constituent value of the field, i.e. the vector or 
+      !! vector component giving the field's value at a particular 
+      !! location
+    generic, public :: set_element => set_element_vector, set_element_component
+      !! Sets a constituent value of the field, i.e. the vector or 
+      !! vector component giving the field's value at a particular 
+      !! location
     procedure(vf_bound), public, deferred :: get_boundary
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -581,10 +595,10 @@ module abstract_fields_mod
       integer, intent(in) :: rhs
       class(scalar_field), allocatable :: sf_i !! The result of this operation
     end function sf_i
-  
+
     pure function sf_elem(this,element)
       !! Returns an element of the field corresponding to the provided ID 
-      !! number
+      !! number.
       import :: scalar_field
       import :: r8
       class(scalar_field), intent(in) :: this
@@ -699,7 +713,7 @@ module abstract_fields_mod
     
     pure function vf_elem_vec(this,element)
       !! Returns a vector of the field corresponding to the provided ID 
-      !! number
+      !! number.
       import :: vector_field
       import :: r8
       class(vector_field), intent(in) :: this
@@ -711,7 +725,7 @@ module abstract_fields_mod
     
     pure function vf_elem_comp(this,element,component)
       !! Returns a component of the vector of the field corresponding to 
-      !! the provided ID number
+      !! the provided ID number.
       import :: vector_field
       import :: r8
       class(vector_field), intent(in) :: this
@@ -719,12 +733,12 @@ module abstract_fields_mod
         !! The ID number of the field element to be returned
       integer, intent(in) :: component
         !! The number of the vector component to be returned
-      real(r8), allocatable, dimension(:) :: vf_elem_comp
+      real(r8) :: vf_elem_comp
         !! The vector component in the field corresponding to the 
         !! specified ID
     end function vf_elem_comp
 
-    pure subroutine vf_set_elem(this,element,val)
+    pure subroutine vf_set_elem_vec(this,element,val)
       !! Sets the element of the field corresponding to the given ID to
       !! the given vector value.
       import :: vector_field
@@ -734,7 +748,21 @@ module abstract_fields_mod
         !! The ID number of the field element to be set
       real(r8), dimension(:), intent(in) :: val
         !! The new vector value the field element is to be set to
-    end subroutine vf_set_elem
+    end subroutine vf_set_elem_vec
+
+    pure subroutine vf_set_elem_comp(this,element,component,val)
+      !! Sets the element of the field corresponding to the given ID to
+      !! the given vector value.
+      import :: vector_field
+      import :: r8
+      class(vector_field), intent(inout) :: this
+      integer, intent(in) :: element
+        !! The ID number of the field element to be set
+      integer, intent(in) :: component
+        !! The number of the vector component to be returned
+      real(r8), intent(in) :: val
+        !! The new value of the vector component in the field element
+    end subroutine vf_set_elem_comp
 
     pure function vf_ret_sf(this)
       !! \([{\rm operator}] {\rm field}\)

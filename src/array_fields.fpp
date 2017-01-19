@@ -162,6 +162,12 @@ module array_fields_mod
     procedure(sf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of the scalar field using a 1-D array of
       !! data passed to it.
+    procedure, public :: get_element => array_scalar_get_element
+      !! Returns one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location.
+    procedure, public :: set_element => array_scalar_set_element
+      !! Sets one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location.
     procedure, public :: get_boundary => array_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -396,6 +402,20 @@ module array_fields_mod
     procedure(vf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of particular vector component of the
       !! field, using a 1-D array of data passed to it.
+    procedure :: get_element_vector => array_vector_get_element_vec
+      !! Returns ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location.
+    procedure :: get_element_component => array_vector_get_element_comp
+      !! Returns one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location.
+    procedure :: set_element_vector => array_vector_set_element_vec
+      !! Sets ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location.
+    procedure :: set_element_component => array_vector_set_element_comp
+      !! Sets one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location.
     procedure, public :: get_boundary => array_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -1362,6 +1382,36 @@ contains
       error stop (err_message//'    incompatible types.')
     end select
   end subroutine array_scalar_compatible
+
+  pure function array_scalar_get_element(this,element) result(val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Returns an element of the field corresponding to the provided ID 
+    ! number.
+    !
+    class(array_scalar_field), intent(in) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be returned
+    real(r8) :: val
+      !! The value of the field corresponding to the specified ID
+    val = this%field_data(element)
+  end function array_scalar_get_element
+
+  pure subroutine array_scalar_set_element(this,element,val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Sets the element of the field corresponding to the given ID to
+    ! the given value.
+    !
+    class(array_scalar_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    real(r8), intent(in) :: val
+      !! The new value the field element is to be set to
+    this%field_data(element) = val
+  end subroutine array_scalar_set_element
 
   pure function array_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
@@ -2565,6 +2615,71 @@ contains
       error stop (err_message//'    incompatible types.')
     end select
   end subroutine array_vector_compatible
+
+  pure function array_vector_get_element_vec(this,element) result(val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Returns a vector of the field corresponding to the provided ID 
+    ! number.
+    !
+    class(array_vector_field), intent(in) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be returned
+    real(r8), allocatable, dimension(:) :: val
+      !! The vector in the field corresponding to the specified ID
+    val = this%field_data(element,:)
+  end function array_vector_get_element_vec
+  
+  pure function array_vector_get_element_comp(this,element,component) result(val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Returns a component of the vector of the field corresponding to 
+    ! the provided ID number.
+    !
+    class(array_vector_field), intent(in) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be returned
+    integer, intent(in) :: component
+      !! The number of the vector component to be returned
+    real(r8) :: val
+      !! The vector component in the field corresponding to the 
+      !! specified ID
+    val = this%field_data(element,component)
+  end function array_vector_get_element_comp
+
+  pure subroutine array_vector_set_element_vec(this,element,val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Sets the element of the field corresponding to the given ID to
+    ! the given vector value.
+    !
+    class(array_vector_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    real(r8), dimension(:), intent(in) :: val
+      !! The new vector value the field element is to be set to
+    this%field_data(element,:) = val
+  end subroutine array_vector_set_element_vec
+
+  pure subroutine array_vector_set_element_comp(this,element,component,val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Sets the element of the field corresponding to the given ID to
+    ! the given vector value.
+    !
+    class(array_vector_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    integer, intent(in) :: component
+      !! The number of the vector component to be returned
+    real(r8), intent(in) :: val
+      !! The new value of the vector component in the field element
+    this%field_data(element,component) = val
+  end subroutine array_vector_set_element_comp
 
   pure function array_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin

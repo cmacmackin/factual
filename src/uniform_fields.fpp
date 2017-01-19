@@ -167,6 +167,12 @@ module uniform_fields_mod
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
+    procedure, public :: get_element => uniform_scalar_get_element
+      !! Returns one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location.
+    procedure, public :: set_element => uniform_scalar_set_element
+      !! Sets one of the constituent values of the field, i.e. the 
+      !! field's value at a particular location.
     procedure, public :: get_boundary => uniform_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -181,7 +187,7 @@ module uniform_fields_mod
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
-     ! An abstract data type representing a mathematical field of
+    ! An abstract data type representing a mathematical field of
     ! vector values, in which the field is uniform across all of
     ! space. This allows for reduced memory usage and avoiding having
     ! to apply a differentiation algorithm, compared to using another
@@ -291,6 +297,20 @@ module uniform_fields_mod
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
+    procedure :: get_element_vector => uniform_vector_get_element_vec
+      !! Returns ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location.
+    procedure :: get_element_component => uniform_vector_get_element_comp
+      !! Returns one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location.
+    procedure :: set_element_vector => uniform_vector_set_element_vec
+      !! Sets ones of the constituent vectors of the field, i.e. the 
+      !! field's value at a particular location.
+    procedure :: set_element_component => uniform_vector_set_element_comp
+      !! Sets one of the components of a constituent vector of the 
+      !! field, i.e. the component of the field's value at a particular 
+      !! location.
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -1002,6 +1022,38 @@ contains
     local%vector_dims = grid_spacing_size
     local%field_data = huge(local%field_data)
   end function uniform_scalar_grid_spacing
+
+  pure function uniform_scalar_get_element(this,element) result(val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Returns an element of the field corresponding to the provided ID
+    ! number. For a uniform field, this will always be the same
+    ! regardless of the ID number.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be returned
+    real(r8) :: val
+      !! The value of the field corresponding to the specified ID
+    val = this%field_data
+  end function uniform_scalar_get_element
+
+  pure subroutine uniform_scalar_set_element(this,element,val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Sets the element of the field corresponding to the given ID to
+    ! the given value. For a uniform field, this ammounts to setting
+    ! the field value everywhere.
+    !
+    class(uniform_scalar_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    real(r8), intent(in) :: val
+      !! The new value the field element is to be set to
+    this%field_data = val
+  end subroutine uniform_scalar_set_element
   
   pure function uniform_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
@@ -1846,6 +1898,75 @@ contains
     local%vector_dims = grid_spacing_size
     local%field_data = huge(local%field_data)
   end function uniform_vector_grid_spacing
+
+  pure function uniform_vector_get_element_vec(this,element) result(val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Returns a vector of the field corresponding to the provided ID
+    ! number. For a uniform field, this will always be the same
+    ! regardless of the ID number.
+    !
+    class(uniform_vector_field), intent(in) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be returned
+    real(r8), allocatable, dimension(:) :: val
+      !! The vector in the field corresponding to the specified ID
+    val = this%field_data
+  end function uniform_vector_get_element_vec
+  
+  pure function uniform_vector_get_element_comp(this,element,component) result(val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Returns a component of the vector of the field corresponding to
+    ! the provided ID number. For a uniform field, this will always be
+    ! the same regardless of the ID number.
+    !
+    class(uniform_vector_field), intent(in) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be returned
+    integer, intent(in) :: component
+      !! The number of the vector component to be returned
+    real(r8) :: val
+      !! The vector component in the field corresponding to the 
+      !! specified ID
+    val = this%field_data(component)
+  end function uniform_vector_get_element_comp
+
+  pure subroutine uniform_vector_set_element_vec(this,element,val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Sets the element of the field corresponding to the given ID to
+    ! the given vector value. For a uniform field, this ammounts to
+    ! setting the value everywhere.
+    !
+    class(uniform_vector_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    real(r8), dimension(:), intent(in) :: val
+      !! The new vector value the field element is to be set to
+    this%field_data(:) = val
+  end subroutine uniform_vector_set_element_vec
+
+  pure subroutine uniform_vector_set_element_comp(this,element,component,val)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Sets the element of the field corresponding to the given ID to
+    ! the given vector value. For a uniform field, this ammounts to
+    ! setting the component everywhere.
+    !
+    class(uniform_vector_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    integer, intent(in) :: component
+      !! The number of the vector component to be returned
+    real(r8), intent(in) :: val
+      !! The new value of the vector component in the field element
+    this%field_data(component) = val
+  end subroutine uniform_vector_set_element_comp
 
   pure function uniform_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin

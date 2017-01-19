@@ -84,7 +84,7 @@ OBJS := $(shell find $(SDIR) -iregex $(EXT_PATTERN_GREP) | sed -r $(EXT_PATTERN_
 OBJS += $(shell find $(SDIR) -iregex $(FPP_PATTERN_GREP) | sed -r $(FPP_PATTERN_SED))
 TOBJS := $(patsubst %.pf,%.o,$(wildcard $(TDIR)/*.pf))
 
-.PRECIOUS: %.F90
+#.PRECIOUS: %.F90
 
 # "make" builds all
 all: all_objects tests
