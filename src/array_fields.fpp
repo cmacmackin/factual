@@ -175,6 +175,11 @@ module array_fields_mod
       !! Performs whatever operations are needed on the subtype to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, public :: finalize => array_scalar_finalize
+      !! Deallocates the contents of the field. This procedure is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type array_scalar_field
 
   interface array_scalar_field
@@ -423,6 +428,11 @@ module array_fields_mod
       !! Performs whatever operations are needed by the subtype to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, public :: finalize => array_vector_finalize
+      !! Deallocates the contents of the field. This procedure is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type array_vector_field
 
   interface array_vector_field
@@ -1449,6 +1459,16 @@ contains
     local%numpoints = size(local%field_data)
     call move_alloc(local, res)
   end function array_scalar_get_bound
+
+  pure subroutine array_scalar_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    class(array_scalar_field), intent(inout) :: this
+    deallocate(this%field_data)
+  end subroutine array_scalar_finalize
 
 
   !=====================================================================
@@ -2722,5 +2742,15 @@ contains
     end do
     call move_alloc(local, res)
   end function array_vector_get_bound
+
+  pure subroutine array_vector_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    class(array_vector_field), intent(inout) :: this
+    deallocate(this%field_data)
+  end subroutine array_vector_finalize
 
 end module array_fields_mod
