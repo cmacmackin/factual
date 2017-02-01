@@ -314,6 +314,11 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    final :: uniform_vector_finalize
+      !! Deallocates all field contents for this object. It is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type uniform_vector_field
 
   interface uniform_vector_field
@@ -1993,5 +1998,15 @@ contains
       !! adjecent to the specified boundary.
     allocate(res, source=this)
   end function uniform_vector_get_bound
+
+  elemental subroutine uniform_vector_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    type(uniform_vector_field), intent(inout) :: this
+    if (allocated(this%field_data)) deallocate(this%field_data)
+  end subroutine uniform_vector_finalize
 
 end module uniform_fields_mod

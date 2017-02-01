@@ -179,6 +179,11 @@ module array_fields_mod
     procedure, non_overridable :: is_allocated => array_scalar_is_allocated
       !! Indicates whether both the array pointer _and_ the array it
       !! contains are allocated.
+    procedure, public :: finalize => array_scalar_finalize
+      !! Deallocates the contents of the field. This procedure is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type array_scalar_field
 
   interface array_scalar_field
@@ -430,6 +435,11 @@ module array_fields_mod
     procedure, non_overridable :: is_allocated => array_vector_is_allocated
       !! Indicates whether both the array pointer _and_ the array it
       !! contains are allocated.
+    procedure, public :: finalize => array_vector_finalize
+      !! Deallocates the contents of the field. This procedure is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type array_vector_field
 
   interface array_vector_field
@@ -1466,6 +1476,16 @@ contains
     local%numpoints = size(local%field_data%array)
     call move_alloc(local, res)
   end function array_scalar_get_bound
+
+  pure subroutine array_scalar_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    class(array_scalar_field), intent(inout) :: this
+    deallocate(this%field_data)
+  end subroutine array_scalar_finalize
 
   pure function array_scalar_is_allocated(this) result(res)
     !* Author: Chris MacMackin
@@ -2766,6 +2786,16 @@ contains
     res = allocated(this%field_data)
     if (res) res = allocated(this%field_data%array)
   end function array_vector_is_allocated
+
+  pure subroutine array_vector_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    class(array_vector_field), intent(inout) :: this
+    deallocate(this%field_data)
+  end subroutine array_vector_finalize
 
 
 end module array_fields_mod

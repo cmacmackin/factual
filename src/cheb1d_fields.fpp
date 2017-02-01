@@ -119,6 +119,11 @@ $:public_unary()
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
+    final :: cheb1d_scalar_finalize
+      !! Deallocates all field contents for this object. It is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -181,6 +186,11 @@ $:public_unary()
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
+    final :: cheb1d_vector_finalize
+      !! Deallocates all field contents for this object. It is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type cheb1d_vector_field
   
   interface cheb1d_vector_field
@@ -557,6 +567,19 @@ contains
     allocate(grid, source=array_vector_field(local, &
                           grid_to_spacing(this%colloc_points)))
   end function cheb1d_scalar_grid_spacing
+
+  elemental subroutine cheb1d_scalar_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    type(cheb1d_scalar_field), intent(inout) :: this
+    if (allocated(this%colloc_points)) then
+      call this%finalize()
+      deallocate(this%colloc_points)
+    end if
+  end subroutine cheb1d_scalar_finalize
 
 
   !=====================================================================
@@ -937,5 +960,18 @@ contains
     allocate(grid, source=array_vector_field(this, &
                           grid_to_spacing(this%colloc_points)))
   end function cheb1d_vector_grid_spacing
+
+  elemental subroutine cheb1d_vector_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    type(cheb1d_vector_field), intent(inout) :: this
+    if (allocated(this%colloc_points)) then
+      call this%finalize()
+      deallocate(this%colloc_points)
+    end if
+  end subroutine cheb1d_vector_finalize
 
 end module cheb1d_fields_mod
