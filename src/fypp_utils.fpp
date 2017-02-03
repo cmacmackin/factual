@@ -15,12 +15,15 @@
     class(${field_name}$_field), intent(in) :: this
     class(scalar_field), allocatable :: res !! The result of this operation
     class(${field_name}$_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = ${func}$(this%field_data)
+    if (associated(this%field_data)) then
+      local%field_data%array = ${func}$(this%field_data%array)
     end if
     call move_alloc(local, res)
+    call res%set_temp()
+    call this%clean_temp()
   end function ${field_name}$_${func}$
 #:enddef
 

@@ -176,6 +176,10 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure :: force_finalise => uniform_scalar_force_finalise
+      !! Frees the data array for this field, in order to reduce the
+      !! volume of any memory leaks. In this case, there are no large
+      !! arrays so nothing happens.
   end type uniform_scalar_field
 
   interface uniform_scalar_field
@@ -314,6 +318,10 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure :: force_finalise => uniform_vector_force_finalise
+      !! Frees the data array for this field, in order to reduce the
+      !! volume of any memory leaks. In this case, there are no large
+      !! arrays so nothing happens.
     final :: uniform_vector_finalize
       !! Deallocates all field contents for this object. It is a
       !! workaround for the fact that `gfortran` fails to deallocate
@@ -1085,6 +1093,16 @@ contains
       !! adjecent to the specified boundary.
     allocate(res, source=this)
   end function uniform_scalar_get_bound
+
+  pure subroutine uniform_scalar_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object. For a uniform field,
+    ! there is no array of any significant size, so nothing happens.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+  end subroutine uniform_scalar_force_finalise
 
 
   !=====================================================================
@@ -1998,6 +2016,16 @@ contains
       !! adjecent to the specified boundary.
     allocate(res, source=this)
   end function uniform_vector_get_bound
+
+  pure subroutine uniform_vector_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object. For a uniform field,
+    ! there is no array of any significant size, so nothing happens.
+    !
+    class(uniform_vector_field), intent(in) :: this
+  end subroutine uniform_vector_force_finalise
 
   elemental subroutine uniform_vector_finalize(this)
     !* Author: Chris MacMackin

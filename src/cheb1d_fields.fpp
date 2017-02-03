@@ -119,11 +119,16 @@ $:public_unary()
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
-    final :: cheb1d_scalar_finalize
-      !! Deallocates all field contents for this object. It is a
-      !! workaround for the fact that `gfortran` fails to deallocate
-      !! polymorphic allocatable function results. While some memory
-      !! will still be leaked, this will minimize the ammount.
+    procedure :: force_finalise => cheb1d_scalar_force_finalise
+      !! Frees the data array for this field, in order to reduce the
+      !! volume of any memory leaks.
+    final :: cheb1d_scalar_finalise
+      !! Deallocates the contents of the field. The bulk of the
+      !! field's memory should be deallocated with the `clean_temp`
+      !! method, but that is unable to deallocate the pointer to the
+      !! data array--only the array itself. In compilers which support
+      !! finalisation, this method eliminates the small memory leak
+      !! from the pointer..
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -186,11 +191,16 @@ $:public_unary()
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
-    final :: cheb1d_vector_finalize
-      !! Deallocates all field contents for this object. It is a
-      !! workaround for the fact that `gfortran` fails to deallocate
-      !! polymorphic allocatable function results. While some memory
-      !! will still be leaked, this will minimize the ammount.
+    procedure :: force_finalise => cheb1d_vector_force_finalise
+      !! Frees the data array for this field, in order to reduce the
+      !! volume of any memory leaks.
+    final :: cheb1d_vector_finalise
+      !! Deallocates the contents of the field. The bulk of the
+      !! field's memory should be deallocated with the `clean_temp`
+      !! method, but that is unable to deallocate the pointer to the
+      !! data array--only the array itself. In compilers which support
+      !! finalisation, this method eliminates the small memory leak
+      !! from the pointer..
   end type cheb1d_vector_field
   
   interface cheb1d_vector_field
@@ -230,6 +240,7 @@ contains
     end if
     field%colloc_points = collocation_points(numpoints-1,lower_bound,upper_bound)
     field = array_scalar_field(field,numpoints,initializer)
+    call field%set_temp()
   end function scalar_constructor
 
   pure function cheb1d_scalar_domain(this) result(res)
@@ -244,8 +255,10 @@ contains
       !  dimensions of the field. Each row contains the lower and the
       !  upper extent of the fields domain in the corresponding 
       !  dimension
+    call this%guard_temp()
     allocate(res(1,2))
     res(1,:) = this%extent
+    call this%clean_temp()
   end function cheb1d_scalar_domain
 
   elemental function cheb1d_scalar_dimensions(this) result(res)
@@ -256,7 +269,9 @@ contains
     !
     class(cheb1d_scalar_field), intent(in) :: this
     integer :: res
+    call this%guard_temp()
     res = 1
+    call this%clean_temp()
   end function cheb1d_scalar_dimensions
 
   pure function cheb1d_scalar_resolution(this) result(res)
@@ -269,8 +284,10 @@ contains
     class(cheb1d_scalar_field), intent(in) :: this
     integer, dimension(:), allocatable :: res
       !! Array of length 1 specifying the number of data points.
+    call this%guard_temp()
     allocate(res(1))
     res(1) = this%elements()
+    call this%clean_temp()
   end function cheb1d_scalar_resolution
 
   pure function cheb1d_scalar_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
@@ -297,6 +314,7 @@ contains
       !! slices(2,i) = end_index
       !! slices(3,i) = stride
       !! ```
+    call this%guard_temp()
     allocate(slices(3,1))
     ! Remember that Chebyshev collocation nodes end up in reverse order
     if (present(exclude_upper_bound)) then
@@ -310,6 +328,7 @@ contains
       slices(2,1) = this%elements()
     end if
     slices(3,1) = 1
+    call this%clean_temp()
   end function cheb1d_scalar_raw_slices
 
   pure function cheb1d_scalar_id_to_position(this, id) result(pos)
@@ -325,12 +344,14 @@ contains
       !! The ID number for some location in the field
     real(r8), dimension(:), allocatable    :: pos
       !! The coordinates for this location in the field
+    call this%guard_temp()
     allocate(pos(1))
     if (id <= this%elements()) then
       pos(1) = this%colloc_points(id)
     else
       error stop ('cheb1d_scalar_field: Invalid ID number provided.')
     end if
+    call this%clean_temp()
   end function cheb1d_scalar_id_to_position
 
   function cheb1d_scalar_array_dx(this, data_array, dir, order) result(res)
@@ -350,6 +371,7 @@ contains
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
     integer :: i
+    call this%guard_temp()
     if (dir==1) then
 #:if defined('DEBUG')
       if (.not. this%differentiable) &
@@ -362,6 +384,7 @@ contains
       allocate(res(size(data_array)))
       res = 0.0_r8
     end if
+    call this%clean_temp()
   end function cheb1d_scalar_array_dx
 
   pure subroutine cheb1d_scalar_check_compatible(this,other)
@@ -377,6 +400,7 @@ contains
       !! The field being checked against this one
     character(len=70), parameter :: err_message = 'cheb1d_scalar_field: '//&
          'Error, operation with incompatible fields due to '
+    call this%guard_temp(); call other%guard_temp()
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
@@ -391,6 +415,7 @@ contains
     class default
       error stop (err_message//'incompatible types.')
     end select
+    call this%clean_temp(); call other%clean_temp()
   end subroutine cheb1d_scalar_check_compatible
 
   pure subroutine cheb1d_scalar_assign_meta(this, rhs)
@@ -403,6 +428,7 @@ contains
     class(cheb1d_scalar_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
       !! If present and false, do not allocate the array of `this`.
+    call this%guard_temp(); call rhs%guard_temp()
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
@@ -423,6 +449,7 @@ contains
         deallocate(this%colloc_points)
       end if
     end select
+    call this%clean_temp(); call rhs%guard_temp()
   end subroutine cheb1d_scalar_assign_meta
 
   pure subroutine cheb1d_scalar_allocate_scalar(this, new_field)
@@ -437,8 +464,10 @@ contains
     class(scalar_field), allocatable, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as scalar fields produced by `this`.
+    call this%guard_temp()
     if (allocated(new_field)) deallocate(new_field)
     allocate(cheb1d_scalar_field :: new_field)
+    call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_scalar
 
   pure subroutine cheb1d_scalar_allocate_vector(this, new_field)
@@ -453,8 +482,10 @@ contains
     class(vector_field), allocatable, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as vector fields produced by `this`.
+    call this%guard_temp()
     if (allocated(new_field)) deallocate(new_field)
     allocate(cheb1d_vector_field :: new_field)
+    call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_vector
 
   pure subroutine cheb1d_scalar_bound(this,src,boundary,depth,slices)
@@ -487,6 +518,7 @@ contains
       !! slices(3,i) = stride
       !! ```
     integer :: length
+    call this%guard_temp(); call src%guard_temp()
     select type(src)
     class is(cheb1d_scalar_field)
       length = size(src%colloc_points)
@@ -515,6 +547,7 @@ contains
       error stop ('Trying to compute boundary metadata for type other '// &
                  'than `cheb1d_scalar_field`.')
     end select
+    call this%clean_temp(); call src%clean_temp()
   end subroutine cheb1d_scalar_bound
 
   subroutine cheb1d_scalar_write_hdf(this, hdf_id, dataset_name, error)
@@ -537,6 +570,7 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    call this%guard_temp()
     error = 0
     call this%write_hdf_array(hdf_id, dataset_name, [this%elements()], error)
     if (error /= 0) return
@@ -549,6 +583,7 @@ contains
     call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
                                     this%colloc_points, int(this%elements(),size_t), &
                                     error)
+    call this%clean_temp()
   end subroutine cheb1d_scalar_write_hdf
 
   pure function cheb1d_scalar_grid_spacing(this) result(grid)
@@ -563,23 +598,36 @@ contains
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
     type(cheb1d_vector_field) :: local
+    call this%guard_temp()
     call local%assign_subtype_meta_data(this)
     allocate(grid, source=array_vector_field(local, &
                           grid_to_spacing(this%colloc_points)))
+    call grid%set_temp()
+    call this%clean_temp()
   end function cheb1d_scalar_grid_spacing
 
-  elemental subroutine cheb1d_scalar_finalize(this)
+  pure subroutine cheb1d_scalar_force_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
     ! Deallocates the field data for this object.
     !
+    class(cheb1d_scalar_field), intent(in) :: this
+    call this%force_finalise_array()
+  end subroutine cheb1d_scalar_force_finalise
+
+  elemental subroutine cheb1d_scalar_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the pointer to the field data for this object.
+    !
     type(cheb1d_scalar_field), intent(inout) :: this
     if (allocated(this%colloc_points)) then
-      call this%finalize()
+      call this%finalise()
       deallocate(this%colloc_points)
     end if
-  end subroutine cheb1d_scalar_finalize
+  end subroutine cheb1d_scalar_finalise
 
 
   !=====================================================================
@@ -626,6 +674,7 @@ contains
     end if
     field%colloc_points = collocation_points(numpoints-1,lower_bound,upper_bound)
     field = array_vector_field(field,numpoints,dims,initializer)
+    call field%set_temp()
   end function vector_constructor
 
   pure function cheb1d_vector_domain(this) result(res)
@@ -640,8 +689,10 @@ contains
       !  dimensions of the field. Each row contains the lower and the
       !  upper extent of the fields domain in the corresponding 
       !  dimension
+    call this%guard_temp()
     allocate(res(1,2))
     res(1,:) = this%extent
+    call this%clean_temp()
   end function cheb1d_vector_domain
 
   elemental function cheb1d_vector_dimensions(this) result(res)
@@ -652,7 +703,9 @@ contains
     !
     class(cheb1d_vector_field), intent(in) :: this
     integer :: res
+    call this%guard_temp()
     res = 1
+    call this%clean_temp()
   end function cheb1d_vector_dimensions
 
   pure function cheb1d_vector_resolution(this) result(res)
@@ -665,8 +718,10 @@ contains
     class(cheb1d_vector_field), intent(in) :: this
     integer, dimension(:), allocatable :: res
       !! Array of length 1 specifying the number of data points.
+    call this%guard_temp()
     allocate(res(1))
     res(1) = this%elements()
+    call this%clean_temp()
   end function cheb1d_vector_resolution
 
   pure function cheb1d_vector_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
@@ -693,6 +748,7 @@ contains
       !! slices(2,i) = end_index
       !! slices(3,i) = stride
       !! ```
+    call this%guard_temp()
     allocate(slices(3,1))
     ! Remember that Chebyshev collocation nodes end up in reverse order
     if (present(exclude_upper_bound)) then
@@ -706,6 +762,7 @@ contains
       slices(2,1) = this%elements()
     end if
     slices(3,1) = 1
+    call this%clean_temp()
   end function cheb1d_vector_raw_slices
   
   pure function cheb1d_vector_id_to_position(this, id) result(pos)
@@ -721,16 +778,18 @@ contains
     !! The ID number for some location in the field
     real(r8), dimension(:), allocatable    :: pos
     !! The coordinates for this location in the field
+    call this%guard_temp()
     allocate(pos(1))
     if (id <= this%elements()) then
       pos(1) = this%colloc_points(id)
     else
       error stop ('cheb1d_vector_field: Invalid ID number provided.')
     end if
+    call this%clean_temp()
   end function cheb1d_vector_id_to_position
 
   function cheb1d_vector_array_dx(this, data_array, dir, order) &
-                                                              result(res)
+                                                    result(res)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -746,6 +805,7 @@ contains
       !! Order of the derivative, default = 1
     real(r8), dimension(:), allocatable   :: res
       !! The spatial derivative of order `order` taken in direction `dir`
+    call this%guard_temp()
     if (dir==1) then
 #:if defined('DEBUG')
       if (.not. this%differentiable) &
@@ -758,6 +818,7 @@ contains
       allocate(res, mold=data_array)
       res = 0.0
     end if
+    call this%clean_temp()
   end function cheb1d_vector_array_dx
 
   pure subroutine cheb1d_vector_check_compatible(this,other)
@@ -773,6 +834,7 @@ contains
       !! The field being checked against this one
     character(len=70), parameter :: err_message = 'cheb1d_vector_field: '//&
          'Error, operation with incompatible fields due to '
+    call this%guard_temp(); call other%guard_temp()
     select type(other)
     class is(cheb1d_scalar_field)
       if (any(abs(this%extent - other%extent) > 1.e-15_r8)) &
@@ -787,6 +849,7 @@ contains
     class default
       error stop (err_message//'incompatible types.')
     end select
+    call this%clean_temp(); call other%clean_temp()
   end subroutine cheb1d_vector_check_compatible
 
   pure subroutine cheb1d_vector_assign_meta(this, rhs)
@@ -799,6 +862,7 @@ contains
     class(cheb1d_vector_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
       !! If present and false, do not allocate the array of `this`.
+    call this%guard_temp(); call rhs%guard_temp()
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
@@ -819,6 +883,7 @@ contains
         deallocate(this%colloc_points)
       end if
     end select
+    call this%clean_temp(); call rhs%guard_temp()
   end subroutine cheb1d_vector_assign_meta
 
   pure subroutine cheb1d_vector_allocate_scalar(this, new_field)
@@ -833,8 +898,10 @@ contains
     class(scalar_field), allocatable, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as scalar fields produced by `this`.
+    call this%guard_temp()
     if (allocated(new_field)) deallocate(new_field)
     allocate(cheb1d_scalar_field :: new_field)
+    call this%clean_temp()
   end subroutine cheb1d_vector_allocate_scalar
 
   pure subroutine cheb1d_vector_allocate_vector(this, new_field)
@@ -849,8 +916,10 @@ contains
     class(vector_field), allocatable, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as vector fields produced by `this`.
+    call this%guard_temp()
     if (allocated(new_field)) deallocate(new_field)
     allocate(cheb1d_vector_field :: new_field)
+    call this%clean_temp()
   end subroutine cheb1d_vector_allocate_vector
 
   pure subroutine cheb1d_vector_bound(this,src,boundary,depth,slices)
@@ -883,6 +952,7 @@ contains
       !! slices(3,i) = stride
       !! ```
     integer :: length
+    call this%guard_temp(); call src%guard_temp()
     select type(src)
     class is(cheb1d_vector_field)
       length = size(src%colloc_points)
@@ -910,6 +980,7 @@ contains
       error stop ('Trying to compute boundary metadata for type other '// &
                  'than `cheb1d_vector_field`.')
     end select
+    call this%clean_temp(); call src%clean_temp()
   end subroutine cheb1d_vector_bound
   
   subroutine cheb1d_vector_write_hdf(this, hdf_id, dataset_name, error)
@@ -932,6 +1003,7 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    call this%guard_temp()
     error = 0
     call this%write_hdf_array(hdf_id, dataset_name, [this%elements()], error)
     if (error /= 0) return
@@ -944,6 +1016,7 @@ contains
     call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
                                     this%colloc_points, int(this%elements(),size_t), &
                                     error)
+    call this%clean_temp()
   end subroutine cheb1d_vector_write_hdf
 
   pure function cheb1d_vector_grid_spacing(this) result(grid)
@@ -957,11 +1030,24 @@ contains
       !! A field where the values indicate the grid spacing that
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
+    call this%guard_temp()
     allocate(grid, source=array_vector_field(this, &
                           grid_to_spacing(this%colloc_points)))
+    call grid%set_temp()
+    call this%clean_temp()
   end function cheb1d_vector_grid_spacing
 
-  elemental subroutine cheb1d_vector_finalize(this)
+  pure subroutine cheb1d_vector_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    class(cheb1d_vector_field), intent(in) :: this
+    call this%force_finalise_array()
+  end subroutine cheb1d_vector_force_finalise
+
+  elemental subroutine cheb1d_vector_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -969,9 +1055,9 @@ contains
     !
     type(cheb1d_vector_field), intent(inout) :: this
     if (allocated(this%colloc_points)) then
-      call this%finalize()
+      call this%finalise()
       deallocate(this%colloc_points)
     end if
-  end subroutine cheb1d_vector_finalize
+  end subroutine cheb1d_vector_finalise
 
 end module cheb1d_fields_mod

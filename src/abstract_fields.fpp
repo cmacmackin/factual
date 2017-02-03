@@ -73,6 +73,8 @@ module abstract_fields_mod
     ! Damian and Xia, Jim and Xu, Xiaofeng, 2011, ISBN 9780521888134, 
     ! Cambridge University Press, New York, NY, USA.
     !
+    private
+    integer, pointer :: temporary => null()
   contains
     procedure :: elements
       !! Specifies the number of individual data points present in this field.
@@ -112,6 +114,18 @@ module abstract_fields_mod
       !! in the grid of the field at each point, in each
       !! direction. This can be useful, e.g., when calculating time
       !! steps for integration.
+    procedure :: set_temp
+      !! Specifies that this field is temporary.
+    procedure :: unset_temp
+      !! Specifies that this field is not temporary and deallocates an
+      !! integer pointer.
+    procedure :: guard_temp
+      !! Increments depth count for temporary arguments.
+    procedure :: clean_temp
+      !! Decremenets depth count for temporary arguments, freeing
+      !! memory if depth reaches 1.
+    procedure(finalise), deferred, private :: force_finalise
+      !! Frees dynamic memory in the field.
   end type abstract_field
   
   type, extends(abstract_field), abstract, public :: scalar_field
@@ -341,6 +355,11 @@ module abstract_fields_mod
 
 
   abstract interface
+    pure subroutine finalise(this)
+      import :: abstract_field
+      class(abstract_field), intent(in) :: this
+    end subroutine finalise
+
     pure function f_ret_r(this)
       import :: abstract_field
       import :: r8
@@ -959,8 +978,76 @@ contains
     !
     class(abstract_field), intent(in) :: this
     integer :: elements
+    call this%guard_temp()
     elements = product(this%resolution())
+    call this%clean_temp()
   end function elements
+
+  pure subroutine set_temp(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Specifies that a field object is temporary and should have its
+    ! memory freed at the end of use.
+    !
+    class(abstract_field), intent(inout) :: this
+    if (.not. associated(this%temporary)) allocate(this%temporary)
+    this%temporary = 1
+  end subroutine set_temp
+
+  pure subroutine unset_temp(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Specifies that a field object is not temporary and deallocates
+    ! the integer pointer which indicated that the field was
+    ! temporary.
+    !
+    class(abstract_field), intent(inout) :: this
+    if (associated(this%temporary)) deallocate(this%temporary)
+  end subroutine unset_temp
+
+  pure subroutine guard_temp(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Increases the depth count for the field object. This is used to
+    ! let the memory-management system know when to free the field's
+    ! memory.
+    !
+    class(abstract_field), intent(in) :: this
+    if (associated(this%temporary)) this%temporary = this%temporary + 1
+  end subroutine guard_temp
+
+  pure subroutine clean_temp(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Decreases the depth count for the field object. This is used to
+    ! let the memory-management system know when to free the field's
+    ! memory. If the depth count reaches one then the
+    ! [[force_finalise]] method is called.
+    !
+    ! In order to make it possible to call this procedure from
+    ! type-bound operators, the field must have `intent_in`. As such,
+    ! it is not possible to deallocate the `temporary` component. This
+    ! will result in a small memory leak unless the component is
+    ! deallocated in a finalisation routine. However, the leak is much
+    ! smaller in volume than if the memory-management system is not
+    ! implemented and the compiler fails to automatically deallocate
+    ! the field.
+    !
+    class(abstract_field), intent(in) :: this
+    if (associated(this%temporary)) then
+      if (this%temporary > 1) this%temporary = this%temporary - 1
+      if (this%temporary == 1) call this%force_finalise()
+#:if defined('DEBUG')
+      if (this%temporary < 1) then
+        error stop ('Depth count for temprorary field has been corrupted.')
+      end if
+#:endif
+    end if
+  end subroutine clean_temp
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
   pure function scalar_field_${FUNC}$(field) result(res)
