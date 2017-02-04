@@ -1016,6 +1016,8 @@ contains
     ! memory.
     !
     class(abstract_field), intent(in) :: this
+    if (associated(this%temporary)) print*,'Guarding...',this%temporary
+    !if (associated(this%temporary)) call backtrace()
     if (associated(this%temporary)) this%temporary = this%temporary + 1
   end subroutine guard_temp
 
@@ -1039,13 +1041,9 @@ contains
     !
     class(abstract_field), intent(in) :: this
     if (associated(this%temporary)) then
+      if (this%temporary > 1) print*,'Cleaning!!!',this%temporary
       if (this%temporary > 1) this%temporary = this%temporary - 1
       if (this%temporary == 1) call this%force_finalise()
-#:if defined('DEBUG')
-      if (this%temporary < 1) then
-        error stop ('Depth count for temprorary field has been corrupted.')
-      end if
-#:endif
     end if
   end subroutine clean_temp
 
@@ -1061,6 +1059,7 @@ contains
     class(scalar_field), allocatable :: tmp
     allocate(res, mold=field)
     res = field%${FUNC}$()
+    call res%set_temp()
   end function scalar_field_${FUNC}$
   
 #:endfor
@@ -1097,6 +1096,7 @@ contains
     class(scalar_field), allocatable :: res
     allocate(res,mold=field)
     res = 0.0_r8 - field
+    call res%set_temp()
   end function scalar_field_negation
 
   function vector_field_negation(field) result(res)
@@ -1109,6 +1109,7 @@ contains
     class(vector_field), allocatable :: res
     allocate(res,mold=field)
     res = [0.0_r8] - field
+    call res%set_temp()
   end function vector_field_negation
   
   subroutine set_tol(tol)

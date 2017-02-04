@@ -449,7 +449,7 @@ contains
         deallocate(this%colloc_points)
       end if
     end select
-    call this%clean_temp(); call rhs%guard_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end subroutine cheb1d_scalar_assign_meta
 
   pure subroutine cheb1d_scalar_allocate_scalar(this, new_field)
@@ -883,7 +883,7 @@ contains
         deallocate(this%colloc_points)
       end if
     end select
-    call this%clean_temp(); call rhs%guard_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end subroutine cheb1d_vector_assign_meta
 
   pure subroutine cheb1d_vector_allocate_scalar(this, new_field)
