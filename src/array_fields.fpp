@@ -1384,9 +1384,10 @@ contains
       do i=1,this%numpoints
         normalization = abs(this%field_data%array(i))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = iseq .and.( ((this%field_data%array(i)-rhs%field_data%array(i))/normalization < &
-                             get_tol()) .or. (is_nan(this%field_data%array(i)).and. &
-                                              is_nan(rhs%field_data%array(i))) )
+        iseq = iseq .and.( ((this%field_data%array(i)-rhs%field_data%array(i)) &
+                            /normalization < get_tol()) .or. &
+                           (is_nan(this%field_data%array(i)).and. &
+                            is_nan(rhs%field_data%array(i))) )
         if (.not. iseq) return
       end do
     class is(uniform_scalar_field)
@@ -2268,6 +2269,8 @@ contains
         error stop ('Trying to assign `uniform_vector_field` to '// &
                    '`array_vector_field` with unallocated contents.')
       end if
+    class default
+      error stop ('Incompatible field assignment.')
     end select
     call rhs%clean_temp()
   end subroutine array_vector_assign
@@ -2336,6 +2339,7 @@ contains
     integer :: i
     call this%guard_temp()
     allocate(local, mold=this)
+    allocate(local%field_data)
     allocate(local%field_data%array, mold=this%field_data%array)
     call local%assign_meta_data(this)
     do i = 1, this%vector_dims
@@ -2810,6 +2814,7 @@ contains
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = this%dimensions()
+      if (.not. associated(this%field_data)) allocate(this%field_data)
       if (allocated(this%field_data%array)) then
         if (.not. allocated(rhs%field_data%array)) then
           deallocate(this%field_data%array)
@@ -2823,16 +2828,19 @@ contains
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = rhs%vector_dims
+      if (.not. associated(this%field_data)) allocate(this%field_data)
       if (allocated(this%field_data%array)) then
         if (.not. allocated(rhs%field_data%array)) then
           deallocate(this%field_data%array)
-        else if (al .and. size(this%field_data%array,1)/=size(rhs%field_data%array,1) &
-                 .and. size(this%field_data%array,2)/=size(rhs%field_data%array,2)) then
+        else if (al .and. &
+                 any(shape(this%field_data%array) /= shape(rhs%field_data%array))) then
           deallocate(this%field_data%array)
-          allocate(this%field_data%array(size(rhs%field_data%array,1),size(rhs%field_data%array,2)))
+          allocate(this%field_data%array(size(rhs%field_data%array,1), &
+                                         size(rhs%field_data%array,2)))
         end if
       else if (allocated(rhs%field_data%array) .and. al) then
-        allocate(this%field_data%array(size(rhs%field_data%array,1),size(rhs%field_data%array,2)))
+        allocate(this%field_data%array(size(rhs%field_data%array,1), &
+                                       size(rhs%field_data%array,2)))
       end if
     end select
     call this%clean_temp(); call rhs%clean_temp()
