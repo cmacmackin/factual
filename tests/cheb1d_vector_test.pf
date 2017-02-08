@@ -24,6 +24,7 @@
 module cheb1d_vector_test
   use iso_fortran_env, only: r8 => real64
   use pfunit_mod
+  use array_pointer_mod, only: array_1d
   use abstract_fields_mod, only: scalar_field, vector_field
   use chebyshev_mod
   use cheb1d_fields_mod
@@ -158,11 +159,13 @@ contains
 @Test
   subroutine test_raw(this)
     class(test_field), intent(inout) :: this
+    type(array_1d) :: xvals_array    
     real(r8), allocatable, dimension(:,:) :: raw, expected
     real(r8), dimension(this%nodes) :: xvals
     integer :: i, comps
     comps = this%extra_dims1 + 1
-    xvals = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    xvals_array = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    xvals = xvals_array%array
     allocate(expected(this%nodes,comps))
     forall (i = 1:this%nodes) expected(i,:) = f1([xvals(i)])
     raw = reshape(this%field1%raw(),[this%nodes,comps])
@@ -190,10 +193,12 @@ contains
 @Test
   subroutine test_assign_raw(this)
     class(test_field), intent(inout) :: this
+    type(array_1d) :: xvals_array
     real(r8), dimension(this%nodes,this%extra_dims2+1) :: raw
     real(r8), dimension(this%nodes) :: xvals
     integer :: i
-    xvals = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    xvals_array = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    xvals = xvals_array%array
     forall (i = 1:this%nodes) raw(i,:) = f2([xvals(i)])
     call this%field2%set_from_raw(pack(raw,.true.))
     @assertEqual(pack(raw,.true.),this%field2%raw(),message='Error setting field from raw.')
@@ -257,10 +262,12 @@ contains
 @Test
   subroutine test_id_to_position(this)
     class(test_field), intent(inout) :: this
+    type(array_1d) :: xvals_array
     real(r8), dimension(this%nodes)  :: xvals
     real(r8), dimension(:), allocatable :: actual
     integer :: i
-    xvals = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    xvals_array = collocation_points(this%nodes-1,this%lower1,this%upper1)
+    xvals = xvals_array%array
     do i = 1,this%nodes
       actual = this%field1%id_to_position(i)
       @assertEqual(xvals(i),actual(1),message='Wrong location returned for this ID')

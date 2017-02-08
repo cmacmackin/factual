@@ -1016,7 +1016,7 @@ contains
     ! memory.
     !
     class(abstract_field), intent(in) :: this
-    if (associated(this%temporary)) print*,'Guarding...',this%temporary
+    !if (associated(this%temporary)) print*,'Guarding...',this%temporary
     !if (associated(this%temporary)) call backtrace()
     if (associated(this%temporary)) this%temporary = this%temporary + 1
   end subroutine guard_temp
@@ -1041,7 +1041,7 @@ contains
     !
     class(abstract_field), intent(in) :: this
     if (associated(this%temporary)) then
-      if (this%temporary > 1) print*,'Cleaning!!!',this%temporary
+      !if (this%temporary > 1) print*,'Cleaning!!!',this%temporary
       if (this%temporary > 1) this%temporary = this%temporary - 1
       if (this%temporary == 1) call this%force_finalise()
     end if

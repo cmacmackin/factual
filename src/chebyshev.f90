@@ -31,13 +31,33 @@ module chebyshev_mod
   use iso_fortran_env, only: r8 => real64
   use iso_c_binding
   use fftw3_mod
+  use array_pointer_mod, only: array_1d
   implicit none
   private
   
   real(r8), parameter :: pi = 4.0_r8*atan(1.0_r8)
   
+  type :: cached_points
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! A type to form a singly-linked list storing collocation points
+    ! which have previously been calculated, as well as information on
+    ! the parameters used in the calculation.
+    !
+    private
+    type(array_1d), pointer      :: colloc_points => null()
+    integer                      :: nodes
+    real(r8)                     :: lower_bound, upper_bound
+    type(cached_points), pointer :: next => null()
+  end type cached_points
+
+  type(cached_points), pointer :: cache_list => null()
+    !! Contains pointers to sets of collocation points which have been
+    !! created by the [[collocation_points]] function.
+
   public :: collocation_points, differentiate_1d
-  
+
 contains
   
   function collocation_points(nodes,lower_bound,upper_bound)
@@ -54,17 +74,42 @@ contains
       !! The position of the start of the domain. Default is -1.0.
     real(r8), optional, intent(in) :: upper_bound
       !! The position of the end of the domain. Default is 1.0.
-    real(r8), dimension(nodes+1) :: collocation_points
+    type(array_1d), pointer :: collocation_points
     integer :: i
     real(r8) :: upper, lower, factor
+    type(cached_points), pointer :: list_location
     upper = 1.0_r8
     lower = -1.0_r8
     if (present(upper_bound)) upper = upper_bound
     if (present(lower_bound)) lower = lower_bound
+    ! Check if collocation points have been calculated for these parameters before.
+    list_location => cache_list
+    do while (associated(list_location))
+      !TODO: Convert this to relative difference check, rather than equality check.
+      if ((list_location%nodes == nodes) .and. &
+          (list_location%lower_bound == lower) .and. &
+          (list_location%upper_bound == upper)) then
+        collocation_points => list_location%colloc_points
+        return
+      else
+        list_location => list_location%next
+      end if
+    end do
+    ! If these collocation points have not already been calculated, do so now.
+    allocate(collocation_points)
+    allocate(collocation_points%array(nodes+1))
     factor = (upper - lower)/2.0_r8
-    collocation_points = cos([(real(i,r8), i=0,nodes)] * (pi/real(nodes,r8)))
-    collocation_points = factor*collocation_points
-    collocation_points = (lower + 1.0_r8*factor) + collocation_points
+    collocation_points%array = cos([(real(i,r8), i=0,nodes)] * (pi/real(nodes,r8)))
+    collocation_points%array = factor*collocation_points%array
+    collocation_points%array = (lower + 1.0_r8*factor) + collocation_points%array
+    ! Cache this set of collocation points
+    allocate(list_location)
+    list_location%colloc_points => collocation_points
+    list_location%nodes = nodes
+    list_location%lower_bound = lower
+    list_location%upper_bound = upper
+    list_location%next => cache_list
+    cache_list => list_location
   end function collocation_points
 
   subroutine differentiate_1d(field_data,xvals,order)
