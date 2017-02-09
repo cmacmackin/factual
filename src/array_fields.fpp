@@ -1349,8 +1349,15 @@ contains
     call rhs%guard_temp()
     select type(rhs)
     class is(array_scalar_field)
-      call this%assign_meta_data(rhs)
-      if (allocated(rhs%field_data%array)) this%field_data%array = rhs%field_data%array
+      call this%assign_meta_data(rhs, .not. rhs%memory_reusable())
+      if (allocated(rhs%field_data%array)) then
+        if (rhs%memory_reusable()) then
+          if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+          call move_alloc(rhs%field_data%array, this%field_data%array)
+        else
+          this%field_data%array = rhs%field_data%array
+        end if
+      end if
     class is(uniform_scalar_field)
       if (allocated(this%field_data%array)) then
         this%field_data%array = rhs%get_value()
@@ -2255,10 +2262,17 @@ contains
     integer :: i
     real(r8), dimension(:), allocatable :: tmp
     call rhs%guard_temp()
-    call this%assign_meta_data(rhs)
+    call this%assign_meta_data(rhs, .not. this%memory_reusable())
     select type(rhs)
     class is(array_vector_field)
-      if (allocated(rhs%field_data%array)) this%field_data%array = rhs%field_data%array
+      if (allocated(rhs%field_data%array)) then
+        if (rhs%memory_reusable()) then
+          if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+          call move_alloc(rhs%field_data%array, this%field_data%array)
+        else
+          this%field_data%array = rhs%field_data%array
+        end if
+      end if
     class is(uniform_vector_field)
       if (allocated(this%field_data%array)) then
         tmp = rhs%get_value()

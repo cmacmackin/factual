@@ -124,6 +124,9 @@ module abstract_fields_mod
     procedure :: clean_temp
       !! Decremenets depth count for temporary arguments, freeing
       !! memory if depth reaches 1.
+    procedure :: memory_reusable
+      !! Returns `.true.` if this field is temporary and at a depth in
+      !! the call-tree where it is safe to reuse its memory.
     procedure(finalise), deferred, private :: force_finalise
       !! Frees dynamic memory in the field.
   end type abstract_field
@@ -1046,6 +1049,23 @@ contains
       if (this%temporary == 1) call this%force_finalise()
     end if
   end subroutine clean_temp
+
+  pure logical function memory_reusable(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Indicates whether it is safe to reuse the memory allocated by
+    ! this field. This requires that the field is temporary and has
+    ! only been guarded once. Reusing memory saves
+    ! allocations/deallocations and, in some cases, copying of values.
+    !
+    class(abstract_field), intent(in) :: this
+    if (associated(this%temporary)) then
+      memory_reusable = (this%temporary <= 2)
+    else
+      memory_reusable = .false.
+    end if
+  end function memory_reusable
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
   pure function scalar_field_${FUNC}$(field) result(res)
