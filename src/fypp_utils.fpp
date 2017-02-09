@@ -6,7 +6,7 @@
   & ('exp','e^'), ('abs','\\abs'), ('sqrt','\sqrt')]
 
 #:def unary_func(func,tex,field_name)
-  pure function ${field_name}$_${func}$(this) result(res)
+  function ${field_name}$_${func}$(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !

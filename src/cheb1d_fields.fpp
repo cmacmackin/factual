@@ -20,13 +20,6 @@
 !  MA 02110-1301, USA.
 !  
 
-! Make procedures non-pure for debugging, so that messages can be
-! printed to the screen.
-#:if defined('DEBUG')
-#define pure 
-#define elemental 
-#:endif
-
 #:include 'fypp_utils.fpp'
 
 module cheb1d_fields_mod
@@ -220,7 +213,7 @@ contains
       !! The number of collocation nodes to use when modelling this
       !! field. This corresponds to resolution.
     procedure(scalar_init), optional :: initializer
-      !! An elemental procedure taking which takes the position in the
+      !! An impure elemental procedure taking which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
@@ -244,7 +237,7 @@ contains
     call field%set_temp()
   end function scalar_constructor
 
-  pure function cheb1d_scalar_domain(this) result(res)
+  function cheb1d_scalar_domain(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -262,7 +255,7 @@ contains
     call this%clean_temp()
   end function cheb1d_scalar_domain
 
-  elemental function cheb1d_scalar_dimensions(this) result(res)
+  impure elemental function cheb1d_scalar_dimensions(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -275,7 +268,7 @@ contains
     call this%clean_temp()
   end function cheb1d_scalar_dimensions
 
-  pure function cheb1d_scalar_resolution(this) result(res)
+  function cheb1d_scalar_resolution(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -291,7 +284,7 @@ contains
     call this%clean_temp()
   end function cheb1d_scalar_resolution
 
-  pure function cheb1d_scalar_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+  function cheb1d_scalar_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                                         result(slices)
     class(cheb1d_scalar_field), intent(in)      :: this
     integer, dimension(:), optional, intent(in) :: exclude_lower_bound
@@ -332,7 +325,7 @@ contains
     call this%clean_temp()
   end function cheb1d_scalar_raw_slices
 
-  pure function cheb1d_scalar_id_to_position(this, id) result(pos)
+  function cheb1d_scalar_id_to_position(this, id) result(pos)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -388,7 +381,7 @@ contains
     call this%clean_temp()
   end function cheb1d_scalar_array_dx
 
-  pure subroutine cheb1d_scalar_check_compatible(this,other)
+  subroutine cheb1d_scalar_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -419,7 +412,7 @@ contains
     call this%clean_temp(); call other%clean_temp()
   end subroutine cheb1d_scalar_check_compatible
 
-  pure subroutine cheb1d_scalar_assign_meta(this, rhs)
+  subroutine cheb1d_scalar_assign_meta(this, rhs)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -471,7 +464,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end subroutine cheb1d_scalar_assign_meta
 
-  pure subroutine cheb1d_scalar_allocate_scalar(this, new_field)
+  subroutine cheb1d_scalar_allocate_scalar(this, new_field)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -489,7 +482,7 @@ contains
     call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_scalar
 
-  pure subroutine cheb1d_scalar_allocate_vector(this, new_field)
+  subroutine cheb1d_scalar_allocate_vector(this, new_field)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -507,7 +500,7 @@ contains
     call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_vector
 
-  pure subroutine cheb1d_scalar_bound(this,src,boundary,depth,slices)
+  subroutine cheb1d_scalar_bound(this,src,boundary,depth,slices)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -606,7 +599,7 @@ contains
     call this%clean_temp()
   end subroutine cheb1d_scalar_write_hdf
 
-  pure function cheb1d_scalar_grid_spacing(this) result(grid)
+  function cheb1d_scalar_grid_spacing(this) result(grid)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -626,7 +619,7 @@ contains
     call this%clean_temp()
   end function cheb1d_scalar_grid_spacing
 
-  pure subroutine cheb1d_scalar_force_finalise(this)
+  subroutine cheb1d_scalar_force_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -637,7 +630,7 @@ contains
     call this%force_finalise_array()
   end subroutine cheb1d_scalar_force_finalise
 
-  elemental subroutine cheb1d_scalar_finalise(this)
+  impure elemental subroutine cheb1d_scalar_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -666,7 +659,7 @@ contains
       !! The number of collocation nodes to use when modelling this
       !! field. This corresponds to resolution.
     procedure(vector_init), optional :: initializer
-      !! An elemental procedure which takes the position in the
+      !! An impure elemental procedure which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
@@ -702,7 +695,7 @@ contains
     call field%set_temp()
   end function vector_constructor
 
-  pure function cheb1d_vector_domain(this) result(res)
+  function cheb1d_vector_domain(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -720,7 +713,7 @@ contains
     call this%clean_temp()
   end function cheb1d_vector_domain
 
-  elemental function cheb1d_vector_dimensions(this) result(res)
+  impure elemental function cheb1d_vector_dimensions(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -733,7 +726,7 @@ contains
     call this%clean_temp()
   end function cheb1d_vector_dimensions
 
-  pure function cheb1d_vector_resolution(this) result(res)
+  function cheb1d_vector_resolution(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -749,7 +742,7 @@ contains
     call this%clean_temp()
   end function cheb1d_vector_resolution
 
-  pure function cheb1d_vector_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+  function cheb1d_vector_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                                         result(slices)
     class(cheb1d_vector_field), intent(in)      :: this
     integer, dimension(:), optional, intent(in) :: exclude_lower_bound
@@ -790,7 +783,7 @@ contains
     call this%clean_temp()
   end function cheb1d_vector_raw_slices
   
-  pure function cheb1d_vector_id_to_position(this, id) result(pos)
+  function cheb1d_vector_id_to_position(this, id) result(pos)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -846,7 +839,7 @@ contains
     call this%clean_temp()
   end function cheb1d_vector_array_dx
 
-  pure subroutine cheb1d_vector_check_compatible(this,other)
+  subroutine cheb1d_vector_check_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -877,7 +870,7 @@ contains
     call this%clean_temp(); call other%clean_temp()
   end subroutine cheb1d_vector_check_compatible
 
-  pure subroutine cheb1d_vector_assign_meta(this, rhs)
+  subroutine cheb1d_vector_assign_meta(this, rhs)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -929,7 +922,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end subroutine cheb1d_vector_assign_meta
 
-  pure subroutine cheb1d_vector_allocate_scalar(this, new_field)
+  subroutine cheb1d_vector_allocate_scalar(this, new_field)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -947,7 +940,7 @@ contains
     call this%clean_temp()
   end subroutine cheb1d_vector_allocate_scalar
 
-  pure subroutine cheb1d_vector_allocate_vector(this, new_field)
+  subroutine cheb1d_vector_allocate_vector(this, new_field)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -965,7 +958,7 @@ contains
     call this%clean_temp()
   end subroutine cheb1d_vector_allocate_vector
 
-  pure subroutine cheb1d_vector_bound(this,src,boundary,depth,slices)
+  subroutine cheb1d_vector_bound(this,src,boundary,depth,slices)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1065,7 +1058,7 @@ contains
     call this%clean_temp()
   end subroutine cheb1d_vector_write_hdf
 
-  pure function cheb1d_vector_grid_spacing(this) result(grid)
+  function cheb1d_vector_grid_spacing(this) result(grid)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1083,7 +1076,7 @@ contains
     call this%clean_temp()
   end function cheb1d_vector_grid_spacing
 
-  pure subroutine cheb1d_vector_force_finalise(this)
+  subroutine cheb1d_vector_force_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1094,7 +1087,7 @@ contains
     call this%force_finalise_array()
   end subroutine cheb1d_vector_force_finalise
 
-  elemental subroutine cheb1d_vector_finalise(this)
+  impure elemental subroutine cheb1d_vector_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !

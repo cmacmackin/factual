@@ -20,13 +20,6 @@
 !  MA 02110-1301, USA.
 !  
 
-! Make procedures non-pure for debugging, so that messages can be
-! printed to the screen.
-#:if defined('DEBUG')
-#define pure 
-#define elemental 
-#:endif
-
 #:include 'fypp_utils.fpp'
 
 module array_fields_mod
@@ -200,7 +193,7 @@ module array_fields_mod
   end interface array_scalar_field
 
   abstract interface
-    pure function sf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+    function sf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                              result(slices)
       import :: array_scalar_field
       class(array_scalar_field), intent(in)       :: this
@@ -227,7 +220,7 @@ module array_fields_mod
         !! ```
     end function sf_raw_slices
      
-    pure subroutine sf_compatible(this,other)
+    subroutine sf_compatible(this,other)
       !* Author: Chris MacMackin
       !  Date: April 2016
       !
@@ -242,7 +235,7 @@ module array_fields_mod
         !! The field being checked against this one
     end subroutine sf_compatible
 
-    pure subroutine sf_bound(this,src,boundary,depth,slices)
+    subroutine sf_bound(this,src,boundary,depth,slices)
       import :: array_scalar_field
       class(array_scalar_field), intent(inout)          :: this
       class(array_scalar_field), intent(in)             :: src
@@ -267,7 +260,7 @@ module array_fields_mod
         !! ```
     end subroutine sf_bound
 
-    pure subroutine sf_meta(this, rhs)
+    subroutine sf_meta(this, rhs)
       import :: array_scalar_field
       import :: abstract_field
       class(array_scalar_field), intent(inout) :: this
@@ -291,7 +284,7 @@ module array_fields_mod
         !! The spatial derivative of order `order` taken in direction `dir`
     end function sf_scalar_dx
 
-    pure function scalar_init(x) result(scalar)
+    function scalar_init(x) result(scalar)
       !! Function used to specify value held by a scalar field at
       !! location `x`.
       import :: r8
@@ -464,7 +457,7 @@ module array_fields_mod
  end interface array_vector_field
 
   abstract interface
-    pure function vf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+    function vf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                              result(slices)
       import array_vector_field
       class(array_vector_field), intent(in)       :: this
@@ -491,7 +484,7 @@ module array_fields_mod
         !! ```
     end function vf_raw_slices
 
-    pure subroutine vf_bound(this,src,boundary,depth,slices)
+    subroutine vf_bound(this,src,boundary,depth,slices)
       import :: array_vector_field
       class(array_vector_field), intent(inout)          :: this
       class(array_vector_field), intent(in)             :: src
@@ -516,7 +509,7 @@ module array_fields_mod
         !! ```
     end subroutine vf_bound
 
-    pure subroutine vf_compatible(this,other)
+    subroutine vf_compatible(this,other)
       !* Author: Chris MacMackin
       !  Date: September 2016
       !
@@ -531,7 +524,7 @@ module array_fields_mod
         !! The field being checked against this one
     end subroutine vf_compatible
 
-    pure subroutine vf_meta(this, rhs)
+    subroutine vf_meta(this, rhs)
       import :: array_vector_field
       import :: abstract_field
       class(array_vector_field), intent(inout) :: this
@@ -556,7 +549,7 @@ module array_fields_mod
         !! The spatial derivative of order `order` taken in direction `dir`
     end function vf_scalar_dx
     
-    pure function vector_init(x) result(vector)
+    function vector_init(x) result(vector)
       !! Function used to specify value held by a vector field at
       !! location `x`.
       import :: r8
@@ -591,7 +584,7 @@ contains
       !! The number of data points needed in the array when modelling this
       !! field.
     procedure(scalar_init), optional       :: initializer
-      !! An elemental procedure taking which takes the position in the
+      !! An impure elemental procedure taking which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
@@ -621,7 +614,7 @@ contains
     call this%set_temp()
   end function array_scalar_constructor1
 
-  pure function array_scalar_constructor2(template, array) result(this)
+  function array_scalar_constructor2(template, array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -650,7 +643,7 @@ contains
     call this%set_temp()
   end function array_scalar_constructor2
 
-  pure function array_scalar_elements(this) result(elements)
+  function array_scalar_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -663,7 +656,7 @@ contains
     call this%clean_temp()
   end function array_scalar_elements
 
-  pure function array_scalar_raw_size(this,exclude_lower_bound, &
+  function array_scalar_raw_size(this,exclude_lower_bound, &
                                       exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -698,7 +691,7 @@ contains
     call this%clean_temp()
   end function array_scalar_raw_size
   
-  pure function array_scalar_raw(this,exclude_lower_bound, &
+  function array_scalar_raw(this,exclude_lower_bound, &
                                  exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -740,7 +733,7 @@ contains
     call this%clean_temp()
   end function array_scalar_raw
   
-  pure subroutine array_scalar_set_from_raw(this,raw,provide_lower_bound, &
+  subroutine array_scalar_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -784,7 +777,7 @@ contains
     call this%clean_temp()
   end subroutine array_scalar_set_from_raw
   
-  pure function array_scalar_sf_m_sf(this,rhs) result(res)
+  function array_scalar_sf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -811,7 +804,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_m_sf
 
-  pure function array_scalar_sf_m_vf(this,rhs) result(res)
+  function array_scalar_sf_m_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -841,7 +834,7 @@ contains
         call res%assign_meta_data(rhs, .false.)
         allocate(res%field_data%array(this%numpoints,rhs%vector_dimensions()))
         res%vector_dims = size(rhs%get_value())
-        do concurrent (i=1:this%numpoints)
+        do i = 1, this%numpoints
           res%field_data%array(i,:) = this%field_data%array(i) * rhs%get_value()
         end do
       class default
@@ -853,7 +846,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_m_vf
 
-  pure function array_scalar_r_m_sf(lhs,rhs) result(res)
+  function array_scalar_r_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -872,7 +865,7 @@ contains
     call rhs%clean_temp()
   end function array_scalar_r_m_sf
 
-  pure function array_scalar_vr_m_sf(lhs,rhs) result(res)
+  function array_scalar_vr_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -900,7 +893,7 @@ contains
     call rhs%clean_temp()
   end function array_scalar_vr_m_sf
 
-  pure function array_scalar_sf_m_r(this,rhs) result(res)
+  function array_scalar_sf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -919,7 +912,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_m_r
 
-  pure function array_scalar_sf_m_vr(this,rhs) result(res)
+  function array_scalar_sf_m_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -947,7 +940,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_m_vr
   
-  pure function array_scalar_sf_d_sf(this,rhs) result(res)
+  function array_scalar_sf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -974,7 +967,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_d_sf
 
-  pure function array_scalar_r_d_sf(lhs,rhs) result(res)
+  function array_scalar_r_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -993,7 +986,7 @@ contains
     call rhs%clean_temp()
   end function array_scalar_r_d_sf
 
-  pure function array_scalar_vr_d_sf(lhs,rhs) result(res)
+  function array_scalar_vr_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1021,7 +1014,7 @@ contains
     call rhs%clean_temp()
   end function array_scalar_vr_d_sf
 
-  pure function array_scalar_sf_d_r(this,rhs) result(res)
+  function array_scalar_sf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1039,7 +1032,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_d_r
   
-  pure function array_scalar_sf_s_sf(this,rhs) result(res)
+  function array_scalar_sf_s_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1066,7 +1059,7 @@ contains
     call this%clean_temp(); call this%clean_temp()
  end function array_scalar_sf_s_sf
 
-  pure function array_scalar_r_s_sf(lhs,rhs) result(res)
+  function array_scalar_r_s_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1085,7 +1078,7 @@ contains
     call rhs%clean_temp()
   end function array_scalar_r_s_sf
 
-  pure function array_scalar_sf_s_r(this,rhs) result(res)
+  function array_scalar_sf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1104,7 +1097,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_s_r
   
-  pure function array_scalar_sf_a_sf(this,rhs) result(res)
+  function array_scalar_sf_a_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1131,7 +1124,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_a_sf
 
-  pure function array_scalar_r_a_sf(lhs,rhs) result(res)
+  function array_scalar_r_a_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1150,7 +1143,7 @@ contains
     call rhs%clean_temp()
   end function array_scalar_r_a_sf
 
-  pure function array_scalar_sf_a_r(this,rhs) result(res)
+  function array_scalar_sf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1169,7 +1162,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_a_r
 
-  pure function array_scalar_sf_p_r(this,rhs) result(res)
+  function array_scalar_sf_p_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1188,7 +1181,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_p_r
 
-  pure function array_scalar_sf_p_r4(this,rhs) result(res)
+  function array_scalar_sf_p_r4(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1207,7 +1200,7 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_p_r4
 
-  pure function array_scalar_sf_p_i(this,rhs) result(res)
+  function array_scalar_sf_p_i(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1231,7 +1224,7 @@ contains
 
 #:endfor
 
-  pure function array_scalar_minval(this) result(res)
+  function array_scalar_minval(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1248,7 +1241,7 @@ contains
     call this%clean_temp()
   end function array_scalar_minval
 
-  pure function array_scalar_maxval(this) result(res)
+  function array_scalar_maxval(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1338,7 +1331,7 @@ contains
     call this%clean_temp()
   end function array_scalar_gradient
   
-  elemental subroutine array_scalar_assign(this,rhs)
+  impure elemental subroutine array_scalar_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1369,7 +1362,7 @@ contains
     call rhs%clean_temp()
   end subroutine array_scalar_assign
 
-  pure logical function array_scalar_is_equal(this,rhs) result(iseq)
+  logical function array_scalar_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1412,7 +1405,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_is_equal
 
-  pure subroutine array_scalar_assign_meta_data(this, rhs, alloc)
+  subroutine array_scalar_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1494,7 +1487,7 @@ contains
     call this%clean_temp()
   end subroutine array_scalar_write_hdf
 
-  pure subroutine array_scalar_compatible(this,other)
+  subroutine array_scalar_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1532,7 +1525,7 @@ contains
     call this%clean_temp(); call other%clean_temp()
   end subroutine array_scalar_compatible
 
-  pure function array_scalar_get_element(this,element) result(val)
+  function array_scalar_get_element(this,element) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1549,7 +1542,7 @@ contains
     call this%clean_temp()
   end function array_scalar_get_element
 
-  pure subroutine array_scalar_set_element(this,element,val)
+  subroutine array_scalar_set_element(this,element,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1566,7 +1559,7 @@ contains
     call this%clean_temp()
   end subroutine array_scalar_set_element
 
-  pure function array_scalar_get_bound(this,boundary,depth) result(res)
+  function array_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1606,7 +1599,7 @@ contains
     call this%clean_temp()
   end function array_scalar_get_bound
 
-  pure subroutine array_scalar_force_finalise(this)
+  subroutine array_scalar_force_finalise(this)
     !* Author: Chris MacMackin
     !  Date: February 2017
     !
@@ -1619,7 +1612,7 @@ contains
     end if
   end subroutine array_scalar_force_finalise
 
-  pure subroutine array_scalar_finalise(this)
+  subroutine array_scalar_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1631,7 +1624,7 @@ contains
     call this%unset_temp()
   end subroutine array_scalar_finalise
 
-  pure function array_scalar_is_allocated(this) result(res)
+  function array_scalar_is_allocated(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1668,7 +1661,7 @@ contains
     integer, intent(in)                    :: vector_dims
       !! The number of components of vectors in this field
     procedure(vector_init), optional       :: initializer
-      !! An elemental procedure taking which takes the position in the
+      !! An impure elemental procedure taking which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
@@ -1693,7 +1686,7 @@ contains
     call this%set_temp()
   end function array_vector_constructor1
 
-  pure function array_vector_constructor2(template,array) result(this)
+  function array_vector_constructor2(template,array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1724,7 +1717,7 @@ contains
     call this%set_temp()
   end function array_vector_constructor2
 
-  elemental function array_vector_vector_dimensions(this) result(dims)
+  impure elemental function array_vector_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1738,7 +1731,7 @@ contains
     call this%clean_temp()
   end function array_vector_vector_dimensions
 
-  pure function array_vector_elements(this) result(elements)
+  function array_vector_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1751,7 +1744,7 @@ contains
     call this%clean_temp()
   end function array_vector_elements
 
-  pure function array_vector_raw_size(this,exclude_lower_bound, &
+  function array_vector_raw_size(this,exclude_lower_bound, &
                                        exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1787,7 +1780,7 @@ contains
     call this%clean_temp()
   end function array_vector_raw_size
   
-  pure function array_vector_raw(this,exclude_lower_bound, &
+  function array_vector_raw(this,exclude_lower_bound, &
                                   exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1829,7 +1822,7 @@ contains
     call this%clean_temp()
   end function array_vector_raw
   
-  pure subroutine array_vector_set_from_raw(this,raw,provide_lower_bound, &
+  subroutine array_vector_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1874,7 +1867,7 @@ contains
     call this%clean_temp()
   end subroutine array_vector_set_from_raw
 
-  pure function array_vector_vf_m_sf(this,rhs) result(res)
+  function array_vector_vf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1904,7 +1897,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_m_sf
 
-  pure function array_vector_r_m_vf(lhs,rhs) result(res)
+  function array_vector_r_m_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1923,7 +1916,7 @@ contains
     call rhs%clean_temp()
   end function array_vector_r_m_vf
 
-  pure function array_vector_vf_m_r(this,rhs) result(res)
+  function array_vector_vf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1942,7 +1935,7 @@ contains
     call this%clean_temp()
   end function array_vector_vf_m_r
   
-  pure function array_vector_vf_d_sf(this,rhs) result(res)
+  function array_vector_vf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1972,7 +1965,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_d_sf
 
-  pure function array_vector_vf_d_r(this,rhs) result(res)
+  function array_vector_vf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1991,7 +1984,7 @@ contains
     call this%clean_temp()
   end function array_vector_vf_d_r
   
-  pure function array_vector_vf_s_vf(this,rhs) result(res)
+  function array_vector_vf_s_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2055,7 +2048,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_s_vf
 
-  pure function array_vector_r_s_vf(lhs,rhs) result(res)
+  function array_vector_r_s_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2088,7 +2081,7 @@ contains
     call rhs%clean_temp()
   end function array_vector_r_s_vf
 
-  pure function array_vector_vf_s_r(this,rhs) result(res)
+  function array_vector_vf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2121,7 +2114,7 @@ contains
     call this%clean_temp()
   end function array_vector_vf_s_r
   
-  pure function array_vector_vf_a_vf(this,rhs) result(res)
+  function array_vector_vf_a_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2185,7 +2178,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_a_vf
 
-  pure function array_vector_r_a_vf(lhs,rhs) result(res)
+  function array_vector_r_a_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2218,7 +2211,7 @@ contains
     call rhs%clean_temp()
   end function array_vector_r_a_vf
 
-  pure function array_vector_vf_a_r(this,rhs) result(res)
+  function array_vector_vf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2251,7 +2244,7 @@ contains
     call this%clean_temp()
   end function array_vector_vf_a_r
 
-  elemental subroutine array_vector_assign(this,rhs)
+  impure elemental subroutine array_vector_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2289,7 +2282,7 @@ contains
     call rhs%clean_temp()
   end subroutine array_vector_assign
 
-  pure function array_vector_norm(this) result(res)
+  function array_vector_norm(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2312,7 +2305,7 @@ contains
     call this%clean_temp()
   end function array_vector_norm
 
-  pure function array_vector_component(this,comp) result(res)
+  function array_vector_component(this,comp) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2516,7 +2509,7 @@ contains
     call this%clean_temp()
   end function array_vector_curl
 
-  pure function array_vector_vf_cross_vf(this,rhs) result(res)
+  function array_vector_vf_cross_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2569,7 +2562,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_cross_vf
 
-  pure function array_vector_vf_cross_vr(this,rhs) result(res)
+  function array_vector_vf_cross_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2605,7 +2598,7 @@ contains
     call this%clean_temp()
   end function array_vector_vf_cross_vr
 
-  pure function array_vector_vr_cross_vf(lhs,rhs) result(res)
+  function array_vector_vr_cross_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2641,7 +2634,7 @@ contains
     call rhs%clean_temp()
   end function array_vector_vr_cross_vf
 
-  pure function array_vector_vf_dot_vf(this,rhs) result(res)
+  function array_vector_vf_dot_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2680,7 +2673,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_dot_vf
 
-  pure function array_vector_vf_dot_vr(this,rhs) result(res)
+  function array_vector_vf_dot_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2707,7 +2700,7 @@ contains
     call this%clean_temp()
   end function array_vector_vf_dot_vr
 
-  pure function array_vector_vr_dot_vf(lhs,rhs) result(res)
+  function array_vector_vr_dot_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2734,7 +2727,7 @@ contains
     call rhs%clean_temp()
   end function array_vector_vr_dot_vf
 
-  pure logical function array_vector_is_equal(this,rhs) result(iseq)
+  logical function array_vector_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -2805,7 +2798,7 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_is_equal
 
-  pure subroutine array_vector_assign_meta_data(this, rhs, alloc)
+  subroutine array_vector_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -2893,7 +2886,7 @@ contains
     call this%clean_temp()
   end subroutine array_vector_write_hdf
   
-  pure subroutine array_vector_compatible(this,other)
+  subroutine array_vector_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -2931,7 +2924,7 @@ contains
     call this%clean_temp(); call other%clean_temp()
   end subroutine array_vector_compatible
 
-  pure function array_vector_get_element_vec(this,element) result(val)
+  function array_vector_get_element_vec(this,element) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2948,7 +2941,7 @@ contains
     call this%clean_temp()
   end function array_vector_get_element_vec
   
-  pure function array_vector_get_element_comp(this,element,component) result(val)
+  function array_vector_get_element_comp(this,element,component) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2968,7 +2961,7 @@ contains
     call this%clean_temp()
   end function array_vector_get_element_comp
 
-  pure subroutine array_vector_set_element_vec(this,element,val)
+  subroutine array_vector_set_element_vec(this,element,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2985,7 +2978,7 @@ contains
     call this%clean_temp()
   end subroutine array_vector_set_element_vec
 
-  pure subroutine array_vector_set_element_comp(this,element,component,val)
+  subroutine array_vector_set_element_comp(this,element,component,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -3004,7 +2997,7 @@ contains
     call this%clean_temp()
   end subroutine array_vector_set_element_comp
 
-  pure function array_vector_get_bound(this,boundary,depth) result(res)
+  function array_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -3050,7 +3043,7 @@ contains
     call this%clean_temp()
   end function array_vector_get_bound
 
-  pure function array_vector_is_allocated(this) result(res)
+  function array_vector_is_allocated(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -3065,7 +3058,7 @@ contains
     call this%clean_temp()
   end function array_vector_is_allocated
 
-  pure subroutine array_vector_force_finalise(this)
+  subroutine array_vector_force_finalise(this)
     !* Author: Chris MacMackin
     !  Date: February 2017
     !
@@ -3078,7 +3071,7 @@ contains
     end if
   end subroutine array_vector_force_finalise
 
-  pure subroutine array_vector_finalise(this)
+  subroutine array_vector_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
