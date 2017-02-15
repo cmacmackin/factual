@@ -630,11 +630,15 @@ contains
     class(array_scalar_field), allocatable :: this
       !! A scalar field initiated based on the arguments to this function.
     call template%guard_temp()
-    allocate(this, source=template)
+    allocate(this, mold=template)
+    call this%assign_subtype_meta_data(template)
     if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (allocated(this%field_data%array)) then
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(size(array)))
+    else
       if (size(this%field_data%array) /= size(array)) then
         deallocate(this%field_data%array)
+        allocate(this%field_data%array(size(array)))
       end if
     end if
     this%numpoints = size(array)
@@ -1042,7 +1046,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
-    call this%guard_temp(); call this%guard_temp()
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -1056,7 +1060,7 @@ contains
     end select
     call move_alloc(local,res)
     call res%set_temp() 
-    call this%clean_temp(); call this%clean_temp()
+    call this%clean_temp(); call rhs%clean_temp()
  end function array_scalar_sf_s_sf
 
   function array_scalar_r_s_sf(lhs,rhs) result(res)
@@ -1437,6 +1441,7 @@ contains
         end if
       else if (allocated(rhs%field_data%array) .and. al) then
         allocate(this%field_data%array(size(rhs%field_data%array)))
+      else
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
@@ -1591,9 +1596,12 @@ contains
     end if
     allocate(local, mold=this)
     call local%subtype_boundary(this,boundary,depth,slices)
-    local%field_data%array = [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i)), i=1, &
-                      size(slices,2))]
-    local%numpoints = size(local%field_data%array)
+    allocate(local%field_data)
+    local%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
+    allocate(local%field_data%array(local%numpoints))
+    local%field_data%array = &
+         [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i)), &
+          i=1,size(slices,2))]
     call move_alloc(local, res)
     call res%set_temp()
     call this%clean_temp()
@@ -1612,7 +1620,7 @@ contains
     end if
   end subroutine array_scalar_force_finalise
 
-  subroutine array_scalar_finalise(this)
+  elemental subroutine array_scalar_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1620,7 +1628,7 @@ contains
     ! 'temporary' setting.
     !
     class(array_scalar_field), intent(inout) :: this
-    deallocate(this%field_data)
+    if (associated(this%field_data)) deallocate(this%field_data)
     call this%unset_temp()
   end subroutine array_scalar_finalise
 
@@ -1695,7 +1703,7 @@ contains
     !
     class(array_vector_field), intent(in)  :: template
       !! A scalar field object which will act as a mold for the concrete
-      !! type of the returned type.
+      !! type of the returned type and which provides the meta-data.
     real(r8), dimension(:,:), intent(in)   :: array
       !! An array containing the values which this field will be
       !! initialised with.
@@ -1703,11 +1711,15 @@ contains
       !! A scalar field initiated based on the arguments to this function.
     integer :: i
     call template%guard_temp()
-    allocate(this, source=template)
+    allocate(this, mold=template)
+    call this%assign_subtype_meta_data(template)
     if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (allocated(this%field_data%array)) then
-      if (all(shape(this%field_data%array,1) /= shape(array))) then
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(size(array,1),size(array,2)))
+    else
+      if (any(shape(this%field_data%array) /= shape(array))) then
         deallocate(this%field_data%array)
+        allocate(this%field_data%array(size(array,1),size(array,2)))
       end if
     end if
     this%numpoints = size(array,1)
@@ -2314,6 +2326,7 @@ contains
     class(array_vector_field), intent(in) :: this
     integer, intent(in) :: comp
     class(scalar_field), allocatable :: res
+    real(r8), allocatable, dimension(:,:) :: tmp
     call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
@@ -2645,7 +2658,7 @@ contains
     class(scalar_field), allocatable :: res !! The restult of this operation
     integer :: i, min_dims
     real(r8), dimension(:), allocatable :: tmp
-    call this%guard_temp(); call this%guard_temp()
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -3031,7 +3044,8 @@ contains
     allocate(local, mold=this)
     call local%subtype_boundary(this,boundary,depth,slices)
     local%vector_dims = this%vector_dims
-    local%numpoints = size(local%field_data%array)
+    local%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
+    allocate(local%field_data)
     allocate(local%field_data%array(local%numpoints,local%vector_dims))
     do concurrent (j=1:local%vector_dims)
       local%field_data%array(:,j) = &
@@ -3071,14 +3085,14 @@ contains
     end if
   end subroutine array_vector_force_finalise
 
-  subroutine array_vector_finalise(this)
+  elemental subroutine array_vector_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
     ! Deallocates the field data for this object.
     !
     class(array_vector_field), intent(inout) :: this
-    deallocate(this%field_data)
+    if (associated(this%field_data)) deallocate(this%field_data)
     call this%unset_temp()
   end subroutine array_vector_finalise
 

@@ -537,6 +537,7 @@ contains
       select case(boundary)
       case(-1)
         allocate(this%colloc_points)
+        allocate(this%colloc_points%array(depth))
         this%colloc_points%array = src%colloc_points%array(length+1-depth:)
         this%extent = [src%colloc_points%array(length+1-depth), &
                       src%colloc_points%array(length)]
@@ -545,6 +546,7 @@ contains
         slices(:,1) = [length+1-depth,length,1]
       case(1)
         allocate(this%colloc_points)
+        allocate(this%colloc_points%array(depth))
         this%colloc_points%array = src%colloc_points%array(1:depth)
         this%extent = [src%colloc_points%array(depth), src%colloc_points%array(1)]
         this%differentiable = .false.
@@ -613,8 +615,8 @@ contains
     type(cheb1d_vector_field) :: local
     call this%guard_temp()
     call local%assign_subtype_meta_data(this)
-    allocate(grid, source=array_vector_field(local, &
-                          grid_to_spacing(this%colloc_points%array)))
+    allocate(cheb1d_vector_field :: grid)
+    grid = array_vector_field(local, grid_to_spacing(this%colloc_points%array))
     call grid%set_temp()
     call this%clean_temp()
   end function cheb1d_scalar_grid_spacing
@@ -630,11 +632,15 @@ contains
     call this%force_finalise_array()
   end subroutine cheb1d_scalar_force_finalise
 
-  impure elemental subroutine cheb1d_scalar_finalise(this)
+  subroutine cheb1d_scalar_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
     ! Deallocates the pointer to the field data for this object.
+    ! 
+    ! @Warning This only works for scalar field objects. For some
+    ! reason gfortran segfualts when an elemental or higher rank
+    ! finalisation routine is used.
     !
     type(cheb1d_scalar_field), intent(inout) :: this
     if (associated(this%colloc_points)) then
@@ -995,6 +1001,7 @@ contains
       select case(boundary)
       case(-1)
         allocate(this%colloc_points)
+        allocate(this%colloc_points%array(depth))
         this%colloc_points%array = src%colloc_points%array(length+1-depth:)
         this%extent = [src%colloc_points%array(length+1-depth), &
                       src%colloc_points%array(length)]
@@ -1003,6 +1010,7 @@ contains
         slices(:,1) = [length+1-depth,length,1]
       case(1)
         allocate(this%colloc_points)
+        allocate(this%colloc_points%array(depth))
         this%colloc_points%array = src%colloc_points%array(1:depth)
         this%extent = [src%colloc_points%array(depth), &
                       src%colloc_points%array(1)]
@@ -1070,8 +1078,8 @@ contains
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
     call this%guard_temp()
-    allocate(grid, source=array_vector_field(this, &
-                          grid_to_spacing(this%colloc_points%array)))
+    allocate(cheb1d_vector_field :: grid)
+    grid = array_vector_field(this, grid_to_spacing(this%colloc_points%array))
     call grid%set_temp()
     call this%clean_temp()
   end function cheb1d_vector_grid_spacing
@@ -1087,11 +1095,15 @@ contains
     call this%force_finalise_array()
   end subroutine cheb1d_vector_force_finalise
 
-  impure elemental subroutine cheb1d_vector_finalise(this)
+  subroutine cheb1d_vector_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
     ! Deallocates the field data for this object.
+    !
+    ! @Warning This only works for scalar field objects. For some
+    ! reason gfortran segfualts when an elemental or higher rank
+    ! finalisation routine is used.
     !
     type(cheb1d_vector_field), intent(inout) :: this
     if (associated(this%colloc_points)) then

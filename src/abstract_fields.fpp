@@ -120,6 +120,7 @@ module abstract_fields_mod
     procedure :: memory_reusable
       !! Returns `.true.` if this field is temporary and at a depth in
       !! the call-tree where it is safe to reuse its memory.
+    procedure :: guard_level
     procedure(finalise), deferred, private :: force_finalise
       !! Frees dynamic memory in the field.
   end type abstract_field
@@ -991,7 +992,7 @@ contains
     this%temporary = 1
   end subroutine set_temp
 
-  impure elemental subroutine unset_temp(this)
+  elemental subroutine unset_temp(this)
     !* Author: Chris MacMackin
     !  Date: February 2017
     !
@@ -1037,7 +1038,6 @@ contains
     !
     class(abstract_field), intent(in) :: this
     if (associated(this%temporary)) then
-      !if (this%temporary > 1) print*,'Cleaning!!!',this%temporary
       if (this%temporary > 1) this%temporary = this%temporary - 1
       if (this%temporary == 1) call this%force_finalise()
     end if
@@ -1059,6 +1059,15 @@ contains
       memory_reusable = .false.
     end if
   end function memory_reusable
+
+  integer function guard_level(this)
+    class(abstract_field), intent(in) :: this
+    if (associated(this%temporary)) then
+      guard_level = this%temporary
+    else
+      guard_level = -1
+    end if
+  end function guard_level
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
   function scalar_field_${FUNC}$(field) result(res)
