@@ -278,6 +278,8 @@ module uniform_fields_mod
       !! \({\rm\vec{real}} \times {\rm\vec{field}}\)
     procedure :: assign_field => uniform_vector_assign
       !! \({\rm field} = {\rm field}\)
+    procedure :: assign_scalar_fields => uniform_vector_assign_scalar
+      !! \({\rm \vec{field}} = [{\rm field1, field2, \ldots}]\)
     procedure :: is_equal => uniform_vector_is_equal
       !! Checks fields are equal within a tolerance
     procedure, public :: assign_meta_data => uniform_vector_assign_meta_data
@@ -1508,6 +1510,23 @@ contains
       error stop ('Assigning incompatible type to uniform_vector_field')
     end select
   end subroutine uniform_vector_assign
+
+  elemental subroutine uniform_vector_assign_scalar(this,rhs)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! \(\vec{\rm field} = [{\rm field1, field2, \ldots}]\)
+    !
+    class(uniform_vector_field), intent(inout)    :: this
+    class(scalar_field), dimension(:), intent(in) :: rhs
+    select type(rhs)
+    class is(uniform_scalar_field)
+      this%vector_dims = size(rhs)
+      this%field_data = rhs%field_data
+    class default
+      error stop ('Assigning incompatible type to uniform_vector_field')
+    end select
+  end subroutine uniform_vector_assign_scalar
 
   pure function uniform_vector_norm(this) result(res)
     !* Author: Chris MacMackin

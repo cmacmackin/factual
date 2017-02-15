@@ -383,6 +383,8 @@ module array_fields_mod
       !! \({\rm\vec{real}} \times {\rm\vec{field}}\)
     procedure :: assign_field => array_vector_assign
       !! \({\rm field} = {\rm field}\)
+    procedure :: assign_scalar_fields => array_vector_assign_scalar
+      !! \({\rm \vec{field}} = [{\rm field1, field2, \ldots}]\)
     procedure :: is_equal => array_vector_is_equal
       !! Checks fields are equal within a tolerance
     procedure, public :: assign_meta_data => array_vector_assign_meta_data
@@ -2025,6 +2027,36 @@ contains
       end if
     end select
   end subroutine array_vector_assign
+
+  elemental subroutine array_vector_assign_scalar(this,rhs)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! \(\vec{\rm field} = [{\rm field1, field2, \ldots}]\)
+    !
+    class(array_vector_field), intent(inout)      :: this
+    class(scalar_field), dimension(:), intent(in) :: rhs
+    integer :: i
+    call this%assign_meta_data(rhs(1), .false.)
+    select type(rhs)
+    class is(array_scalar_field)
+      this%vector_dims = size(rhs)
+      this%numpoints = rhs(1)%numpoints
+      allocate(this%field_data(this%numpoints,this%vector_dims))
+      do concurrent (i=1:this%vector_dims)
+        this%field_data(:,i) = rhs(i)%field_data
+      end do
+    class is(uniform_scalar_field)
+      if (allocated(this%field_data)) then
+        do concurrent (i=1:this%vector_dims)
+          this%field_data(:,i) = rhs(i)%get_value()
+        end do
+      else
+        error stop ('Trying to assign `uniform_scalar_field` to '// &
+                   '`array_vector_field` with unallocated contents.')
+      end if
+    end select
+  end subroutine array_vector_assign_scalar
 
   pure function array_vector_norm(this) result(res)
     !* Author: Chris MacMackin

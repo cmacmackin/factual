@@ -292,6 +292,8 @@ module abstract_fields_mod
       !! \({\rm\vec{real}} \times {\rm\vec{field}}\)
     procedure(vf_eq_vf), deferred :: assign_field
       !! \({\rm \vec{field}} = {\rm \vec{field}}\)
+    procedure(vf_eq_sf), deferred :: assign_scalar_fields
+      !! \({\rm \vec{field}} = [{\rm field1, field2, \ldots}]\)
     procedure(vf_elem_vec), deferred :: get_element_vector
       !! Returns ones of the constituent vectors of the field, i.e. the 
       !! field's value at a particular location
@@ -331,7 +333,7 @@ module abstract_fields_mod
          real_dot_field, field_dot_real
     generic, public :: operator(.cross.) => field_cross_field, &
          real_cross_field, field_cross_real
-    generic, public :: assignment(=) => assign_field
+    generic, public :: assignment(=) => assign_field, assign_scalar_fields
     procedure(vf_is_equal), deferred :: is_equal
       !! Checks fields are equal within a tolerance
     generic, public :: operator(==) => is_equal
@@ -865,6 +867,14 @@ module abstract_fields_mod
       class(vector_field), intent(inout) :: this
       class(vector_field), intent(in) :: rhs
     end subroutine vf_eq_vf
+
+    elemental subroutine vf_eq_sf(this,rhs)
+      !! \({\rm \vec{field}} = [{\rm field1, field2, \ldots}]\)
+      import :: vector_field
+      import :: scalar_field
+      class(vector_field), intent(inout)            :: this
+      class(scalar_field), dimension(:), intent(in) :: rhs
+    end subroutine vf_eq_sf
 
     pure function vr_vf(lhs,rhs)
       !! \({\rm \vec{real}} [{\rm operator}] {\rm field}\)
