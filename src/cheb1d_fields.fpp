@@ -392,7 +392,6 @@ contains
     !
     class(cheb1d_scalar_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
-      !! If present and false, do not allocate the array of `this`.
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent

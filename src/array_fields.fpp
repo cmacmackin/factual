@@ -2042,7 +2042,15 @@ contains
     class is(array_scalar_field)
       this%vector_dims = size(rhs)
       this%numpoints = rhs(1)%numpoints
-      allocate(this%field_data(this%numpoints,this%vector_dims))
+      if (allocated(this%field_data)) then
+        if (size(this%field_data,1) /= this%numpoints .or. &
+            size(this%field_data,2) /= this%vector_dims) then
+          deallocate(this%field_data)
+        end if
+      end if
+      if (.not. allocated(this%field_data)) then
+        allocate(this%field_data(this%numpoints,this%vector_dims))
+      end if
       do concurrent (i=1:this%vector_dims)
         this%field_data(:,i) = rhs(i)%field_data
       end do
