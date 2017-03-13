@@ -2296,7 +2296,7 @@ contains
     call rhs%clean_temp()
   end subroutine array_vector_assign
 
-  impure elemental subroutine array_vector_assign_scalar(this,rhs)
+  subroutine array_vector_assign_scalar(this,rhs)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2317,15 +2317,15 @@ contains
           deallocate(this%field_data%array)
         end if
       end if
-      if (.not. allocated(this%field_data)) then
-        allocate(this%field_data(this%numpoints,this%vector_dims))
+      if (.not. allocated(this%field_data%array)) then
+        allocate(this%field_data%array(this%numpoints,this%vector_dims))
       end if
       do concurrent (i=1:this%vector_dims)
-        this%field_data(:,i) = rhs(i)%field_data
+        this%field_data%array(:,i) = rhs(i)%field_data%array
       end do
     class is(uniform_scalar_field)
       if (allocated(this%field_data%array)) then
-        do concurrent (i=1:this%vector_dims)
+        do i = 1, this%vector_dims
           this%field_data%array(:,i) = rhs(i)%get_value()
         end do
       else

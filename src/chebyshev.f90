@@ -121,7 +121,7 @@ contains
       !! The position of the start of the domain. Default is -1.0.
     real(r8), optional, intent(in) :: upper_bound
       !! The position of the end of the domain. Default is 1.0.
-    real(r8), dimension(nodes) :: diff
+    real(r8), dimension(nodes+1) :: diff
     integer  :: j
     real(r8) :: c_i, c_j
     type(array_1d), pointer :: collocs

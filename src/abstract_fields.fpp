@@ -292,8 +292,7 @@ module abstract_fields_mod
     procedure(vf_vf_ret_sf), deferred :: field_dot_field
       !! \({\rm \vec{field}} \cdot {\rm \vec{field}}\)
     procedure(vf_vr_ret_sf), deferred :: field_dot_real
-      !! \({\rm \vec{field}} \cdot {
-\rm \vec{real}}\)
+      !! \({\rm \vec{field}} \cdot {\rm \vec{real}}\)
     procedure(vr_vf_ret_sf), pass(rhs), deferred :: real_dot_field
       !! \({\rm \vec{real}} \cdot {\rm \vec{field}}\)
     procedure(vf_vf), deferred :: field_cross_field
@@ -885,7 +884,7 @@ module abstract_fields_mod
       class(vector_field), intent(in) :: rhs
     end subroutine vf_eq_vf
 
-    impure elemental subroutine vf_eq_sf(this,rhs)
+    subroutine vf_eq_sf(this,rhs)
       !! \({\rm \vec{field}} = [{\rm field1, field2, \ldots}]\)
       import :: vector_field
       import :: scalar_field
@@ -893,7 +892,7 @@ module abstract_fields_mod
       class(scalar_field), dimension(:), intent(in) :: rhs
     end subroutine vf_eq_sf
 
-    pure function vr_vf(lhs,rhs)
+    function vr_vf(lhs,rhs)
       !! \({\rm \vec{real}} [{\rm operator}] {\rm field}\)
       import :: vector_field
       import :: r8

@@ -1507,7 +1507,7 @@ contains
     end select
   end subroutine uniform_vector_assign
 
-  impure elemental subroutine uniform_vector_assign_scalar(this,rhs)
+  subroutine uniform_vector_assign_scalar(this,rhs)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
