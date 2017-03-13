@@ -112,6 +112,46 @@ contains
     cache_list => list_location
   end function collocation_points
 
+  function differentiation_row(nodes,row,lower_bound,upper_bound) result(diff)
+    integer, intent(in) :: nodes
+      !! The number of collocation nodes
+    integer, intent(in) :: row
+      !! The point at which the derivative is being evaluated
+    real(r8), optional, intent(in) :: lower_bound
+      !! The position of the start of the domain. Default is -1.0.
+    real(r8), optional, intent(in) :: upper_bound
+      !! The position of the end of the domain. Default is 1.0.
+    real(r8), dimension(nodes) :: diff
+    integer  :: j
+    real(r8) :: c_i, c_j
+    type(array_1d), pointer :: collocs
+    collocs => collocation_points(nodes,lower_bound,upper_bound)
+    if (row == 1 .or. row == nodes + 1) then
+      c_i = 2._r8
+    else
+      c_i = 1._r8
+    end if
+    do j = 1, nodes+1
+      if (j == row) then
+        if (j == 1) then
+          diff(j) = (2*nodes**2 + 1.0_r8)/6._r8
+        else if (j == nodes + 1) then
+          diff(j) = -(2*nodes**2 + 1.0_r8)/6._r8
+        else
+          diff(j) = -0.5_r8*collocs%array(j)/(1 - collocs%array(j)**2)
+        end if
+      else
+        if (j == 1 .or. j == nodes + 1) then
+          c_j = 2._r8
+        else
+          c_j = 1._r8
+        end if
+        diff(j) = c_i*(-1)**(row+j)/ &
+                  (c_j*(collocs%array(row) - collocs%array(j)))
+      end if
+    end do
+  end function differentiation_row
+
   subroutine differentiate_1d(field_data,xvals,order)
     !* Author: Chris MacMackin
     !  Date: April 2016
