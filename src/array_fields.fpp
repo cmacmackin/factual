@@ -20,13 +20,6 @@
 !  MA 02110-1301, USA.
 !  
 
-! Make procedures non-pure for debugging, so that messages can be
-! printed to the screen.
-#:if defined('DEBUG')
-#define pure 
-#define elemental 
-#:endif
-
 #:include 'fypp_utils.fpp'
 
 module array_fields_mod
@@ -40,6 +33,7 @@ module array_fields_mod
   ! Cartesian coordinates are supported.
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
+  use array_pointer_mod, only: array_1d, array_2d
   use abstract_fields_mod, only: abstract_field, scalar_field, vector_field, &
                                  get_tol
   use uniform_fields_mod, only: uniform_scalar_field, uniform_vector_field
@@ -69,9 +63,9 @@ module array_fields_mod
     ! higher dimensional field.
     !
     private
-    integer :: numpoints
+    integer                 :: numpoints
       !! The number of datapoints used
-    real(r8), dimension(:), allocatable :: field_data
+    type(array_1d), pointer :: field_data => null()
       !! The value of the scalar field at the data-points. Each
       !! element represents the value at a different location.
   contains
@@ -175,6 +169,22 @@ module array_fields_mod
       !! Performs whatever operations are needed on the subtype to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, non_overridable :: is_allocated => array_scalar_is_allocated
+      !! Indicates whether both the array pointer _and_ the array it
+      !! contains are allocated.
+    procedure, public :: force_finalise_array => array_scalar_force_finalise
+      !! Deallocates the contents of the array pointer. This is
+      !! largely a work-around arising due to gfortran's failure to
+      !! automatically deallocate field objects in all situations
+      !! where it should. This way, the memory leak can be greatly
+      !! reduced in volume.
+    procedure, public :: finalise => array_scalar_finalise
+      !! Deallocates the contents of the field. The bulk of the
+      !! field's memory should be deallocated with the `clean_temp`
+      !! method, but that is unable to deallocate the pointer to the
+      !! data array--only the array itself. In compilers which support
+      !! finalisation, this method eliminates the small memory leak
+      !! from the pointer..
   end type array_scalar_field
 
   interface array_scalar_field
@@ -183,9 +193,9 @@ module array_fields_mod
   end interface array_scalar_field
 
   abstract interface
-    pure function sf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+    function sf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                              result(slices)
-      import array_scalar_field
+      import :: array_scalar_field
       class(array_scalar_field), intent(in)       :: this
       integer, dimension(:), optional, intent(in) :: exclude_lower_bound
         !! Specifies how many layers of data points should be excluded
@@ -210,7 +220,7 @@ module array_fields_mod
         !! ```
     end function sf_raw_slices
      
-    pure subroutine sf_compatible(this,other)
+    subroutine sf_compatible(this,other)
       !* Author: Chris MacMackin
       !  Date: April 2016
       !
@@ -225,7 +235,7 @@ module array_fields_mod
         !! The field being checked against this one
     end subroutine sf_compatible
 
-    pure subroutine sf_bound(this,src,boundary,depth,slices)
+    subroutine sf_bound(this,src,boundary,depth,slices)
       import :: array_scalar_field
       class(array_scalar_field), intent(inout)          :: this
       class(array_scalar_field), intent(in)             :: src
@@ -250,7 +260,7 @@ module array_fields_mod
         !! ```
     end subroutine sf_bound
 
-    pure subroutine sf_meta(this, rhs)
+    subroutine sf_meta(this, rhs)
       import :: array_scalar_field
       import :: abstract_field
       class(array_scalar_field), intent(inout) :: this
@@ -274,7 +284,7 @@ module array_fields_mod
         !! The spatial derivative of order `order` taken in direction `dir`
     end function sf_scalar_dx
 
-    pure function scalar_init(x) result(scalar)
+    function scalar_init(x) result(scalar)
       !! Function used to specify value held by a scalar field at
       !! location `x`.
       import :: r8
@@ -305,13 +315,13 @@ module array_fields_mod
     ! higher dimensional field.
     !
     private
-    integer :: numpoints
+    integer                 :: numpoints
       !! The number of datapoints used
-    real(r8), dimension(:,:), allocatable :: field_data
+    type(array_2d), pointer :: field_data => null()
       !! The value of the vector field at the data-points. Each row
       !! represents a different spatial location, while each column
       !! represents a different component of the vector.
-    integer :: vector_dims = 0
+    integer                 :: vector_dims = 0
       !! The number of vector components
   contains
     private
@@ -425,6 +435,22 @@ module array_fields_mod
       !! Performs whatever operations are needed by the subtype to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, non_overridable :: is_allocated => array_vector_is_allocated
+      !! Indicates whether both the array pointer _and_ the array it
+      !! contains are allocated.
+    procedure, public :: force_finalise_array => array_vector_force_finalise
+      !! Deallocates the contents of the array pointer. This is
+      !! largely a work-around arising due to gfortran's failure to
+      !! automatically deallocate field objects in all situations
+      !! where it should. This way, the memory leak can be greatly
+      !! reduced in volume.
+    procedure, public :: finalise => array_vector_finalise
+      !! Deallocates the contents of the field. The bulk of the
+      !! field's memory should be deallocated with the `clean_temp`
+      !! method, but that is unable to deallocate the pointer to the
+      !! data array--only the array itself. In compilers which support
+      !! finalisation, this method eliminates the small memory leak
+      !! from the pointer.
   end type array_vector_field
 
   interface array_vector_field
@@ -433,7 +459,7 @@ module array_fields_mod
  end interface array_vector_field
 
   abstract interface
-    pure function vf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
+    function vf_raw_slices(this,exclude_lower_bound,exclude_upper_bound) &
                                                              result(slices)
       import array_vector_field
       class(array_vector_field), intent(in)       :: this
@@ -460,7 +486,7 @@ module array_fields_mod
         !! ```
     end function vf_raw_slices
 
-    pure subroutine vf_bound(this,src,boundary,depth,slices)
+    subroutine vf_bound(this,src,boundary,depth,slices)
       import :: array_vector_field
       class(array_vector_field), intent(inout)          :: this
       class(array_vector_field), intent(in)             :: src
@@ -485,7 +511,7 @@ module array_fields_mod
         !! ```
     end subroutine vf_bound
 
-    pure subroutine vf_compatible(this,other)
+    subroutine vf_compatible(this,other)
       !* Author: Chris MacMackin
       !  Date: September 2016
       !
@@ -500,7 +526,7 @@ module array_fields_mod
         !! The field being checked against this one
     end subroutine vf_compatible
 
-    pure subroutine vf_meta(this, rhs)
+    subroutine vf_meta(this, rhs)
       import :: array_vector_field
       import :: abstract_field
       class(array_vector_field), intent(inout) :: this
@@ -525,7 +551,7 @@ module array_fields_mod
         !! The spatial derivative of order `order` taken in direction `dir`
     end function vf_scalar_dx
     
-    pure function vector_init(x) result(vector)
+    function vector_init(x) result(vector)
       !! Function used to specify value held by a vector field at
       !! location `x`.
       import :: r8
@@ -560,27 +586,37 @@ contains
       !! The number of data points needed in the array when modelling this
       !! field.
     procedure(scalar_init), optional       :: initializer
-      !! An elemental procedure taking which takes the position in the
+      !! An impure elemental procedure taking which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
     class(array_scalar_field), allocatable :: this
       !! A scalar field initiated based on the arguments to this function.
     integer :: i
+    call template%guard_temp()
     allocate(this, source=template)
-    if (allocated(this%field_data)) deallocate(this%field_data)
-    allocate(this%field_data(numpoints))
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (allocated(this%field_data%array)) then
+      if (size(this%field_data%array) /= numpoints) then
+        deallocate(this%field_data%array)
+        allocate(this%field_data%array(numpoints))
+      end if
+    else
+      allocate(this%field_data%array(numpoints))
+    end if
     this%numpoints = numpoints
     if (present(initializer)) then
       do i = 1, numpoints
-        this%field_data(i) = initializer(this%id_to_position(i))
+        this%field_data%array(i) = initializer(this%id_to_position(i))
       end do
     else
-      this%field_data = 0
+      this%field_data%array = 0
     end if
+    call template%clean_temp()
+    call this%set_temp()
   end function array_scalar_constructor1
 
-  pure function array_scalar_constructor2(template, array) result(this)
+  function array_scalar_constructor2(template, array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -595,13 +631,25 @@ contains
       !! initialised with.
     class(array_scalar_field), allocatable :: this
       !! A scalar field initiated based on the arguments to this function.
-    allocate(this, source=template)
-    if (allocated(this%field_data)) deallocate(this%field_data)
+    call template%guard_temp()
+    allocate(this, mold=template)
+    call this%assign_subtype_meta_data(template)
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(size(array)))
+    else
+      if (size(this%field_data%array) /= size(array)) then
+        deallocate(this%field_data%array)
+        allocate(this%field_data%array(size(array)))
+      end if
+    end if
     this%numpoints = size(array)
-    this%field_data = array
+    this%field_data%array = array
+    call template%clean_temp()
+    call this%set_temp()
   end function array_scalar_constructor2
 
-  pure function array_scalar_elements(this) result(elements)
+  function array_scalar_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -609,10 +657,12 @@ contains
     !
     class(array_scalar_field), intent(in) :: this
     integer :: elements
+    call this%guard_temp()
     elements = this%numpoints
+    call this%clean_temp()
   end function array_scalar_elements
 
-  pure function array_scalar_raw_size(this,exclude_lower_bound, &
+  function array_scalar_raw_size(this,exclude_lower_bound, &
                                       exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -637,15 +687,17 @@ contains
     integer :: res
     integer, dimension(:,:), allocatable :: slices
     integer :: i
-    if (allocated(this%field_data)) then
+    call this%guard_temp()
+    if (this%is_allocated()) then
       slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
       res = sum(elements_in_slice(slices(1,:),slices(2,:),slices(3,:)))
     else
       res = 0
     end if
+    call this%clean_temp()
   end function array_scalar_raw_size
   
-  pure function array_scalar_raw(this,exclude_lower_bound, &
+  function array_scalar_raw(this,exclude_lower_bound, &
                                  exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -676,16 +728,18 @@ contains
       !! Array containing data needed to describe field
     integer, dimension(:,:), allocatable :: slices
     integer :: i
+    call this%guard_temp()
     slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
-    if (allocated(this%field_data)) then
-      res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), i=1, &
+    if (this%is_allocated()) then
+      res = [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i)), i=1, &
              size(slices,2))]
     else
       allocate(res(0))
     end if
+    call this%clean_temp()
   end function array_scalar_raw
   
-  pure subroutine array_scalar_set_from_raw(this,raw,provide_lower_bound, &
+  subroutine array_scalar_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -713,20 +767,23 @@ contains
     integer, dimension(:,:), allocatable :: slices
     integer, dimension(:), allocatable :: counts
     integer :: i, start, finish
+    call this%guard_temp()
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     slices = this%raw_slices(provide_lower_bound,provide_upper_bound)
     counts = elements_in_slice(slices(1,:),slices(2,:),slices(3,:))
-    if (.not. allocated(this%field_data)) then
-       allocate(this%field_data(maxval(slices(2,:))))
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (.not. allocated(this%field_data%array)) then
+       allocate(this%field_data%array(maxval(slices(2,:))))
     end if
     do concurrent (i = 1:size(counts))
       start = sum(counts(1:i-1)) + 1
       finish = start + counts(i) - 1 
-      this%field_data(slices(1,i):slices(2,i):slices(3,i)) = raw(start:finish)
+      this%field_data%array(slices(1,i):slices(2,i):slices(3,i)) = raw(start:finish)
     end do
+    call this%clean_temp()
   end subroutine array_scalar_set_from_raw
   
-  pure function array_scalar_sf_m_sf(this,rhs) result(res)
+  function array_scalar_sf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -736,6 +793,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -743,14 +801,16 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data = this%field_data * rhs%field_data
+      local%field_data%array = this%field_data%array * rhs%field_data%array
     class is(uniform_scalar_field)
-      local%field_data = this%field_data * rhs%get_value()
+      local%field_data%array = this%field_data%array * rhs%get_value()
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_m_sf
 
-  pure function array_scalar_sf_m_vf(this,rhs) result(res)
+  function array_scalar_sf_m_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -761,6 +821,7 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -769,7 +830,7 @@ contains
       allocate(local, mold=rhs)
       call local%assign_meta_data(rhs)
       do concurrent (i=1:this%numpoints)
-        local%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
+        local%field_data%array(i,:) = this%field_data%array(i) * rhs%field_data%array(i,:)
       end do
       call move_alloc(local,res)
     class is(uniform_vector_field)
@@ -777,19 +838,21 @@ contains
       select type(res)
       class is(array_vector_field)
         call res%assign_meta_data(rhs, .false.)
-        allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
+        allocate(res%field_data%array(this%numpoints,rhs%vector_dimensions()))
         res%vector_dims = size(rhs%get_value())
-        do concurrent (i=1:this%numpoints)
-          res%field_data(i,:) = this%field_data(i) * rhs%get_value()
+        do i = 1, this%numpoints
+          res%field_data%array(i,:) = this%field_data%array(i) * rhs%get_value()
         end do
       class default
         error stop ('Non-array_scalar_field type allocated by '//&
                    '`allocate_scalar_field` routine.')
       end select
     end select
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_m_vf
 
-  pure function array_scalar_r_m_sf(lhs,rhs) result(res)
+  function array_scalar_r_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -799,13 +862,16 @@ contains
     class(array_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data = lhs * rhs%field_data
+    local%field_data%array = lhs * rhs%field_data%array
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_scalar_r_m_sf
 
-  pure function array_scalar_vr_m_sf(lhs,rhs) result(res)
+  function array_scalar_vr_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -815,22 +881,25 @@ contains
     class(array_scalar_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     integer :: i
+    call rhs%guard_temp()
     call rhs%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      allocate(res%field_data(rhs%numpoints,size(lhs)))
+      allocate(res%field_data%array(rhs%numpoints,size(lhs)))
       res%vector_dims = size(lhs)
       do concurrent (i=1:rhs%numpoints)
-        res%field_data(i,:) = rhs%field_data(i) * lhs
+        res%field_data%array(i,:) = rhs%field_data%array(i) * lhs
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_scalar_vr_m_sf
 
-  pure function array_scalar_sf_m_r(this,rhs) result(res)
+  function array_scalar_sf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -840,13 +909,16 @@ contains
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data * rhs
+    local%field_data%array = this%field_data%array * rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_m_r
 
-  pure function array_scalar_sf_m_vr(this,rhs) result(res)
+  function array_scalar_sf_m_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -856,22 +928,25 @@ contains
     real(r8), dimension(:), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     integer :: i
+    call this%guard_temp()
     call this%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data(this%numpoints,size(rhs)))
+      allocate(res%field_data%array(this%numpoints,size(rhs)))
       res%vector_dims = size(rhs)
       do concurrent (i=1:this%numpoints)
-        res%field_data(i,:) = this%field_data(i) * rhs
+        res%field_data%array(i,:) = this%field_data%array(i) * rhs
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_m_vr
   
-  pure function array_scalar_sf_d_sf(this,rhs) result(res)
+  function array_scalar_sf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -881,6 +956,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -888,14 +964,16 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data = this%field_data / rhs%field_data
+      local%field_data%array = this%field_data%array / rhs%field_data%array
     class is(uniform_scalar_field)
-      local%field_data = this%field_data / rhs%get_value()
+      local%field_data%array = this%field_data%array / rhs%get_value()
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_d_sf
 
-  pure function array_scalar_r_d_sf(lhs,rhs) result(res)
+  function array_scalar_r_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -905,13 +983,16 @@ contains
     class(array_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data = lhs / rhs%field_data
+    local%field_data%array = lhs / rhs%field_data%array
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_scalar_r_d_sf
 
-  pure function array_scalar_vr_d_sf(lhs,rhs) result(res)
+  function array_scalar_vr_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -921,22 +1002,25 @@ contains
     class(array_scalar_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     integer :: i
+    call rhs%guard_temp()
     call rhs%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      allocate(res%field_data(size(lhs),rhs%numpoints))
+      allocate(res%field_data%array(size(lhs),rhs%numpoints))
       res%vector_dims = size(lhs)
       do concurrent (i=1:rhs%numpoints)
-        res%field_data(i,:) = lhs / rhs%field_data(i)
+        res%field_data%array(i,:) = lhs / rhs%field_data%array(i)
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_scalar_vr_d_sf
 
-  pure function array_scalar_sf_d_r(this,rhs) result(res)
+  function array_scalar_sf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -946,13 +1030,15 @@ contains
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data / rhs
+    local%field_data%array = this%field_data%array / rhs
     call move_alloc(local,res)
+    call this%clean_temp()
   end function array_scalar_sf_d_r
   
-  pure function array_scalar_sf_s_sf(this,rhs) result(res)
+  function array_scalar_sf_s_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -962,6 +1048,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -969,14 +1056,16 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data = this%field_data - rhs%field_data
+      local%field_data%array = this%field_data%array - rhs%field_data%array
     class is(uniform_scalar_field)
-      local%field_data = this%field_data - rhs%get_value()
+      local%field_data%array = this%field_data%array - rhs%get_value()
     end select
     call move_alloc(local,res)
-  end function array_scalar_sf_s_sf
+    call res%set_temp() 
+    call this%clean_temp(); call rhs%clean_temp()
+ end function array_scalar_sf_s_sf
 
-  pure function array_scalar_r_s_sf(lhs,rhs) result(res)
+  function array_scalar_r_s_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -986,13 +1075,16 @@ contains
     class(array_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data = lhs - rhs%field_data
+    local%field_data%array = lhs - rhs%field_data%array
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_scalar_r_s_sf
 
-  pure function array_scalar_sf_s_r(this,rhs) result(res)
+  function array_scalar_sf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1002,13 +1094,16 @@ contains
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data - rhs
+    local%field_data%array = this%field_data%array - rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_s_r
   
-  pure function array_scalar_sf_a_sf(this,rhs) result(res)
+  function array_scalar_sf_a_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1018,6 +1113,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -1025,14 +1121,16 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data = this%field_data + rhs%field_data
+      local%field_data%array = this%field_data%array + rhs%field_data%array
     class is(uniform_scalar_field)
-      local%field_data = this%field_data + rhs%get_value()
+      local%field_data%array = this%field_data%array + rhs%get_value()
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_sf_a_sf
 
-  pure function array_scalar_r_a_sf(lhs,rhs) result(res)
+  function array_scalar_r_a_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1042,13 +1140,16 @@ contains
     class(array_scalar_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data = lhs + rhs%field_data
+    local%field_data%array = lhs + rhs%field_data%array
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_scalar_r_a_sf
 
-  pure function array_scalar_sf_a_r(this,rhs) result(res)
+  function array_scalar_sf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1058,13 +1159,16 @@ contains
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data + rhs
+    local%field_data%array = this%field_data%array + rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_a_r
 
-  pure function array_scalar_sf_p_r(this,rhs) result(res)
+  function array_scalar_sf_p_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1074,13 +1178,16 @@ contains
     real(r8), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data ** rhs
+    local%field_data%array = this%field_data%array ** rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_p_r
 
-  pure function array_scalar_sf_p_r4(this,rhs) result(res)
+  function array_scalar_sf_p_r4(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1090,13 +1197,16 @@ contains
     real, intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data ** rhs
+    local%field_data%array = this%field_data%array ** rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_p_r4
 
-  pure function array_scalar_sf_p_i(this,rhs) result(res)
+  function array_scalar_sf_p_i(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1106,10 +1216,13 @@ contains
     integer, intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The result of this operation
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data ** rhs
+    local%field_data%array = this%field_data%array ** rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_sf_p_i
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
@@ -1117,7 +1230,7 @@ contains
 
 #:endfor
 
-  pure function array_scalar_minval(this) result(res)
+  function array_scalar_minval(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1125,14 +1238,16 @@ contains
     !
     class(array_scalar_field), intent(in) :: this
     real(r8) :: res !! The result of this operation
-    if (allocated(this%field_data)) then
-      res = minval(this%field_data)
+    call this%guard_temp()
+    if (allocated(this%field_data%array)) then
+      res = minval(this%field_data%array)
     else
       res = 0.0_r8
     end if
+    call this%clean_temp()
   end function array_scalar_minval
 
-  pure function array_scalar_maxval(this) result(res)
+  function array_scalar_maxval(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1140,11 +1255,13 @@ contains
     !
     class(array_scalar_field), intent(in) :: this
     real(r8) :: res !! The result of this operation
-    if (allocated(this%field_data)) then
-      res = maxval(this%field_data)
+    call this%guard_temp()
+    if (allocated(this%field_data%array)) then
+      res = maxval(this%field_data%array)
     else
       res = 0.0_r8
     end if
+    call this%clean_temp()
   end function array_scalar_maxval
 
   function array_scalar_d_dx(this, dir, order) result(res)
@@ -1158,10 +1275,13 @@ contains
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(scalar_field), allocatable :: res
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%array_dx(this%field_data, dir, order)
+    local%field_data%array = this%array_dx(this%field_data%array, dir, order)
     call move_alloc(local, res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_d_dx
 
   function array_scalar_laplacian(this) result(res)
@@ -1173,18 +1293,21 @@ contains
     class(array_scalar_field), intent(in) :: this
     class(scalar_field), allocatable :: res !! The result of this operation
     integer :: i
+    call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data = this%array_dx(this%field_data,1,2)
+      res%field_data%array = this%array_dx(this%field_data%array,1,2)
       do i = 2, this%dimensions()
-        res%field_data = res%field_data + this%array_dx(this%field_data,i,2)
+        res%field_data%array = res%field_data%array + this%array_dx(this%field_data%array,i,2)
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_laplacian
   
   function array_scalar_gradient(this) result(res)
@@ -1197,21 +1320,24 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
+    call this%guard_temp()
     call this%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data(size(this%field_data),this%dimensions()))
+      allocate(res%field_data%array(size(this%field_data%array),this%dimensions()))
       do i = 1, this%dimensions()
-        res%field_data(:,i) = this%array_dx(this%field_data,i,1)
+        res%field_data%array(:,i) = this%array_dx(this%field_data%array,i,1)
       end do
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                  '`allocate_vector_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_gradient
   
-  elemental subroutine array_scalar_assign(this,rhs)
+  impure elemental subroutine array_scalar_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1219,21 +1345,30 @@ contains
     !
     class(array_scalar_field), intent(inout) :: this
     class(scalar_field), intent(in) :: rhs
+    call rhs%guard_temp()
     select type(rhs)
     class is(array_scalar_field)
-      call this%assign_meta_data(rhs)
-      if (allocated(rhs%field_data)) this%field_data = rhs%field_data
+      call this%assign_meta_data(rhs, .not. rhs%memory_reusable())
+      if (allocated(rhs%field_data%array)) then
+        if (rhs%memory_reusable()) then
+          if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+          call move_alloc(rhs%field_data%array, this%field_data%array)
+        else
+          this%field_data%array = rhs%field_data%array
+        end if
+      end if
     class is(uniform_scalar_field)
-      if (allocated(this%field_data)) then
-        this%field_data = rhs%get_value()
+      if (allocated(this%field_data%array)) then
+        this%field_data%array = rhs%get_value()
       else
         error stop ('Trying to assign `uniform_scalar_field` to '// &
                    '`array_scalar_field` with unallocated contents.')
       end if
     end select
+    call rhs%clean_temp()
   end subroutine array_scalar_assign
 
-  pure logical function array_scalar_is_equal(this,rhs) result(iseq)
+  logical function array_scalar_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1244,6 +1379,7 @@ contains
     class(scalar_field), intent(in) :: rhs
     integer :: i
     real(r8) :: normalization
+    call this%guard_temp(); call rhs%guard_temp()
     iseq = .true.
     select type(rhs)
     class is(array_scalar_field)
@@ -1252,28 +1388,30 @@ contains
         return
       end if
       do i=1,this%numpoints
-        normalization = abs(this%field_data(i))
+        normalization = abs(this%field_data%array(i))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = iseq .and.( ((this%field_data(i)-rhs%field_data(i))/normalization < &
-                             get_tol()) .or. (is_nan(this%field_data(i)).and. &
-                                              is_nan(rhs%field_data(i))) )
+        iseq = iseq .and.( ((this%field_data%array(i)-rhs%field_data%array(i)) &
+                            /normalization < get_tol()) .or. &
+                           (is_nan(this%field_data%array(i)).and. &
+                            is_nan(rhs%field_data%array(i))) )
         if (.not. iseq) return
       end do
     class is(uniform_scalar_field)
       do i=1,this%numpoints
-        normalization = abs(this%field_data(i))
+        normalization = abs(this%field_data%array(i))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = iseq .and.( ((this%field_data(i)-rhs%get_value())/normalization < &
-                             get_tol()) .or. (is_nan(this%field_data(i)).and. &
+        iseq = iseq .and.( ((this%field_data%array(i)-rhs%get_value())/normalization < &
+                             get_tol()) .or. (is_nan(this%field_data%array(i)).and. &
                                               is_nan(rhs%get_value())) )
         if (.not. iseq) return
       end do
     class default
       iseq = .false.
     end select
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_scalar_is_equal
 
-  pure subroutine array_scalar_assign_meta_data(this, rhs, alloc)
+  subroutine array_scalar_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -1285,6 +1423,7 @@ contains
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
     logical :: al
+    call this%guard_temp(); call rhs%guard_temp()
     if (present(alloc)) then
       al = alloc
     else
@@ -1294,29 +1433,33 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      if (allocated(this%field_data)) then
-        if (.not. allocated(rhs%field_data)) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data)/=size(rhs%field_data)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data)))
+      if (.not. associated(this%field_data)) allocate(this%field_data)
+      if (allocated(this%field_data%array)) then
+        if (.not. rhs%is_allocated()) then
+          deallocate(this%field_data%array)
+        else if (al .and. size(this%field_data%array)/=size(rhs%field_data%array)) then
+          deallocate(this%field_data%array)
+          allocate(this%field_data%array(size(rhs%field_data%array)))
         end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data)))
+      else if (allocated(rhs%field_data%array) .and. al) then
+        allocate(this%field_data%array(size(rhs%field_data%array)))
+      else
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
-      if (allocated(this%field_data)) then
-        if (.not. allocated(rhs%field_data)) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data)/=size(rhs%field_data,1)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data,1)))
+      if (.not. associated(this%field_data)) allocate(this%field_data)
+      if (allocated(this%field_data%array)) then
+        if (.not. rhs%is_allocated()) then
+          deallocate(this%field_data%array)
+        else if (al .and. size(this%field_data%array)/=size(rhs%field_data%array,1)) then
+          deallocate(this%field_data%array)
+          allocate(this%field_data%array(size(rhs%field_data%array,1)))
         end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data,1)))
+      else if (allocated(rhs%field_data%array) .and. al) then
+        allocate(this%field_data%array(size(rhs%field_data%array,1)))
       end if
     end select
+    call this%clean_temp(); call rhs%clean_temp()
   end subroutine array_scalar_assign_meta_data
 
   subroutine array_scalar_write_hdf(this, hdf_id, dataset_name, dims, &
@@ -1339,6 +1482,7 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    call this%guard_temp()
     error = 0
 #:if defined('DEBUG')
     if (product(dims) /= this%numpoints) &
@@ -1346,10 +1490,11 @@ contains
                  'number of data-points in the field.')
 #:endif
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims), &
-                                   int(dims,hsize_t), this%field_data, error)
+                                   int(dims,hsize_t), this%field_data%array, error)
+    call this%clean_temp()
   end subroutine array_scalar_write_hdf
 
-  pure subroutine array_scalar_compatible(this,other)
+  subroutine array_scalar_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1362,30 +1507,32 @@ contains
       !! The field being checked against this one
     character(len=69), parameter :: err_message = 'array_scalar_field: '//&
          'Error, operation with incompatible fields due to'//new_line('a')
+    call this%guard_temp(); call other%guard_temp()
     call this%check_subtype_compatible(other)
     select type(other)
     class is(array_scalar_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class is(array_vector_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_scalar_field)
-      if (.not.(allocated(this%field_data))) &
+      if (.not.(allocated(this%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_vector_field)
-      if (.not.(allocated(this%field_data))) &
+      if (.not.(allocated(this%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class default
       error stop (err_message//'    incompatible types.')
     end select
+    call this%clean_temp(); call other%clean_temp()
   end subroutine array_scalar_compatible
 
-  pure function array_scalar_get_element(this,element) result(val)
+  function array_scalar_get_element(this,element) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1397,10 +1544,12 @@ contains
       !! The ID number of the field element to be returned
     real(r8) :: val
       !! The value of the field corresponding to the specified ID
-    val = this%field_data(element)
+    call this%guard_temp()
+    val = this%field_data%array(element)
+    call this%clean_temp()
   end function array_scalar_get_element
 
-  pure subroutine array_scalar_set_element(this,element,val)
+  subroutine array_scalar_set_element(this,element,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1412,10 +1561,12 @@ contains
       !! The ID number of the field element to be set
     real(r8), intent(in) :: val
       !! The new value the field element is to be set to
-    this%field_data(element) = val
+    call this%guard_temp()
+    this%field_data%array(element) = val
+    call this%clean_temp()
   end subroutine array_scalar_set_element
 
-  pure function array_scalar_get_bound(this,boundary,depth) result(res)
+  function array_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1440,17 +1591,63 @@ contains
     class(array_scalar_field), allocatable :: local
     integer, dimension(:,:), allocatable :: slices
     integer :: i
+    call this%guard_temp()
     if (boundary == 0) then
       allocate(res, source=this)
       return
     end if
     allocate(local, mold=this)
     call local%subtype_boundary(this,boundary,depth,slices)
-    local%field_data = [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), i=1, &
-                      size(slices,2))]
-    local%numpoints = size(local%field_data)
+    allocate(local%field_data)
+    local%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
+    allocate(local%field_data%array(local%numpoints))
+    local%field_data%array = &
+         [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i)), &
+          i=1,size(slices,2))]
     call move_alloc(local, res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_scalar_get_bound
+
+  subroutine array_scalar_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Deallocates the field array for this object, reducing the volume
+    ! of any memory leaks.
+    !
+    class(array_scalar_field), intent(in) :: this
+    if (associated(this%field_data)) then
+      if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+    end if
+  end subroutine array_scalar_force_finalise
+
+  elemental subroutine array_scalar_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field pointer for this object and removes the
+    ! 'temporary' setting.
+    !
+    class(array_scalar_field), intent(inout) :: this
+    if (associated(this%field_data)) deallocate(this%field_data)
+    call this%unset_temp()
+  end subroutine array_scalar_finalise
+
+  function array_scalar_is_allocated(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns a logical indicating whether both the array pointer
+    ! _and_ the array which it holds are allocated.
+    !
+    class(array_scalar_field), intent(in) :: this
+    logical :: res
+    call this%guard_temp()
+    res = associated(this%field_data)
+    if (res) res = allocated(this%field_data%array)
+    call this%clean_temp()
+  end function array_scalar_is_allocated
 
 
   !=====================================================================
@@ -1474,28 +1671,32 @@ contains
     integer, intent(in)                    :: vector_dims
       !! The number of components of vectors in this field
     procedure(vector_init), optional       :: initializer
-      !! An elemental procedure taking which takes the position in the
+      !! An impure elemental procedure taking which takes the position in the
       !! fields domain (an 8-byte real) as an argument and returns the
       !! fields value at that position. Default is for field to be zero
       !! everywhere.
     class(array_vector_field), allocatable :: this
       !! A scalar field initiated based on the arguments to this function.
     integer :: i
+    call template%guard_temp()
     allocate(this, source=template)
-    if (allocated(this%field_data)) deallocate(this%field_data)
-    allocate(this%field_data(numpoints,vector_dims))
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+    allocate(this%field_data%array(numpoints,vector_dims))
     this%numpoints = numpoints
     this%vector_dims = vector_dims
     if (present(initializer)) then
       do i = 1, numpoints
-        this%field_data(i,:) = initializer(this%id_to_position(i))
+        this%field_data%array(i,:) = initializer(this%id_to_position(i))
       end do
     else
-      this%field_data = 0.0_r8
+      this%field_data%array = 0.0_r8
     end if
+    call template%clean_temp()
+    call this%set_temp()
   end function array_vector_constructor1
 
-  pure function array_vector_constructor2(template,array) result(this)
+  function array_vector_constructor2(template,array) result(this)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1504,21 +1705,33 @@ contains
     !
     class(array_vector_field), intent(in)  :: template
       !! A scalar field object which will act as a mold for the concrete
-      !! type of the returned type.
+      !! type of the returned type and which provides the meta-data.
     real(r8), dimension(:,:), intent(in)   :: array
       !! An array containing the values which this field will be
       !! initialised with.
     class(array_vector_field), allocatable :: this
       !! A scalar field initiated based on the arguments to this function.
     integer :: i
-    allocate(this, source=template)
-    if (allocated(this%field_data)) deallocate(this%field_data)
+    call template%guard_temp()
+    allocate(this, mold=template)
+    call this%assign_subtype_meta_data(template)
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(size(array,1),size(array,2)))
+    else
+      if (any(shape(this%field_data%array) /= shape(array))) then
+        deallocate(this%field_data%array)
+        allocate(this%field_data%array(size(array,1),size(array,2)))
+      end if
+    end if
     this%numpoints = size(array,1)
     this%vector_dims = size(array,2)
-    this%field_data = array
+    this%field_data%array = array
+    call template%clean_temp()
+    call this%set_temp()
   end function array_vector_constructor2
 
-  elemental function array_vector_vector_dimensions(this) result(dims)
+  impure elemental function array_vector_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1527,10 +1740,12 @@ contains
     !
     class(array_vector_field), intent(in) :: this
     integer :: dims !! Number of vector components
+    call this%guard_temp()
     dims = this%vector_dims
+    call this%clean_temp()
   end function array_vector_vector_dimensions
 
-  pure function array_vector_elements(this) result(elements)
+  function array_vector_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1538,10 +1753,12 @@ contains
     !
     class(array_vector_field), intent(in) :: this
     integer :: elements
+    call this%guard_temp()
     elements = this%numpoints
+    call this%clean_temp()
   end function array_vector_elements
 
-  pure function array_vector_raw_size(this,exclude_lower_bound, &
+  function array_vector_raw_size(this,exclude_lower_bound, &
                                        exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1566,16 +1783,18 @@ contains
     integer :: res
     integer, dimension(:,:), allocatable :: slices
     integer :: i
-    if (allocated(this%field_data)) then
+    call this%guard_temp()
+    if (this%is_allocated()) then
       slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
       res = sum(elements_in_slice(slices(1,:),slices(2,:),slices(3,:))) * &
             this%vector_dims
     else
       res = 0
     end if
+    call this%clean_temp()
   end function array_vector_raw_size
   
-  pure function array_vector_raw(this,exclude_lower_bound, &
+  function array_vector_raw(this,exclude_lower_bound, &
                                   exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1606,16 +1825,18 @@ contains
       !! Array containing data needed to describe field
     integer, dimension(:,:), allocatable :: slices
     integer :: i
+    call this%guard_temp()
     slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
-    if (allocated(this%field_data)) then
-      res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i),:), i=1, &
+    if (this%is_allocated()) then
+      res = [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i),:), i=1, &
              size(slices,2))]
     else
       allocate(res(0))
     end if
+    call this%clean_temp()
   end function array_vector_raw
   
-  pure subroutine array_vector_set_from_raw(this,raw,provide_lower_bound, &
+  subroutine array_vector_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -1643,21 +1864,24 @@ contains
     integer, dimension(:,:), allocatable :: slices
     integer, dimension(:), allocatable :: counts
     integer :: i, start, finish
+    call this%guard_temp()
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     slices = this%raw_slices(provide_lower_bound,provide_upper_bound)
     counts = elements_in_slice(slices(1,:),slices(2,:),slices(3,:)) * this%vector_dims
-    if (.not. allocated(this%field_data)) then
-       allocate(this%field_data(maxval(slices(2,:)),this%vector_dims))
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(maxval(slices(2,:)),this%vector_dims))
     end if
     do concurrent (i = 1:size(counts))
       start = sum(counts(1:i-1)) + 1
       finish = start + counts(i) - 1
-      this%field_data(slices(1,i):slices(2,i):slices(3,i),:) = reshape(raw(start:finish), &
+      this%field_data%array(slices(1,i):slices(2,i):slices(3,i),:) = reshape(raw(start:finish), &
            [counts(i)/this%vector_dims,this%vector_dims])
     end do
+    call this%clean_temp()
   end subroutine array_vector_set_from_raw
 
-  pure function array_vector_vf_m_sf(this,rhs) result(res)
+  function array_vector_vf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1668,6 +1892,7 @@ contains
     class(vector_field), allocatable :: res !! The restult of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -1676,15 +1901,17 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       do concurrent(i=1:this%vector_dims)
-        local%field_data(:,i) = this%field_data(:,i) * rhs%field_data
+        local%field_data%array(:,i) = this%field_data%array(:,i) * rhs%field_data%array
       end do
     class is(uniform_scalar_field)
-      local%field_data = this%field_data * rhs%get_value()
+      local%field_data%array = this%field_data%array * rhs%get_value()
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_m_sf
 
-  pure function array_vector_r_m_vf(lhs,rhs) result(res)
+  function array_vector_r_m_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1694,13 +1921,16 @@ contains
     class(array_vector_field), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data = lhs * rhs%field_data
+    local%field_data%array = lhs * rhs%field_data%array
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_vector_r_m_vf
 
-  pure function array_vector_vf_m_r(this,rhs) result(res)
+  function array_vector_vf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1710,13 +1940,16 @@ contains
     real(r8), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data * rhs
+    local%field_data%array = this%field_data%array * rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_vf_m_r
   
-  pure function array_vector_vf_d_sf(this,rhs) result(res)
+  function array_vector_vf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1727,6 +1960,7 @@ contains
     class(vector_field), allocatable :: res !! The restult of this operation
     class(array_vector_field), allocatable :: local
     integer :: i
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -1735,15 +1969,17 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       do concurrent(i=1:this%vector_dims)
-        local%field_data(:,i) = this%field_data(:,i) / rhs%field_data
+        local%field_data%array(:,i) = this%field_data%array(:,i) / rhs%field_data%array
       end do
     class is(uniform_scalar_field)
-      local%field_data = this%field_data / rhs%get_value()
+      local%field_data%array = this%field_data%array / rhs%get_value()
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_d_sf
 
-  pure function array_vector_vf_d_r(this,rhs) result(res)
+  function array_vector_vf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1753,13 +1989,16 @@ contains
     real(r8), intent(in) :: rhs
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data = this%field_data / rhs
+    local%field_data%array = this%field_data%array / rhs
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_vf_d_r
   
-  pure function array_vector_vf_s_vf(this,rhs) result(res)
+  function array_vector_vf_s_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1771,6 +2010,7 @@ contains
     class(array_vector_field), allocatable :: local
     integer :: i, min_dims, max_dims
     real(r8), dimension(:), allocatable :: vec
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -1781,46 +2021,48 @@ contains
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(this, .false.)
-        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
       end if
-      local%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
-                                     - rhs%field_data(:,1:min_dims)
+      local%field_data%array(:,1:min_dims) = this%field_data%array(:,1:min_dims) &
+                                     - rhs%field_data%array(:,1:min_dims)
       if (rhs%vector_dims > this%vector_dims) then
-        local%field_data(:,min_dims+1:max_dims) = -rhs%field_data(:,min_dims+1:max_dims)
+        local%field_data%array(:,min_dims+1:max_dims) = -rhs%field_data%array(:,min_dims+1:max_dims)
       else
-        local%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
+        local%field_data%array(:,min_dims+1:max_dims) = this%field_data%array(:,min_dims+1:max_dims)
       end if
     class is(uniform_vector_field)
       min_dims = min(this%vector_dims,rhs%vector_dimensions())
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(this, .false.)
-        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
       end if
       vec = rhs%get_value()
       do concurrent(i=1:min_dims)
-        local%field_data(:,i) = this%field_data(:,i) - vec(i)
+        local%field_data%array(:,i) = this%field_data%array(:,i) - vec(i)
       end do
       if (rhs%vector_dimensions() > this%vector_dims) then
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data(:,i) = -vec(i)
+          local%field_data%array(:,i) = -vec(i)
         end do
       else
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data(:,i) = this%field_data(:,i)
+          local%field_data%array(:,i) = this%field_data%array(:,i)
         end do
       end if
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_s_vf
 
-  pure function array_vector_r_s_vf(lhs,rhs) result(res)
+  function array_vector_r_s_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1831,26 +2073,29 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: min_dims, max_dims, i
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs,.false.)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data(local%numpoints, max_dims))
+    allocate(local%field_data%array(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
+      local%field_data%array(i,:min_dims) = lhs(:min_dims) - rhs%field_data%array(i,:min_dims)
     end do
     if (rhs%vector_dims > size(lhs)) then
-      local%field_data(:,min_dims+1:) = -rhs%field_data(:,min_dims+1:)
+      local%field_data%array(:,min_dims+1:) = -rhs%field_data%array(:,min_dims+1:)
     else
       local%vector_dims = size(lhs)
       do concurrent (i=1:local%numpoints)
-        local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+        local%field_data%array(i,min_dims+1:) = lhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_vector_r_s_vf
 
-  pure function array_vector_vf_s_r(this,rhs) result(res)
+  function array_vector_vf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1861,26 +2106,29 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: min_dims, max_dims, i
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     min_dims = min(this%vector_dims, size(rhs))
     max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data(local%numpoints, max_dims))
+    allocate(local%field_data%array(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
+      local%field_data%array(i,:min_dims) = this%field_data%array(i,:min_dims) - rhs(:min_dims)
     end do
     if (this%vector_dims > size(rhs)) then
-      local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
+      local%field_data%array(:,min_dims+1:) = this%field_data%array(:,min_dims+1:)
     else
       local%vector_dims = size(rhs)
       do concurrent (i=1:local%numpoints)
-        local%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
+        local%field_data%array(i,min_dims+1:) = -rhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_vf_s_r
   
-  pure function array_vector_vf_a_vf(this,rhs) result(res)
+  function array_vector_vf_a_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1892,6 +2140,7 @@ contains
     class(array_vector_field), allocatable :: local
     integer :: i, max_dims, min_dims
     real(r8), dimension(:), allocatable :: vec
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -1900,24 +2149,24 @@ contains
     class is(array_vector_field)
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(rhs, .false.)
-        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
       end if
       min_dims = min(this%vector_dims,rhs%vector_dimensions())
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
-      local%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
-                                     + rhs%field_data(:,1:min_dims)
+      local%field_data%array(:,1:min_dims) = this%field_data%array(:,1:min_dims) &
+                                     + rhs%field_data%array(:,1:min_dims)
       if (rhs%vector_dims > this%vector_dims) then
-        local%field_data(:,min_dims+1:max_dims) = rhs%field_data(:,min_dims+1:max_dims)
+        local%field_data%array(:,min_dims+1:max_dims) = rhs%field_data%array(:,min_dims+1:max_dims)
       else
-        local%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
+        local%field_data%array(:,min_dims+1:max_dims) = this%field_data%array(:,min_dims+1:max_dims)
       end if
     class is(uniform_vector_field)
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(rhs, .false.)
-        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
@@ -1926,22 +2175,24 @@ contains
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
       vec = rhs%get_value()
       do concurrent(i=1:min_dims)
-        local%field_data(:,i) = this%field_data(:,i) + vec(i)
+        local%field_data%array(:,i) = this%field_data%array(:,i) + vec(i)
       end do
       if (rhs%vector_dimensions() > this%vector_dims) then
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data(:,i) = vec(i)
+          local%field_data%array(:,i) = vec(i)
         end do
       else
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data(:,i) = this%field_data(:,i)
+          local%field_data%array(:,i) = this%field_data%array(:,i)
         end do
       end if
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_a_vf
 
-  pure function array_vector_r_a_vf(lhs,rhs) result(res)
+  function array_vector_r_a_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1952,26 +2203,29 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: min_dims, max_dims, i
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs,.false.)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data(local%numpoints, max_dims))
+    allocate(local%field_data%array(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
+      local%field_data%array(i,:min_dims) = lhs(:min_dims) + rhs%field_data%array(i,:min_dims)
     end do
     if (rhs%vector_dims > size(lhs)) then
-      local%field_data(:,min_dims+1:) = rhs%field_data(:,min_dims+1:)
+      local%field_data%array(:,min_dims+1:) = rhs%field_data%array(:,min_dims+1:)
     else
       local%vector_dims = size(lhs)
       do concurrent (i=1:local%numpoints)
-        local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+        local%field_data%array(i,min_dims+1:) = lhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_vector_r_a_vf
 
-  pure function array_vector_vf_a_r(this,rhs) result(res)
+  function array_vector_vf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -1982,26 +2236,29 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     class(array_vector_field), allocatable :: local
     integer :: min_dims, max_dims, i
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     min_dims = min(this%vector_dims, size(rhs))
     max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data(local%numpoints, max_dims))
+    allocate(local%field_data%array(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
+      local%field_data%array(i,:min_dims) = this%field_data%array(i,:min_dims) + rhs(:min_dims)
     end do
     if (this%vector_dims > size(rhs)) then
-      local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
+      local%field_data%array(:,min_dims+1:) = this%field_data%array(:,min_dims+1:)
     else
       local%vector_dims = size(rhs)
       do concurrent (i=1:local%numpoints) 
-        local%field_data(i,min_dims+1:) = rhs(min_dims+1:)
+        local%field_data%array(i,min_dims+1:) = rhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_vf_a_r
 
-  elemental subroutine array_vector_assign(this,rhs)
+  impure elemental subroutine array_vector_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2011,24 +2268,35 @@ contains
     class(vector_field), intent(in) :: rhs
     integer :: i
     real(r8), dimension(:), allocatable :: tmp
-    call this%assign_meta_data(rhs)
+    call rhs%guard_temp()
+    call this%assign_meta_data(rhs, .not. this%memory_reusable())
     select type(rhs)
     class is(array_vector_field)
-      if (allocated(rhs%field_data)) this%field_data = rhs%field_data
+      if (allocated(rhs%field_data%array)) then
+        if (rhs%memory_reusable()) then
+          if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+          call move_alloc(rhs%field_data%array, this%field_data%array)
+        else
+          this%field_data%array = rhs%field_data%array
+        end if
+      end if
     class is(uniform_vector_field)
-      if (allocated(this%field_data)) then
+      if (allocated(this%field_data%array)) then
         tmp = rhs%get_value()
         do concurrent (i=1:this%vector_dims)
-          this%field_data(:,i) = tmp(i)
+          this%field_data%array(:,i) = tmp(i)
         end do
       else
         error stop ('Trying to assign `uniform_vector_field` to '// &
                    '`array_vector_field` with unallocated contents.')
       end if
+    class default
+      error stop ('Incompatible field assignment.')
     end select
+    call rhs%clean_temp()
   end subroutine array_vector_assign
 
-  elemental subroutine array_vector_assign_scalar(this,rhs)
+  impure elemental subroutine array_vector_assign_scalar(this,rhs)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2037,15 +2305,16 @@ contains
     class(array_vector_field), intent(inout)      :: this
     class(scalar_field), dimension(:), intent(in) :: rhs
     integer :: i
+	call rhs%guard_temp()
     call this%assign_meta_data(rhs(1), .false.)
     select type(rhs)
     class is(array_scalar_field)
       this%vector_dims = size(rhs)
       this%numpoints = rhs(1)%numpoints
-      if (allocated(this%field_data)) then
-        if (size(this%field_data,1) /= this%numpoints .or. &
-            size(this%field_data,2) /= this%vector_dims) then
-          deallocate(this%field_data)
+      if (allocated(this%field_data%array)) then
+        if (size(this%field_data%array,1) /= this%numpoints .or. &
+            size(this%field_data%array,2) /= this%vector_dims) then
+          deallocate(this%field_data%array)
         end if
       end if
       if (.not. allocated(this%field_data)) then
@@ -2055,18 +2324,19 @@ contains
         this%field_data(:,i) = rhs(i)%field_data
       end do
     class is(uniform_scalar_field)
-      if (allocated(this%field_data)) then
+      if (allocated(this%field_data%array)) then
         do concurrent (i=1:this%vector_dims)
-          this%field_data(:,i) = rhs(i)%get_value()
+          this%field_data%array(:,i) = rhs(i)%get_value()
         end do
       else
         error stop ('Trying to assign `uniform_scalar_field` to '// &
                    '`array_vector_field` with unallocated contents.')
       end if
     end select
+	call rhs%clean_temp()
   end subroutine array_vector_assign_scalar
 
-  pure function array_vector_norm(this) result(res)
+  function array_vector_norm(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2075,18 +2345,21 @@ contains
     class(array_vector_field), intent(in) :: this
     class(scalar_field), allocatable :: res
     class(array_scalar_field), allocatable :: local
+    call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data = sqrt(sum(this%field_data**2,2))
+      res%field_data%array = sqrt(sum(this%field_data%array**2,2))
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_norm
 
-  pure function array_vector_component(this,comp) result(res)
+  function array_vector_component(this,comp) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2095,19 +2368,23 @@ contains
     class(array_vector_field), intent(in) :: this
     integer, intent(in) :: comp
     class(scalar_field), allocatable :: res
+    real(r8), allocatable, dimension(:,:) :: tmp
+    call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
       if (comp <= this%vector_dims) then
-        res%field_data = this%field_data(:,comp)
+        res%field_data%array = this%field_data%array(:,comp)
       else
-        res%field_data = 0.0_r8
+        res%field_data%array = 0.0_r8
       end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_component
 
   function array_vector_d_dx(this, dir, order) result(res)
@@ -2122,14 +2399,18 @@ contains
     class(vector_field), allocatable :: res
     class(array_vector_field), allocatable :: local
     integer :: i
+    call this%guard_temp()
     allocate(local, mold=this)
-    allocate(local%field_data, mold=this%field_data)
+    allocate(local%field_data)
+    allocate(local%field_data%array, mold=this%field_data%array)
     call local%assign_meta_data(this)
     do i = 1, this%vector_dims
-      local%field_data(:,i) = this%array_dx(this%field_data(:,i), &
+      local%field_data%array(:,i) = this%array_dx(this%field_data%array(:,i), &
                                                      dir, order)
     end do
     call move_alloc(local, res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_d_dx
 
   function array_vector_component_d_dx(this, dir, component, order) result(res)
@@ -2143,16 +2424,19 @@ contains
     integer, intent(in) :: component !! Which component of the vector is being differentiated
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
     class(scalar_field), allocatable :: res
+    call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data(:) = this%array_dx(this%field_data(:,component), &
+      res%field_data%array(:) = this%array_dx(this%field_data%array(:,component), &
                                         dir, order)
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_component_d_dx
 
   function array_vector_laplacian(this) result(res)
@@ -2164,22 +2448,25 @@ contains
     class(array_vector_field), intent(in) :: this
     class(vector_field), allocatable :: res !! The result of this operation
     integer :: i, j
+    call this%guard_temp()
     call this%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data(size(this%field_data,1),this%vector_dims))
+      allocate(res%field_data%array(size(this%field_data%array,1),this%vector_dims))
       do i = 1, this%vector_dims
-        res%field_data(:,i) = this%array_dx(this%field_data(:,i),1,2)
+        res%field_data%array(:,i) = this%array_dx(this%field_data%array(:,i),1,2)
         do j = 2, this%dimensions()
-          res%field_data(:,i) = res%field_data(:,i) + &
-                              this%array_dx(this%field_data(:,i),j,2)
+          res%field_data%array(:,i) = res%field_data%array(:,i) + &
+                              this%array_dx(this%field_data%array(:,i),j,2)
         end do
       end do
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                  '`allocate_vector_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_laplacian
   
   function array_vector_divergence(this) result(res)
@@ -2191,19 +2478,22 @@ contains
     class(array_vector_field), intent(in) :: this
     class(scalar_field), allocatable :: res !! The result of this operation
     integer :: i
+    call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data = this%array_dx(this%field_data(:,1),1,1)
+      res%field_data%array = this%array_dx(this%field_data%array(:,1),1,1)
       do i = 2, this%dimensions()
-        res%field_data = res%field_data + &
-                         this%array_dx(this%field_data(:,i),i,1)
+        res%field_data%array = res%field_data%array + &
+                         this%array_dx(this%field_data%array(:,i),i,1)
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_divergence
   
   function array_vector_curl(this) result(res)
@@ -2216,62 +2506,65 @@ contains
     class(vector_field), allocatable :: res !! The result of this operation
     logical, dimension(3) :: been_set
     integer :: i
+    call this%guard_temp()
     been_set = .false.
     call this%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this,.false.)
       res%vector_dims = 3
-      allocate(res%field_data(res%numpoints,3))
+      allocate(res%field_data%array(res%numpoints,3))
       if (this%dimensions() >= 3) then
-        res%field_data(:,2) = this%array_dx(this%field_data(:,1),3)
+        res%field_data%array(:,2) = this%array_dx(this%field_data%array(:,1),3)
         been_set(2) = .true.
       end if
       if (this%dimensions() >= 2) then
-        res%field_data(:,3) = -this%array_dx(this%field_data(:,1),2)
+        res%field_data%array(:,3) = -this%array_dx(this%field_data%array(:,1),2)
         been_set(3) = .true.
       end if
       if (this%vector_dims >= 2) then
         if (this%dimensions() >= 3) then
-          res%field_data(:,1) = -this%array_dx(this%field_data(:,2),3)
+          res%field_data%array(:,1) = -this%array_dx(this%field_data%array(:,2),3)
           been_set(1) = .true.
         end if
         if (been_set(3)) then
-          res%field_data(:,3) = res%field_data(:,3) &
-                             + this%array_dx(this%field_data(:,2),1)
+          res%field_data%array(:,3) = res%field_data%array(:,3) &
+                             + this%array_dx(this%field_data%array(:,2),1)
         else
-          res%field_data(:,3) = this%array_dx(this%field_data(:,2),1)
+          res%field_data%array(:,3) = this%array_dx(this%field_data%array(:,2),1)
           been_set(3) = .true.
         end if
       end if
       if (this%vector_dims >= 3) then
         if (this%dimensions() >= 2) then
           if (been_set(1)) then
-            res%field_data(:,1) = res%field_data(:,1) &
-                               + this%array_dx(this%field_data(:,3),2)
+            res%field_data%array(:,1) = res%field_data%array(:,1) &
+                               + this%array_dx(this%field_data%array(:,3),2)
           else
-            res%field_data(:,1) = this%array_dx(this%field_data(:,3),2)
+            res%field_data%array(:,1) = this%array_dx(this%field_data%array(:,3),2)
             been_set(1) = .true.
           end if
         end if
         if (been_set(2)) then
-          res%field_data(:,2) = res%field_data(:,2) &
-                             - this%array_dx(this%field_data(:,3),1)
+          res%field_data%array(:,2) = res%field_data%array(:,2) &
+                             - this%array_dx(this%field_data%array(:,3),1)
         else
-          res%field_data(:,2) = -this%array_dx(this%field_data(:,3),1)
+          res%field_data%array(:,2) = -this%array_dx(this%field_data%array(:,3),1)
           been_set(2) = .true.
         end if
       end if
       do i = 1, 3
-        if (.not. been_set(i)) res%field_data(:,i) = 0.0_r8
+        if (.not. been_set(i)) res%field_data%array(:,i) = 0.0_r8
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_curl
 
-  pure function array_vector_vf_cross_vf(this,rhs) result(res)
+  function array_vector_vf_cross_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2287,13 +2580,14 @@ contains
     real(r8), dimension(:), allocatable :: tmp
     integer :: i, dims1, dims2
     class(array_vector_field), allocatable :: local
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     local%vector_dims = 3
-    allocate(local%field_data(this%numpoints,3))
+    allocate(local%field_data%array(this%numpoints,3))
     vec1 = 0
     vec2 = 0
     dims1 = min(3,this%vector_dims)
@@ -2301,9 +2595,9 @@ contains
     class is(array_vector_field)
       dims2 = min(3,rhs%vector_dimensions())
       do concurrent(i=1:this%numpoints)
-        vec1(:dims1) = this%field_data(i,:dims1)
-        vec2(:dims2) = rhs%field_data(i,:dims2)
-        local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        vec1(:dims1) = this%field_data%array(i,:dims1)
+        vec2(:dims2) = rhs%field_data%array(i,:dims2)
+        local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                  vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                  vec1(1)*vec2(2) - vec2(1)*vec1(2)]
       end do
@@ -2312,16 +2606,18 @@ contains
       tmp = rhs%get_value()
       vec2(:dims2) = tmp(:dims2)
       do concurrent(i=1:this%numpoints)
-        vec1(:dims1) = this%field_data(i,:dims1)
-        local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        vec1(:dims1) = this%field_data%array(i,:dims1)
+        local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                  vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                  vec1(1)*vec2(2) - vec2(1)*vec1(2)]
       end do
     end select
     call move_alloc(local,res)
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_cross_vf
 
-  pure function array_vector_vf_cross_vr(this,rhs) result(res)
+  function array_vector_vf_cross_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2336,25 +2632,28 @@ contains
     real(r8), dimension(3) :: vec1, vec2
     integer :: i, dims1, dims2
     class(array_vector_field), allocatable :: local
+    call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     local%vector_dims = 3
-    allocate(local%field_data(this%numpoints,3))
+    allocate(local%field_data%array(this%numpoints,3))
     dims1 = min(3,this%vector_dims)
     dims2 = min(3,size(rhs))
     vec1 = 0.0_r8
     vec2 = 0.0_r8
     do concurrent(i=1:this%numpoints)
-      vec1(:dims1) = this%field_data(i,:dims1)
+      vec1(:dims1) = this%field_data%array(i,:dims1)
       vec2(:dims2) = rhs(:dims2)
-      local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+      local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                vec1(1)*vec2(2) - vec2(1)*vec1(2)]
     end do
     call move_alloc(local, res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_vf_cross_vr
 
-  pure function array_vector_vr_cross_vf(lhs,rhs) result(res)
+  function array_vector_vr_cross_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2369,25 +2668,28 @@ contains
     class(array_vector_field), allocatable :: local
     real(r8), dimension(3) :: vec1, vec2
     integer :: i, dims1, dims2
+    call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs,.false.)
     local%vector_dims = 3
-    allocate(local%field_data(rhs%numpoints,3))
+    allocate(local%field_data%array(rhs%numpoints,3))
     dims1 = min(3,size(lhs))
     dims2 = min(3,rhs%vector_dims)
     vec1 = 0.0_r8
     vec2 = 0.0_r8
     do concurrent(i=1:rhs%numpoints)
       vec1(:dims1) = lhs(:dims1)
-      vec2(:dims2) = rhs%field_data(i,:dims2)
-      local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+      vec2(:dims2) = rhs%field_data%array(i,:dims2)
+      local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                vec1(1)*vec2(2) - vec2(1)*vec1(2)]
     end do
     call move_alloc(local, res)
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_vector_vr_cross_vf
 
-  pure function array_vector_vf_dot_vf(this,rhs) result(res)
+  function array_vector_vf_dot_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2016
     !
@@ -2398,6 +2700,7 @@ contains
     class(scalar_field), allocatable :: res !! The restult of this operation
     integer :: i, min_dims
     real(r8), dimension(:), allocatable :: tmp
+    call this%guard_temp(); call rhs%guard_temp()
 #:if defined('DEBUG')
     call this%check_compatible(rhs)
 #:endif
@@ -2408,22 +2711,24 @@ contains
       select type(rhs)
       class is(array_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
-        res%field_data = &
-          sum(this%field_data(:,1:min_dims)*rhs%field_data(:,1:min_dims),2)
+        res%field_data%array = &
+          sum(this%field_data%array(:,1:min_dims)*rhs%field_data%array(:,1:min_dims),2)
       class is(uniform_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         tmp = rhs%get_value()
         do concurrent(i=1:this%numpoints)
-          res%field_data(i) = dot_product(this%field_data(i,1:min_dims),tmp(1:min_dims))
+          res%field_data%array(i) = dot_product(this%field_data%array(i,1:min_dims),tmp(1:min_dims))
         end do
       end select
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_vf_dot_vf
 
-  pure function array_vector_vf_dot_vr(this,rhs) result(res)
+  function array_vector_vf_dot_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2433,21 +2738,24 @@ contains
     real(r8), dimension(:), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     integer :: i, min_dims
+    call this%guard_temp()
     call this%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
       min_dims = min(this%vector_dims,size(rhs))
       do concurrent(i=1:this%numpoints)
-        res%field_data(i) = sum(this%field_data(i,1:min_dims)*rhs(1:min_dims))
+        res%field_data%array(i) = sum(this%field_data%array(i,1:min_dims)*rhs(1:min_dims))
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_vf_dot_vr
 
-  pure function array_vector_vr_dot_vf(lhs,rhs) result(res)
+  function array_vector_vr_dot_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2457,21 +2765,24 @@ contains
     class(array_vector_field), intent(in) :: rhs
     class(scalar_field), allocatable :: res !! The restult of this operation
     integer :: i, min_dims
+    call rhs%guard_temp()
     call rhs%allocate_scalar_field(res)
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(rhs)
       min_dims = min(size(lhs),rhs%vector_dims)
       do concurrent(i=1:rhs%numpoints)
-        res%field_data(i) = sum(lhs(1:min_dims)*rhs%field_data(i,1:min_dims))
+        res%field_data%array(i) = sum(lhs(1:min_dims)*rhs%field_data%array(i,1:min_dims))
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
     end select
+    call res%set_temp()
+    call rhs%clean_temp()
   end function array_vector_vr_dot_vf
 
-  pure logical function array_vector_is_equal(this,rhs) result(iseq)
+  logical function array_vector_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -2483,6 +2794,7 @@ contains
     integer :: i, dims
     real(r8) :: normalization
     real(r8), dimension(:), allocatable :: tmp
+    call this%guard_temp(); call rhs%guard_temp()
     iseq = .true.
     select type(rhs)
     class is(array_vector_field)
@@ -2492,21 +2804,21 @@ contains
       end if
       if (this%vector_dims > rhs%vector_dims) then
         dims = rhs%vector_dims
-        iseq = all(abs(this%field_data(:,dims:)) < get_tol())
+        iseq = all(abs(this%field_data%array(:,dims:)) < get_tol())
       else if (this%vector_dims < rhs%vector_dims) then
         dims = this%vector_dims
-        iseq = all(abs(rhs%field_data(:,dims:)) < get_tol())
+        iseq = all(abs(rhs%field_data%array(:,dims:)) < get_tol())
       else
         dims = this%vector_dims
       end if
       if (.not. iseq) return
       do i=1,this%numpoints
-        normalization = norm2(this%field_data(i,:dims))
+        normalization = norm2(this%field_data%array(i,:dims))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
-        iseq = (norm2(this%field_data(i,1:dims) - rhs%field_data(i,1:dims))/ &
+        iseq = (norm2(this%field_data%array(i,1:dims) - rhs%field_data%array(i,1:dims))/ &
                 normalization < get_tol()) .or. &
-               all(is_nan(this%field_data(i,1:dims)) .eqv. &
-                   is_nan(rhs%field_data(i,1:dims)))
+               all(is_nan(this%field_data%array(i,1:dims)) .eqv. &
+                   is_nan(rhs%field_data%array(i,1:dims)))
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
@@ -2516,7 +2828,7 @@ contains
       tmp = rhs%get_value()
       if (this%vector_dims > rhs%vector_dimensions()) then
         dims = rhs%vector_dimensions()
-        iseq = all(abs(this%field_data(:,dims:)) < get_tol())
+        iseq = all(abs(this%field_data%array(:,dims:)) < get_tol())
       else if (this%vector_dims < rhs%vector_dimensions()) then
         dims = this%vector_dimensions()
         iseq = all(abs(tmp(dims:)) < get_tol())
@@ -2525,11 +2837,11 @@ contains
       end if
       if (.not. iseq) return
       do i=1,this%numpoints
-        normalization = norm2(this%field_data(i,:dims))
+        normalization = norm2(this%field_data%array(i,:dims))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = (norm2(this%field_data(i,1:dims) - tmp(1:dims))/normalization &
+        iseq = (norm2(this%field_data%array(i,1:dims) - tmp(1:dims))/normalization &
                 < get_tol()) .or. &
-               all(is_nan(this%field_data(i,1:dims)) .eqv. is_nan(tmp(1:dims))) 
+               all(is_nan(this%field_data%array(i,1:dims)) .eqv. is_nan(tmp(1:dims))) 
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
@@ -2538,9 +2850,10 @@ contains
     class default
       iseq = .false.
     end select
+    call this%clean_temp(); call rhs%clean_temp()
   end function array_vector_is_equal
 
-  pure subroutine array_vector_assign_meta_data(this, rhs, alloc)
+  subroutine array_vector_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: April 2016
     !
@@ -2552,6 +2865,7 @@ contains
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
     logical :: al
+    call this%guard_temp(); call rhs%guard_temp()
     if (present(alloc)) then
       al = alloc
     else
@@ -2562,31 +2876,36 @@ contains
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = this%dimensions()
-      if (allocated(this%field_data)) then
-        if (.not. allocated(rhs%field_data)) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data,1)/=size(rhs%field_data)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data),1))
+      if (.not. associated(this%field_data)) allocate(this%field_data)
+      if (allocated(this%field_data%array)) then
+        if (.not. allocated(rhs%field_data%array)) then
+          deallocate(this%field_data%array)
+        else if (al .and. size(this%field_data%array,1)/=size(rhs%field_data%array)) then
+          deallocate(this%field_data%array)
+          allocate(this%field_data%array(size(rhs%field_data%array),1))
         end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data),1))
+      else if (allocated(rhs%field_data%array) .and. al) then
+        allocate(this%field_data%array(size(rhs%field_data%array),1))
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = rhs%vector_dims
-      if (allocated(this%field_data)) then
-        if (.not. allocated(rhs%field_data)) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data,1)/=size(rhs%field_data,1) &
-                 .and. size(this%field_data,2)/=size(rhs%field_data,2)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data,1),size(rhs%field_data,2)))
+      if (.not. associated(this%field_data)) allocate(this%field_data)
+      if (allocated(this%field_data%array)) then
+        if (.not. allocated(rhs%field_data%array)) then
+          deallocate(this%field_data%array)
+        else if (al .and. &
+                 any(shape(this%field_data%array) /= shape(rhs%field_data%array))) then
+          deallocate(this%field_data%array)
+          allocate(this%field_data%array(size(rhs%field_data%array,1), &
+                                         size(rhs%field_data%array,2)))
         end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data,1),size(rhs%field_data,2)))
+      else if (allocated(rhs%field_data%array) .and. al) then
+        allocate(this%field_data%array(size(rhs%field_data%array,1), &
+                                       size(rhs%field_data%array,2)))
       end if
     end select
+    call this%clean_temp(); call rhs%clean_temp()
   end subroutine array_vector_assign_meta_data
 
   subroutine array_vector_write_hdf(this, hdf_id, dataset_name, dims, &
@@ -2609,6 +2928,7 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    call this%guard_temp()
 #:if defined('DEBUG')
     if (product(dims) /= this%numpoints) &
       error stop('Dimensions in requested output array do not match '// &
@@ -2617,10 +2937,11 @@ contains
     error = 0
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims)+1, &
                                    int([dims,this%vector_dims],hsize_t), &
-                                   this%field_data, error)
+                                   this%field_data%array, error)
+    call this%clean_temp()
   end subroutine array_vector_write_hdf
   
-  pure subroutine array_vector_compatible(this,other)
+  subroutine array_vector_compatible(this,other)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -2633,30 +2954,32 @@ contains
       !! The field being checked against this one
     character(len=69), parameter :: err_message = 'array_vector_field: '//&
          'Error, operation with incompatible fields due to'//new_line('a')
+    call this%guard_temp(); call other%guard_temp()
     call this%check_subtype_compatible(other)
     select type(other)
     class is(array_scalar_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class is(array_vector_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
+      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_scalar_field)
-      if (.not.(allocated(this%field_data))) &
+      if (.not.(allocated(this%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_vector_field)
-      if (.not.(allocated(this%field_data))) &
+      if (.not.(allocated(this%field_data%array))) &
            error stop (err_message//'    uninitialised fields.')
     class default
       error stop (err_message//'    incompatible types.')
     end select
+    call this%clean_temp(); call other%clean_temp()
   end subroutine array_vector_compatible
 
-  pure function array_vector_get_element_vec(this,element) result(val)
+  function array_vector_get_element_vec(this,element) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2668,10 +2991,12 @@ contains
       !! The ID number of the field element to be returned
     real(r8), allocatable, dimension(:) :: val
       !! The vector in the field corresponding to the specified ID
-    val = this%field_data(element,:)
+    call this%guard_temp()
+    val = this%field_data%array(element,:)
+    call this%clean_temp()
   end function array_vector_get_element_vec
   
-  pure function array_vector_get_element_comp(this,element,component) result(val)
+  function array_vector_get_element_comp(this,element,component) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2686,10 +3011,12 @@ contains
     real(r8) :: val
       !! The vector component in the field corresponding to the 
       !! specified ID
-    val = this%field_data(element,component)
+    call this%guard_temp()
+    val = this%field_data%array(element,component)
+    call this%clean_temp()
   end function array_vector_get_element_comp
 
-  pure subroutine array_vector_set_element_vec(this,element,val)
+  subroutine array_vector_set_element_vec(this,element,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2701,10 +3028,12 @@ contains
       !! The ID number of the field element to be set
     real(r8), dimension(:), intent(in) :: val
       !! The new vector value the field element is to be set to
-    this%field_data(element,:) = val
+    call this%guard_temp()
+    this%field_data%array(element,:) = val
+    call this%clean_temp()
   end subroutine array_vector_set_element_vec
 
-  pure subroutine array_vector_set_element_comp(this,element,component,val)
+  subroutine array_vector_set_element_comp(this,element,component,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -2718,10 +3047,12 @@ contains
       !! The number of the vector component to be returned
     real(r8), intent(in) :: val
       !! The new value of the vector component in the field element
-    this%field_data(element,component) = val
+    call this%guard_temp()
+    this%field_data%array(element,component) = val
+    call this%clean_temp()
   end subroutine array_vector_set_element_comp
 
-  pure function array_vector_get_bound(this,boundary,depth) result(res)
+  function array_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2747,6 +3078,7 @@ contains
     class(array_vector_field), allocatable :: local
     integer, dimension(:,:), allocatable :: slices
     integer :: i, j, k
+    call this%guard_temp()
     if (boundary == 0) then
       allocate(res, source=this)
       return
@@ -2754,13 +3086,57 @@ contains
     allocate(local, mold=this)
     call local%subtype_boundary(this,boundary,depth,slices)
     local%vector_dims = this%vector_dims
-    local%numpoints = size(local%field_data)
-    allocate(local%field_data(local%numpoints,local%vector_dims))
+    local%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
+    allocate(local%field_data)
+    allocate(local%field_data%array(local%numpoints,local%vector_dims))
     do concurrent (j=1:local%vector_dims)
-      local%field_data(:,j) = [(this%field_data(slices(1,i):slices(2,i):slices(3,i),j), &
-                              i=1, size(slices,2))]
+      local%field_data%array(:,j) = &
+           [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i),j), &
+           i=1, size(slices,2))]
     end do
     call move_alloc(local, res)
+    call res%set_temp()
+    call this%clean_temp()
   end function array_vector_get_bound
+
+  function array_vector_is_allocated(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: November 2016
+    !
+    ! Returns a logical indicating whether both the array pointer
+    ! _and_ the array which it holds are allocated.
+    !
+    class(array_vector_field), intent(in) :: this
+    logical :: res
+    call this%guard_temp()
+    res = associated(this%field_data)
+    if (res) res = allocated(this%field_data%array)
+    call this%clean_temp()
+  end function array_vector_is_allocated
+
+  subroutine array_vector_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: February 2017
+    !
+    ! Deallocates the field array for this object, reducing the volume
+    ! of any memory leaks.
+    !
+    class(array_vector_field), intent(in) :: this
+    if (associated(this%field_data)) then
+      if (allocated(this%field_data%array)) deallocate(this%field_data%array)
+    end if
+  end subroutine array_vector_force_finalise
+
+  elemental subroutine array_vector_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    class(array_vector_field), intent(inout) :: this
+    if (associated(this%field_data)) deallocate(this%field_data)
+    call this%unset_temp()
+  end subroutine array_vector_finalise
+
 
 end module array_fields_mod

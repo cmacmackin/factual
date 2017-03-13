@@ -20,13 +20,6 @@
 !  MA 02110-1301, USA.
 !  
 
-! Make procedures non-pure for debugging, so that messages can be
-! printed to the screen.
-#:if defined('DEBUG')
-#define pure 
-#define elemental 
-#:endif
-
 #:include 'fypp_utils.fpp'
 
 module uniform_fields_mod
@@ -176,6 +169,10 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure :: force_finalise => uniform_scalar_force_finalise
+      !! Frees the data array for this field, in order to reduce the
+      !! volume of any memory leaks. In this case, there are no large
+      !! arrays so nothing happens.
   end type uniform_scalar_field
 
   interface uniform_scalar_field
@@ -316,6 +313,15 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure :: force_finalise => uniform_vector_force_finalise
+      !! Frees the data array for this field, in order to reduce the
+      !! volume of any memory leaks. In this case, there are no large
+      !! arrays so nothing happens.
+    final :: uniform_vector_finalize
+      !! Deallocates all field contents for this object. It is a
+      !! workaround for the fact that `gfortran` fails to deallocate
+      !! polymorphic allocatable function results. While some memory
+      !! will still be leaked, this will minimize the ammount.
   end type uniform_vector_field
 
   interface uniform_vector_field
@@ -343,7 +349,7 @@ contains
     this%field_data = val
   end function uniform_scalar_constructor
   
-  pure function uniform_scalar_elements(this) result(elements)
+  function uniform_scalar_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -355,7 +361,7 @@ contains
     elements = 1
   end function uniform_scalar_elements
 
-  pure function uniform_scalar_domain(this) result(domain)
+  function uniform_scalar_domain(this) result(domain)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -370,7 +376,7 @@ contains
     domain(1,2) = 0.0_r8
   end function uniform_scalar_domain
 
-  elemental function uniform_scalar_dimensions(this) result(dims)
+  impure elemental function uniform_scalar_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -382,7 +388,7 @@ contains
     dims = 0
   end function uniform_scalar_dimensions
 
-  pure function uniform_scalar_raw_size(this,exclude_lower_bound, &
+  function uniform_scalar_raw_size(this,exclude_lower_bound, &
                                         exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -407,7 +413,7 @@ contains
     res = 1
   end function uniform_scalar_raw_size
   
-  pure function uniform_scalar_raw(this,exclude_lower_bound, &
+  function uniform_scalar_raw(this,exclude_lower_bound, &
                                    exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -440,12 +446,7 @@ contains
     res(1) = this%field_data
   end function uniform_scalar_raw
 
-#:if defined('DEBUG')
-#undef pure 
-#undef elemental 
-#:endif
-
-  pure function uniform_scalar_get_value(this) result(res)
+  function uniform_scalar_get_value(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -458,12 +459,7 @@ contains
     res = this%field_data
   end function uniform_scalar_get_value
 
-#:if defined('DEBUG')
-#define pure 
-#define elemental 
-#:endif
-
-  pure subroutine uniform_scalar_set_from_raw(this,raw,provide_lower_bound, &
+  subroutine uniform_scalar_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -492,7 +488,7 @@ contains
     this%field_data = raw(1)
   end subroutine uniform_scalar_set_from_raw
 
-  pure function uniform_scalar_resolution(this) result(resolution)
+  function uniform_scalar_resolution(this) result(resolution)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -506,7 +502,7 @@ contains
     allocate(resolution(0))
   end function uniform_scalar_resolution
   
-  pure function uniform_scalar_sf_m_sf(this,rhs) result(res)
+  function uniform_scalar_sf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -519,7 +515,7 @@ contains
     res = this%field_data * rhs
   end function uniform_scalar_sf_m_sf
 
-  pure function uniform_scalar_sf_m_vf(this,rhs) result(res)
+  function uniform_scalar_sf_m_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -532,7 +528,7 @@ contains
     res = this%field_data * rhs
   end function uniform_scalar_sf_m_vf
 
-  pure function uniform_scalar_r_m_sf(lhs,rhs) result(res)
+  function uniform_scalar_r_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -547,7 +543,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_r_m_sf
 
-  pure function uniform_scalar_vr_m_sf(lhs,rhs) result(res)
+  function uniform_scalar_vr_m_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -564,7 +560,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_vr_m_sf
 
-  pure function uniform_scalar_sf_m_r(this,rhs) result(res)
+  function uniform_scalar_sf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -579,7 +575,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_m_r
 
-  pure function uniform_scalar_sf_m_vr(this,rhs) result(res)
+  function uniform_scalar_sf_m_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -596,7 +592,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_m_vr
   
-  pure function uniform_scalar_sf_d_sf(this,rhs) result(res)
+  function uniform_scalar_sf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -609,7 +605,7 @@ contains
     res = this%field_data / rhs    
   end function uniform_scalar_sf_d_sf
 
-  pure function uniform_scalar_r_d_sf(lhs,rhs) result(res)
+  function uniform_scalar_r_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -624,7 +620,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_r_d_sf
 
-  pure function uniform_scalar_vr_d_sf(lhs,rhs) result(res)
+  function uniform_scalar_vr_d_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -641,7 +637,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_vr_d_sf
 
-  pure function uniform_scalar_sf_d_r(this,rhs) result(res)
+  function uniform_scalar_sf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -656,7 +652,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_d_r
   
-  pure function uniform_scalar_sf_s_sf(this,rhs) result(res)
+  function uniform_scalar_sf_s_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -669,7 +665,7 @@ contains
     res = this%field_data - rhs
   end function uniform_scalar_sf_s_sf
 
-  pure function uniform_scalar_r_s_sf(lhs,rhs) result(res)
+  function uniform_scalar_r_s_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -684,7 +680,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_r_s_sf
 
-  pure function uniform_scalar_sf_s_r(this,rhs) result(res)
+  function uniform_scalar_sf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -699,7 +695,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_s_r
   
-  pure function uniform_scalar_sf_a_sf(this,rhs) result(res)
+  function uniform_scalar_sf_a_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -712,7 +708,7 @@ contains
     res = this%field_data + rhs
   end function uniform_scalar_sf_a_sf
 
-  pure function uniform_scalar_r_a_sf(lhs,rhs) result(res)
+  function uniform_scalar_r_a_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -727,7 +723,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_r_a_sf
 
-  pure function uniform_scalar_sf_a_r(this,rhs) result(res)
+  function uniform_scalar_sf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -742,7 +738,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_a_r
 
-  pure function uniform_scalar_sf_p_r(this,rhs) result(res)
+  function uniform_scalar_sf_p_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -757,7 +753,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_p_r
 
-  pure function uniform_scalar_sf_p_r4(this,rhs) result(res)
+  function uniform_scalar_sf_p_r4(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -772,7 +768,7 @@ contains
     call move_alloc(local,res)
   end function uniform_scalar_sf_p_r4
 
-  pure function uniform_scalar_sf_p_i(this,rhs) result(res)
+  function uniform_scalar_sf_p_i(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -788,7 +784,7 @@ contains
   end function uniform_scalar_sf_p_i
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
-  pure function uniform_scalar_${FUNC}$(this) result(res)
+  function uniform_scalar_${FUNC}$(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -804,7 +800,7 @@ contains
 
 #:endfor
 
-  pure function uniform_scalar_minval(this) result(res)
+  function uniform_scalar_minval(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -815,7 +811,7 @@ contains
     res = this%field_data
   end function uniform_scalar_minval
 
-  pure function uniform_scalar_maxval(this) result(res)
+  function uniform_scalar_maxval(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -871,7 +867,7 @@ contains
     call move_alloc(local, res)
   end function uniform_scalar_gradient
   
-  elemental subroutine uniform_scalar_assign(this,rhs)
+  impure elemental subroutine uniform_scalar_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -887,7 +883,7 @@ contains
     end select
   end subroutine uniform_scalar_assign
 
-  pure logical function uniform_scalar_is_equal(this,rhs) result(iseq)
+  logical function uniform_scalar_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -910,7 +906,7 @@ contains
     end select
   end function uniform_scalar_is_equal
 
-  pure subroutine uniform_scalar_assign_meta_data(this, rhs, alloc)
+  subroutine uniform_scalar_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -926,7 +922,7 @@ contains
       !! If present and false, do not allocate the array of `this`.
   end subroutine uniform_scalar_assign_meta_data
 
-  pure subroutine uniform_scalar_allocate_scalar(this, new_field)
+  subroutine uniform_scalar_allocate_scalar(this, new_field)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -942,7 +938,7 @@ contains
     allocate(uniform_scalar_field :: new_field)
   end subroutine uniform_scalar_allocate_scalar
 
-  pure subroutine uniform_scalar_allocate_vector(this, new_field)
+  subroutine uniform_scalar_allocate_vector(this, new_field)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -958,7 +954,7 @@ contains
     allocate(uniform_vector_field :: new_field)
   end subroutine uniform_scalar_allocate_vector
 
-  pure function uniform_scalar_id_to_pos(this, id) result(pos)
+  function uniform_scalar_id_to_pos(this, id) result(pos)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1006,7 +1002,7 @@ contains
                                  1_size_t, error)
   end subroutine uniform_scalar_write_hdf
 
-  pure function uniform_scalar_grid_spacing(this) result(grid)
+  function uniform_scalar_grid_spacing(this) result(grid)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1025,7 +1021,7 @@ contains
     local%field_data = huge(local%field_data)
   end function uniform_scalar_grid_spacing
 
-  pure function uniform_scalar_get_element(this,element) result(val)
+  function uniform_scalar_get_element(this,element) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1041,7 +1037,7 @@ contains
     val = this%field_data
   end function uniform_scalar_get_element
 
-  pure subroutine uniform_scalar_set_element(this,element,val)
+  subroutine uniform_scalar_set_element(this,element,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1057,7 +1053,7 @@ contains
     this%field_data = val
   end subroutine uniform_scalar_set_element
   
-  pure function uniform_scalar_get_bound(this,boundary,depth) result(res)
+  function uniform_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1083,6 +1079,16 @@ contains
     allocate(res, source=this)
   end function uniform_scalar_get_bound
 
+  subroutine uniform_scalar_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object. For a uniform field,
+    ! there is no array of any significant size, so nothing happens.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+  end subroutine uniform_scalar_force_finalise
+
 
   !=====================================================================
   ! Vector Field Methods
@@ -1104,7 +1110,7 @@ contains
     this%field_data = val
   end function uniform_vector_constructor
 
-  elemental function uniform_vector_vector_dimensions(this) result(dims)
+  impure elemental function uniform_vector_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1116,7 +1122,7 @@ contains
     dims = this%vector_dims
   end function uniform_vector_vector_dimensions
 
-  pure function uniform_vector_elements(this) result(elements)
+  function uniform_vector_elements(this) result(elements)
     !* Author: Chris MacMackin
     !  Date: October 2016
     !
@@ -1128,7 +1134,7 @@ contains
     elements = 1
   end function uniform_vector_elements
 
-  elemental function uniform_vector_dimensions(this) result(dims)
+  impure elemental function uniform_vector_dimensions(this) result(dims)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1140,7 +1146,7 @@ contains
     dims = 0
   end function uniform_vector_dimensions
   
-  pure function uniform_vector_domain(this) result(domain)
+  function uniform_vector_domain(this) result(domain)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1155,7 +1161,7 @@ contains
     domain(1,2) = 0.0_r8
   end function uniform_vector_domain
 
-  pure function uniform_vector_raw_size(this,exclude_lower_bound, &
+  function uniform_vector_raw_size(this,exclude_lower_bound, &
                                         exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -1187,7 +1193,7 @@ contains
     end if
   end function uniform_vector_raw_size
   
-  pure function uniform_vector_raw(this,exclude_lower_bound, &
+  function uniform_vector_raw(this,exclude_lower_bound, &
                                    exclude_upper_bound) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -1223,12 +1229,7 @@ contains
     end if
   end function uniform_vector_raw
 
-#:if defined('DEBUG')
-#undef pure 
-#undef elemental 
-#:endif
-
-  pure function uniform_vector_get_value(this) result(res)
+  function uniform_vector_get_value(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1240,13 +1241,8 @@ contains
     real(r8), dimension(:), allocatable :: res
     res = this%field_data
   end function uniform_vector_get_value
-
-#:if defined('DEBUG')
-#define pure 
-#define elemental 
-#:endif
   
-  pure subroutine uniform_vector_set_from_raw(this,raw,provide_lower_bound, &
+  subroutine uniform_vector_set_from_raw(this,raw,provide_lower_bound, &
                                             provide_upper_bound)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -1275,7 +1271,7 @@ contains
     this%field_data = raw
   end subroutine uniform_vector_set_from_raw
 
-  pure function uniform_vector_resolution(this) result(resolution)
+  function uniform_vector_resolution(this) result(resolution)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1289,7 +1285,7 @@ contains
     allocate(resolution(0))
   end function uniform_vector_resolution
 
-  pure function uniform_vector_vf_m_sf(this,rhs) result(res)
+  function uniform_vector_vf_m_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1302,7 +1298,7 @@ contains
     res = this%field_data * rhs
   end function uniform_vector_vf_m_sf
 
-  pure function uniform_vector_r_m_vf(lhs,rhs) result(res)
+  function uniform_vector_r_m_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1318,7 +1314,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_r_m_vf
 
-  pure function uniform_vector_vf_m_r(this,rhs) result(res)
+  function uniform_vector_vf_m_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1334,7 +1330,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_vf_m_r
   
-  pure function uniform_vector_vf_d_sf(this,rhs) result(res)
+  function uniform_vector_vf_d_sf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1347,7 +1343,7 @@ contains
     res = this%field_data / rhs
   end function uniform_vector_vf_d_sf
 
-  pure function uniform_vector_vf_d_r(this,rhs) result(res)
+  function uniform_vector_vf_d_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1363,7 +1359,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_vf_d_r
   
-  pure function uniform_vector_vf_s_vf(this,rhs) result(res)
+  function uniform_vector_vf_s_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1376,7 +1372,7 @@ contains
     res = this%field_data - rhs
   end function uniform_vector_vf_s_vf
 
-  pure function uniform_vector_r_s_vf(lhs,rhs) result(res)
+  function uniform_vector_r_s_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1401,7 +1397,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_r_s_vf
 
-  pure function uniform_vector_vf_s_r(this,rhs) result(res)
+  function uniform_vector_vf_s_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1426,7 +1422,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_vf_s_r
   
-  pure function uniform_vector_vf_a_vf(this,rhs) result(res)
+  function uniform_vector_vf_a_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1440,7 +1436,7 @@ contains
     res = this%field_data + rhs
   end function uniform_vector_vf_a_vf
 
-  pure function uniform_vector_r_a_vf(lhs,rhs) result(res)
+  function uniform_vector_r_a_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1465,7 +1461,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_r_a_vf
 
-  pure function uniform_vector_vf_a_r(this,rhs) result(res)
+  function uniform_vector_vf_a_r(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1490,7 +1486,7 @@ contains
     call move_alloc(local,res)
   end function uniform_vector_vf_a_r
 
-  elemental subroutine uniform_vector_assign(this,rhs)
+  impure elemental subroutine uniform_vector_assign(this,rhs)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1511,7 +1507,7 @@ contains
     end select
   end subroutine uniform_vector_assign
 
-  elemental subroutine uniform_vector_assign_scalar(this,rhs)
+  impure elemental subroutine uniform_vector_assign_scalar(this,rhs)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1528,7 +1524,7 @@ contains
     end select
   end subroutine uniform_vector_assign_scalar
 
-  pure function uniform_vector_norm(this) result(res)
+  function uniform_vector_norm(this) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1542,7 +1538,7 @@ contains
     call move_alloc(local, res)
   end function uniform_vector_norm
 
-  pure function uniform_vector_component(this,comp) result(res)
+  function uniform_vector_component(this,comp) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1638,7 +1634,7 @@ contains
     call move_alloc(local, res)
   end function uniform_vector_curl
 
-  pure function uniform_vector_vf_cross_vf(this,rhs) result(res)
+  function uniform_vector_vf_cross_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1654,7 +1650,7 @@ contains
     res = this%field_data .cross. rhs
   end function uniform_vector_vf_cross_vf
 
-  pure function uniform_vector_vf_cross_vr(this,rhs) result(res)
+  function uniform_vector_vf_cross_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1684,7 +1680,7 @@ contains
     call move_alloc(local, res)
   end function uniform_vector_vf_cross_vr
 
-  pure function uniform_vector_vr_cross_vf(lhs,rhs) result(res)
+  function uniform_vector_vr_cross_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1714,7 +1710,7 @@ contains
     call move_alloc(local, res)
   end function uniform_vector_vr_cross_vf
   
-  pure function uniform_vector_vf_dot_vf(this,rhs) result(res)
+  function uniform_vector_vf_dot_vf(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1727,7 +1723,7 @@ contains
     res = this%field_data .dot. rhs
   end function uniform_vector_vf_dot_vf
 
-  pure function uniform_vector_vf_dot_vr(this,rhs) result(res)
+  function uniform_vector_vf_dot_vr(this,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1744,7 +1740,7 @@ contains
     call move_alloc(local, res)
   end function uniform_vector_vf_dot_vr
 
-  pure function uniform_vector_vr_dot_vf(lhs,rhs) result(res)
+  function uniform_vector_vr_dot_vf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1761,7 +1757,7 @@ contains
     call move_alloc(local, res)
   end function uniform_vector_vr_dot_vf
 
-  pure logical function uniform_vector_is_equal(this,rhs) result(iseq)
+  logical function uniform_vector_is_equal(this,rhs) result(iseq)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1797,7 +1793,7 @@ contains
     end select
   end function uniform_vector_is_equal
 
-  pure subroutine uniform_vector_assign_meta_data(this, rhs, alloc)
+  subroutine uniform_vector_assign_meta_data(this, rhs, alloc)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1818,7 +1814,7 @@ contains
     end select
   end subroutine uniform_vector_assign_meta_data
 
-  pure subroutine uniform_vector_allocate_scalar(this, new_field)
+  subroutine uniform_vector_allocate_scalar(this, new_field)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1834,7 +1830,7 @@ contains
     allocate(uniform_scalar_field :: new_field)
   end subroutine uniform_vector_allocate_scalar
 
-  pure subroutine uniform_vector_allocate_vector(this, new_field)
+  subroutine uniform_vector_allocate_vector(this, new_field)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1850,7 +1846,7 @@ contains
     allocate(uniform_vector_field :: new_field)
   end subroutine uniform_vector_allocate_vector
 
-  pure function uniform_vector_id_to_pos(this, id) result(pos)
+  function uniform_vector_id_to_pos(this, id) result(pos)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -1899,7 +1895,7 @@ contains
                                  1_size_t, error)
   end subroutine uniform_vector_write_hdf
   
-  pure function uniform_vector_grid_spacing(this) result(grid)
+  function uniform_vector_grid_spacing(this) result(grid)
     !* Author: Chris MacMackin
     !  Date: December 2016
     !
@@ -1918,7 +1914,7 @@ contains
     local%field_data = huge(local%field_data)
   end function uniform_vector_grid_spacing
 
-  pure function uniform_vector_get_element_vec(this,element) result(val)
+  function uniform_vector_get_element_vec(this,element) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1934,7 +1930,7 @@ contains
     val = this%field_data
   end function uniform_vector_get_element_vec
   
-  pure function uniform_vector_get_element_comp(this,element,component) result(val)
+  function uniform_vector_get_element_comp(this,element,component) result(val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1953,7 +1949,7 @@ contains
     val = this%field_data(component)
   end function uniform_vector_get_element_comp
 
-  pure subroutine uniform_vector_set_element_vec(this,element,val)
+  subroutine uniform_vector_set_element_vec(this,element,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1969,7 +1965,7 @@ contains
     this%field_data(:) = val
   end subroutine uniform_vector_set_element_vec
 
-  pure subroutine uniform_vector_set_element_comp(this,element,component,val)
+  subroutine uniform_vector_set_element_comp(this,element,component,val)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1987,7 +1983,7 @@ contains
     this%field_data(component) = val
   end subroutine uniform_vector_set_element_comp
 
-  pure function uniform_vector_get_bound(this,boundary,depth) result(res)
+  function uniform_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
     !
@@ -2012,5 +2008,25 @@ contains
       !! adjecent to the specified boundary.
     allocate(res, source=this)
   end function uniform_vector_get_bound
+
+  subroutine uniform_vector_force_finalise(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object. For a uniform field,
+    ! there is no array of any significant size, so nothing happens.
+    !
+    class(uniform_vector_field), intent(in) :: this
+  end subroutine uniform_vector_force_finalise
+
+  impure elemental subroutine uniform_vector_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: January 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    type(uniform_vector_field), intent(inout) :: this
+    if (allocated(this%field_data)) deallocate(this%field_data)
+  end subroutine uniform_vector_finalize
 
 end module uniform_fields_mod
