@@ -210,6 +210,9 @@ module abstract_fields_mod
     procedure(sf_bound), public, deferred :: get_boundary
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure(sf_set_bound), public, deferred :: set_boundary
+      !! Set the field values at the specified boundary to be the same
+      !! as in the passed array.
     generic, public :: operator(*) => field_multiply_field, &
         field_multiply_vecfield, real_multiply_field, &
         field_multiply_real, real_array_multiply_field, &
@@ -324,12 +327,15 @@ module abstract_fields_mod
       !! vector component giving the field's value at a particular 
       !! location
     generic, public :: set_element => set_element_vector, set_element_component
-      !! Sets a constituent value of the field, i.e. the vector or 
-      !! vector component giving the field's value at a particular 
+      !! Sets a constituent value of the field, i.e. the vector or
+      !! vector component giving the field's value at a particular
       !! location
     procedure(vf_bound), public, deferred :: get_boundary
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure(vf_set_bound), public, deferred :: set_boundary
+      !! Set the field values at the specified boundary to be the same
+      !! as in the passed array.
     generic, public :: operator(*) => field_multiply_field, &
         real_multiply_field, field_multiply_real
     generic, public :: operator(/) => field_divide_field, field_divide_real
@@ -694,6 +700,27 @@ module abstract_fields_mod
         !! the points within the specified number of layers of cells
         !! adjecent to the specified boundary.
     end function sf_bound
+
+    subroutine sf_set_bound(this,boundary,depth,boundary_field)
+      import :: scalar_field
+      class(scalar_field), intent(inout) :: this
+      integer, intent(in) :: boundary
+        !! Specifies which boundary is to be set. The boundary
+        !! will be the one normal to dimension of number
+        !! `abs(boundary)`. If the argument is negative, then the
+        !! lower boundary is set. If positive, then the upper
+        !! boundary is set. If 0, then the whole field is
+        !! set.
+      integer, intent(in) :: depth
+        !! The number of layers of data-points to set at the
+        !! specified boundary.
+      class(scalar_field), intent(in) :: boundary_field
+        !! A field, of the same type as `this` and with the same
+        !! resolution, number of dimensions etc., but containing only
+        !! the points within the specified number of layers of cells
+        !! adjecent to the specified boundary. Alternatively, it may
+        !! be a [[uniform_scalar_field]].
+    end subroutine sf_set_bound
     
     function vf_sf(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm field}\)
@@ -938,6 +965,27 @@ module abstract_fields_mod
         !! the points within the specified number of layers of cells
         !! adjecent to the specified boundary.
     end function vf_bound
+
+    subroutine vf_set_bound(this,boundary,depth,boundary_field)
+      import :: vector_field
+      class(vector_field), intent(inout) :: this
+      integer, intent(in) :: boundary
+        !! Specifies which boundary is to be set. The boundary
+        !! will be the one normal to dimension of number
+        !! `abs(boundary)`. If the argument is negative, then the
+        !! lower boundary is set. If positive, then the upper
+        !! boundary is set. If 0, then the whole field is
+        !! set.
+      integer, intent(in) :: depth
+        !! The number of layers of data-points to set at the
+        !! specified boundary.
+      class(vector_field), intent(in) :: boundary_field
+        !! A field, of the same type as `this` and with the same
+        !! resolution, number of dimensions etc., but containing only
+        !! the points within the specified number of layers of cells
+        !! adjecent to the specified boundary. Alternatively, it may
+        !! be a [[uniform_vector_field]].
+    end subroutine vf_set_bound
 
     function sf_is_equal(this,rhs) result(iseq)
       import :: scalar_field

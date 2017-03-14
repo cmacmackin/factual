@@ -169,6 +169,9 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure, public :: set_boundary => uniform_scalar_set_bound
+      !! Sets the specified boundary to contain the same data as the
+      !! provided field argument.
     procedure :: force_finalise => uniform_scalar_force_finalise
       !! Frees the data array for this field, in order to reduce the
       !! volume of any memory leaks. In this case, there are no large
@@ -313,6 +316,9 @@ module uniform_fields_mod
     procedure, public :: get_boundary => uniform_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure, public :: set_boundary => uniform_vector_set_bound
+      !! Sets the specified boundary to contain the same data as the
+      !! provided field argument.
     procedure :: force_finalise => uniform_vector_force_finalise
       !! Frees the data array for this field, in order to reduce the
       !! volume of any memory leaks. In this case, there are no large
@@ -1078,6 +1084,39 @@ contains
       !! adjecent to the specified boundary.
     allocate(res, source=this)
   end function uniform_scalar_get_bound
+
+  subroutine uniform_scalar_set_bound(this,boundary,depth,boundary_field)
+    !* Author: Chris MacMackin
+    !  Date: March 2017
+    !
+    ! Sets the value of this field at the specified boundary to be the
+    ! same as those in the passed field. For uniform fields which, by
+    ! definition, have the same value everywhere, this is not a
+    ! meaningful idea and will result in an error.
+    !
+    class(uniform_scalar_field), intent(inout) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be set. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is set. If positive, then the upper
+      !! boundary is set. If 0, then the whole field is
+      !! set.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to set at the
+      !! specified boundary.
+    class(scalar_field), intent(in) :: boundary_field
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary. Alternatively, it may
+      !! be a [[uniform_scalar_field]].
+    select type(boundary_field)
+    class is(uniform_scalar_field)
+      if (this%field_data == boundary_field%field_data) return
+    end select
+    error stop ('Can not set boundary values for a uniform field.')
+  end subroutine uniform_scalar_set_bound
 
   subroutine uniform_scalar_force_finalise(this)
     !* Author: Chris MacMackin
@@ -2008,6 +2047,39 @@ contains
       !! adjecent to the specified boundary.
     allocate(res, source=this)
   end function uniform_vector_get_bound
+
+  subroutine uniform_vector_set_bound(this,boundary,depth,boundary_field)
+    !* Author: Chris MacMackin
+    !  Date: March 2017
+    !
+    ! Sets the value of this field at the specified boundary to be the
+    ! same as those in the passed field. For uniform fields which, by
+    ! definition, have the same value everywhere, this is not a
+    ! meaningful idea and will result in an error.
+    !
+    class(uniform_vector_field), intent(inout) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be set. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is set. If positive, then the upper
+      !! boundary is set. If 0, then the whole field is
+      !! set.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to set at the
+      !! specified boundary.
+    class(vector_field), intent(in) :: boundary_field
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary. Alternatively, it may
+      !! be a [[uniform_vector_field]].
+    select type(boundary_field)
+    class is(uniform_vector_field)
+      if (all(this%field_data == boundary_field%field_data)) return
+    end select
+    error stop ('Can not set boundary values for a uniform field.')
+  end subroutine uniform_vector_set_bound
 
   subroutine uniform_vector_force_finalise(this)
     !* Author: Chris MacMackin

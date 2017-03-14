@@ -106,6 +106,9 @@ $:public_unary()
       !! Performs whatever operations are needed on the field to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, public :: set_boundary => cheb1d_scalar_set_bound
+      !! Sets the specified boundary to hold the same values as the
+      !! passed field argument.
     procedure, public :: write_hdf => cheb1d_scalar_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: grid_spacing => cheb1d_scalar_grid_spacing
@@ -122,7 +125,7 @@ $:public_unary()
       !! method, but that is unable to deallocate the pointer to the
       !! data array--only the array itself. In compilers which support
       !! finalisation, this method eliminates the small memory leak
-      !! from the pointer..
+      !! from the pointer.
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -178,6 +181,9 @@ $:public_unary()
       !! Performs whatever operations are needed on the field to get
       !! a boundary field, including returning the slices needed to
       !! extract the appropriate data.
+    procedure, public :: set_boundary => cheb1d_vector_set_bound
+      !! Sets the specified boundary to hold the same values as the
+      !! passed field argument.
     procedure, public :: write_hdf => cheb1d_vector_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: grid_spacing => cheb1d_vector_grid_spacing
@@ -563,6 +569,99 @@ contains
     end select
     call this%clean_temp(); call src%clean_temp()
   end subroutine cheb1d_scalar_bound
+
+  subroutine cheb1d_scalar_set_bound(this,boundary,depth,boundary_field)
+    !* Author: Chris MacMackin
+    !  Date: March 2017
+    !
+    ! Sets the value of this field at the specified boundary to be the
+    ! same as those in the passed field.
+    !
+    class(cheb1d_scalar_field), intent(inout) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be set. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is set. If positive, then the upper
+      !! boundary is set. If 0, then the whole field is
+      !! set.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to set at the
+      !! specified boundary.
+    class(scalar_field), intent(in) :: boundary_field
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary. Alternatively, it may
+      !! be a [[uniform_scalar_field]].
+    integer :: length, i
+    real(r8) :: val
+#:if defined('DEBUG')
+    integer, dimension(:), allocatable :: res
+#:endif
+    call this%guard_temp(); call boundary_field%guard_temp()
+    select type(boundary_field)
+    class is(cheb1d_scalar_field)
+      length = this%elements()
+#:if defined('DEBUG')
+      res = boundary_field%resolution()
+      if (abs(boundary) >= lbound(res,1) .and. abs(boundary) <= ubound(res,1)) then
+        if (res(abs(boundary)) /= depth) then
+          error stop ('Boundary array not deep enough.')
+        end if
+      end if
+#:endif
+      select case(boundary)
+      case(-1)
+#:if defined('DEBUG')
+        if (abs(this%colloc_points%array(length+1-depth) - boundary_field%extent(1)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+#:endif
+        do i = 1, depth
+          call this%set_element(length+1-depth+i, boundary_field%get_element(i))
+        end do
+      case(1)
+#:if defined('DEBUG')
+        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (abs(this%colloc_points%array(depth) - boundary_field%extent(2)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+#:endif
+        do i = 1, depth
+          call this%set_element(i, boundary_field%get_element(i))
+        end do
+      case default
+#:if defined('DEBUG')
+        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
+#:endif        
+        this = boundary_field
+      end select
+    class is(uniform_scalar_field)
+      val = boundary_field%get_value()
+      select case(boundary)
+      case(-1)
+        do i = 1, depth
+          call this%set_element(length+1-depth+i, val)
+        end do
+      case(1)
+        do i = 1, depth
+          call this%set_element(i, val)
+        end do
+      case default
+        this = boundary_field
+      end select      
+    class default
+      error stop ('Trying to set boundary from type other than '// &
+                  '`cheb1d_scalar_field` or `uniform_scalar_field`.')
+    end select
+    call this%clean_temp(); call boundary_field%clean_temp()
+  end subroutine cheb1d_scalar_set_bound
 
   subroutine cheb1d_scalar_write_hdf(this, hdf_id, dataset_name, error)
     !* Author: Chris MacMackin
@@ -1028,6 +1127,99 @@ contains
     end select
     call this%clean_temp(); call src%clean_temp()
   end subroutine cheb1d_vector_bound
+
+  subroutine cheb1d_vector_set_bound(this,boundary,depth,boundary_field)
+    !* Author: Chris MacMackin
+    !  Date: March 2017
+    !
+    ! Sets the value of this field at the specified boundary to be the
+    ! same as those in the passed field.
+    !
+    class(cheb1d_vector_field), intent(inout) :: this
+    integer, intent(in) :: boundary
+      !! Specifies which boundary is to be set. The boundary
+      !! will be the one normal to dimension of number
+      !! `abs(boundary)`. If the argument is negative, then the
+      !! lower boundary is set. If positive, then the upper
+      !! boundary is set. If 0, then the whole field is
+      !! set.
+    integer, intent(in) :: depth
+      !! The number of layers of data-points to set at the
+      !! specified boundary.
+    class(vector_field), intent(in) :: boundary_field
+      !! A field, of the same type as `this` and with the same
+      !! resolution, number of dimensions etc., but containing only
+      !! the points within the specified number of layers of cells
+      !! adjecent to the specified boundary. Alternatively, it may
+      !! be a [[uniform_vector_field]].
+    integer :: length, i
+    real(r8), dimension(:), allocatable :: val
+#:if defined('DEBUG')
+    integer, dimension(:), allocatable :: res
+#:endif
+    call this%guard_temp(); call boundary_field%guard_temp()
+    select type(boundary_field)
+    class is(cheb1d_vector_field)
+      length = this%elements()
+#:if defined('DEBUG')
+      res = boundary_field%resolution()
+      if (abs(boundary) >= lbound(res,1) .and. abs(boundary) <= ubound(res,1)) then
+        if (res(abs(boundary)) /= depth) then
+          error stop ('Boundary array not deep enough.')
+        end if
+      end if
+#:endif
+      select case(boundary)
+      case(-1)
+#:if defined('DEBUG')
+        if (abs(this%colloc_points%array(length+1-depth) - boundary_field%extent(1)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+#:endif
+        do i = 1, depth
+          call this%set_element(length+1-depth+i, boundary_field%get_element(i))
+        end do
+      case(1)
+#:if defined('DEBUG')
+        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (abs(this%colloc_points%array(depth) - boundary_field%extent(2)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+#:endif
+        do i = 1, depth
+          call this%set_element(i, boundary_field%get_element(i))
+        end do
+      case default
+#:if defined('DEBUG')
+        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+            < 1e-12+r8) error stop ('Domain mismatch.')
+        if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
+#:endif
+        this = boundary_field
+      end select
+    class is(uniform_vector_field)
+      val = boundary_field%get_value()
+      select case(boundary)
+      case(-1)
+        do i = 1, depth
+          call this%set_element(length+1-depth+i, val)
+        end do
+      case(1)
+        do i = 1, depth
+          call this%set_element(i, val)
+        end do
+      case default
+        this = boundary_field
+      end select      
+    class default
+      error stop ('Trying to set boundary from type other than '// &
+                  '`cheb1d_vector_field` or `uniform_vector_field`.')
+    end select
+    call this%clean_temp(); call boundary_field%clean_temp()
+  end subroutine cheb1d_vector_set_bound
   
   subroutine cheb1d_vector_write_hdf(this, hdf_id, dataset_name, error)
     !* Author: Chris MacMackin
