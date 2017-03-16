@@ -1142,7 +1142,7 @@ contains
     !
     real(r8), dimension(:) :: val
       !! The value of the field
-    type(uniform_vector_field), allocatable :: this
+    type(uniform_vector_field) :: this
       !! A scalar field initiated based on the arguments to this function.
     integer :: i
     this%vector_dims = size(val)
