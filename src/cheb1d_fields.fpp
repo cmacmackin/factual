@@ -600,9 +600,9 @@ contains
     integer, dimension(:), allocatable :: res
 #:endif
     call this%guard_temp(); call boundary_field%guard_temp()
+    length = this%elements()
     select type(boundary_field)
     class is(cheb1d_scalar_field)
-      length = this%elements()
 #:if defined('DEBUG')
       res = boundary_field%resolution()
       if (abs(boundary) >= lbound(res,1) .and. abs(boundary) <= ubound(res,1)) then
@@ -615,19 +615,19 @@ contains
       case(-1)
 #:if defined('DEBUG')
         if (abs(this%colloc_points%array(length+1-depth) - boundary_field%extent(1)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
-          call this%set_element(length+1-depth+i, boundary_field%get_element(i))
+          call this%set_element(length-depth+i, boundary_field%get_element(i))
         end do
       case(1)
 #:if defined('DEBUG')
         if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (abs(this%colloc_points%array(depth) - boundary_field%extent(2)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
           call this%set_element(i, boundary_field%get_element(i))
@@ -635,9 +635,9 @@ contains
       case default
 #:if defined('DEBUG')
         if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
 #:endif        
         this = boundary_field
@@ -647,7 +647,7 @@ contains
       select case(boundary)
       case(-1)
         do i = 1, depth
-          call this%set_element(length+1-depth+i, val)
+          call this%set_element(length-depth+i, val)
         end do
       case(1)
         do i = 1, depth
@@ -1152,15 +1152,16 @@ contains
       !! the points within the specified number of layers of cells
       !! adjecent to the specified boundary. Alternatively, it may
       !! be a [[uniform_vector_field]].
-    integer :: length, i
+    integer :: length, i, n
     real(r8), dimension(:), allocatable :: val
 #:if defined('DEBUG')
     integer, dimension(:), allocatable :: res
 #:endif
     call this%guard_temp(); call boundary_field%guard_temp()
+    length = this%elements()
+    n = this%vector_dimensions()
     select type(boundary_field)
     class is(cheb1d_vector_field)
-      length = this%elements()
 #:if defined('DEBUG')
       res = boundary_field%resolution()
       if (abs(boundary) >= lbound(res,1) .and. abs(boundary) <= ubound(res,1)) then
@@ -1173,29 +1174,31 @@ contains
       case(-1)
 #:if defined('DEBUG')
         if (abs(this%colloc_points%array(length+1-depth) - boundary_field%extent(1)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
-          call this%set_element(length+1-depth+i, boundary_field%get_element(i))
+          val = boundary_field%get_element(i)
+          call this%set_element(length-depth+i, val(1:n))
         end do
       case(1)
 #:if defined('DEBUG')
         if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (abs(this%colloc_points%array(depth) - boundary_field%extent(2)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
-          call this%set_element(i, boundary_field%get_element(i))
+          val = boundary_field%get_element(i)
+          call this%set_element(i, val(1:n))
         end do
       case default
 #:if defined('DEBUG')
         if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
-            < 1e-12+r8) error stop ('Domain mismatch.')
+            > 1e-12+r8) error stop ('Domain mismatch.')
         if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
 #:endif
         this = boundary_field
@@ -1205,11 +1208,11 @@ contains
       select case(boundary)
       case(-1)
         do i = 1, depth
-          call this%set_element(length+1-depth+i, val)
+          call this%set_element(length-depth+i, val(1:n))
         end do
       case(1)
         do i = 1, depth
-          call this%set_element(i, val)
+          call this%set_element(i, val(1:n))
         end do
       case default
         this = boundary_field
