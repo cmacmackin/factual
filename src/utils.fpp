@@ -35,10 +35,14 @@ module utils_mod
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use abstract_fields_mod, only: abstract_field
+!  use iso_c_binding, only: c_loc, c_ptr
+  use hdf5
+  use h5lt
   implicit none
   private
 
-  public :: is_nan, check_set_from_raw, elements_in_slice, grid_to_spacing
+  public :: is_nan, check_set_from_raw, elements_in_slice, grid_to_spacing, &
+            open_or_create_hdf_group, create_hdf_dset
 
 contains
 
@@ -132,5 +136,130 @@ contains
       end if
     end do
   end function grid_to_spacing
+
+  subroutine open_or_create_hdf_group(loc_id, group_name, group_id, hdferr)
+    !* Author: Paul Anton Letnes
+    !  Date: April 2017
+    !
+    ! Checks if group with the given name exists. Create it if it doesn't, 
+    ! open it if it does.
+    !
+    ! Copied fromp the [HDF
+    ! forum](http://hdf-forum.184993.n3.nabble.com/Check-if-group-exists-td2601701.html)
+    ! and slightly modified
+    !
+    integer(hid_t), intent(in)   :: loc_id
+      !! File or group identifier
+    character(len=*), intent(in) :: group_name 
+      !! Name of the group
+    integer(hid_t), intent(out)  :: group_id 
+      !! Group identifier
+    integer, intent(inout)       :: hdferr 
+      !! Error code. 0 on success, -1 on failure
+
+    logical :: group_exists 
+
+    call h5lexists_f(loc_id, group_name, group_exists, hdferr) 
+    if (group_exists) then 
+      call h5gopen_f(loc_id, group_name, group_id, hdferr) 
+    else 
+      call h5gcreate_f(loc_id, group_name, group_id, hdferr) 
+    end if 
+  end subroutine open_or_create_hdf_group
+
+  subroutine create_hdf_dset(loc_id, dset_name, rank, dims, buf, hdferr)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Creates a dataset if it doesn't already exist.
+    !
+    !
+    integer(hid_t), intent(in)                 :: loc_id
+      !! File or group identifier
+    character(len=*), intent(in)               :: dset_name 
+      !! Name of the data set
+    integer, intent(in)                        :: rank
+      !! Rank of the data set
+    integer(hsize_t), dimension(*), intent(in) :: dims 
+      !! Size of the data set  
+    real(r8), intent(in), dimension(*)         :: buf  
+      !! Buffer containing the data to be written to the data set.
+    integer, intent(inout)                     :: hdferr 
+      !! Error code. 0 on success, -1 on failure
+
+    integer :: set_exists 
+
+    set_exists = h5ltfind_dataset_f(loc_id, dset_name) 
+    if (set_exists == 0) then 
+      call h5ltmake_dataset_double_f(loc_id, dset_name, rank, dims, buf, hdferr) 
+    end if 
+  end subroutine create_hdf_dset
+
+  subroutine get_hdf_dset_ref(loc_id, dset_name, rank, dims, buf, &
+                              ref, hdferr)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Returns a reference to an HDF dataset of the given name. If such
+    ! a dataset does not already exist, create it first.
+    !
+    integer(hid_t), intent(in)                 :: loc_id
+      !! File or group identifier
+    character(len=*), intent(in)               :: dset_name 
+      !! Name of the data set
+    integer, intent(in)                        :: rank
+      !! Rank of the data set
+    integer(hsize_t), dimension(*), intent(in) :: dims 
+      !! Size of the data set  
+    real(r8), intent(in), dimension(*)         :: buf  
+      !! Buffer containing the data to be written to the data set.
+    type(hobj_ref_t_f), intent(inout)          :: ref
+      !! The reference to the data set
+    integer, intent(inout)                     :: hdferr 
+      !! Error code.
+    
+    integer :: exists
+    
+    exists = h5ltfind_dataset_f(loc_id, dset_name)
+    if (exists /= 0) then
+      call h5ltmake_dataset_double_f(loc_id, dset_name, rank, dims, &
+                                     buf, hdferr)
+    end if
+    call h5rcreate_f(loc_id, dset_name, ref, hdferr)
+  end subroutine get_hdf_dset_ref
+
+!  subroutine set_attribute_ref(loc_id, dset_name, attr_name, ref, &
+!                               errcode)
+!    !* Author: Chris MacMackin
+!    !  Date: April 2017
+!    !
+!    ! Creates an attribute on a dataset which will contain a reference
+!    ! to another object.
+!    !
+!    integer(hid_t), intent(in)             :: loc_id
+!      !! File or group identifier
+!    character(len=*), intent(in)           :: dset_name 
+!      !! Name of the data set
+!    character(len=*), intent(in)           :: attr_name
+!      !! Name of the attribute
+!    type(hobj_ref_t_f), intent(in), target :: ref
+!      !! The reference to be contained in the attribute
+!    integer, intent(out)                   :: errcode 
+!      !! Error code.
+!    
+!    integer(hid_t) :: dset_id, type_id, space_id, attr_id
+!    type(c_ptr) :: reference
+!
+!    call h5dopen_f(loc_id, dset_name, dset_id, errcode)
+!    call h5tcopy_f(H5T_REFERENCE_F, type_id, errcode)
+!    call h5screate_f(H5S_SCALAR_F, space_id, errcode)
+!    call h5acreate_f(dset_id, attr_name, type_id, space_id, &
+!                     attr_id, errcode)
+!    reference = c_loc(ref)
+!    call h5awrite_f(attr_id, type_id, reference, errcode)
+!    call h5aclose_f(attr_id, errcode)
+!    call h5sclose_f(space_id, errcode)
+!    call h5dclose_f(dset_id, errcode)
+!  end subroutine set_attribute_ref
 
 end module utils_mod

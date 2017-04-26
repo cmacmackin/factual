@@ -60,12 +60,12 @@ FPP_FLAGS := -DDEBUG -n
 FCFLAGS += $(PROJECT_INCDIRS:%=-I%) -I$(INCDIR) -I/usr/include -I$(PFUNIT)/mod
 
 # Libraries for use at link-time
-LIBS := -L$(LIBDIR) -lfftw3 -lhdf5hl_fortran
+LIBS := -L$(LIBDIR) -lfftw3 -lhdf5hl_fortran -lhdf5_fortran
 LDFLAGS += $(LIBS)
 
 # A regular expression for names of modules provided by external libraries
 # and which won't be contained in the module directory of this codebase
-EXTERNAL_MODS := ^iso_(fortran_env|c_binding)|ieee_(exceptions|arithmetic|features)|openacc|omp_lib(_kinds)?|mpi|pfunit_mod|h5lt$$
+EXTERNAL_MODS := ^iso_(fortran_env|c_binding)|ieee_(exceptions|arithmetic|features)|openacc|omp_lib(_kinds)?|mpi|pfunit_mod|h5lt|hdf5$$
 
 # Extensions of Fortran files, case insensitive
 F_EXT := f for f90 f95 f03 f08 f15

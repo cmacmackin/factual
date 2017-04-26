@@ -32,11 +32,13 @@ module uniform_fields_mod
   ! optimise memory management and differentiation in simulations
   ! without having to change interfaces to use scalar real values.
   !
-  use iso_fortran_env, only: r8 => real64
+  use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use abstract_fields_mod
   use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
-  use h5lt, only: hid_t, size_t, hsize_t, h5ltmake_dataset_double_f, &
-                  h5ltset_attribute_string_f, h5ltset_attribute_int_f
+  use h5lt, only: hid_t, size_t, hsize_t, h5ltmake_dataset_double_f,     &
+                  h5ltset_attribute_string_f, h5ltset_attribute_int_f,   &
+                  h5ltread_dataset_double_f, h5ltget_attribute_string_f, &
+                  h5ltget_dataset_info_f
   implicit none
   private
 
@@ -153,6 +155,8 @@ module uniform_fields_mod
     procedure, public :: id_to_position => uniform_scalar_id_to_pos
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure, public :: read_hdf => uniform_scalar_read_hdf
+      !! Read field data from a dataset in an HDF5 file.
     procedure, public :: write_hdf => uniform_scalar_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: grid_spacing => uniform_scalar_grid_spacing
@@ -292,6 +296,8 @@ module uniform_fields_mod
     procedure, public :: id_to_position => uniform_vector_id_to_pos
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure, public :: read_hdf => uniform_vector_read_hdf
+      !! Read field data from a dataset in an HDF5 file.
     procedure, public :: write_hdf => uniform_vector_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: grid_spacing => uniform_vector_grid_spacing
@@ -975,6 +981,44 @@ contains
       !! The coordinates for this location in the field
     pos = [0.0_r8]
   end function uniform_scalar_id_to_pos
+  
+  subroutine uniform_scalar_read_hdf(this, hdf_id, dataset_name, &
+                                     error)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Reads the contents of the uniform field from a dataset in an HDF
+    ! file. The dataset will have an attribute specifying the name of
+    ! the field type.
+    !
+    class(uniform_scalar_field), intent(inout) :: this
+    integer(hid_t), intent(in)                 :: hdf_id
+      !! The identifier for the HDF file/group from which the field
+      !! data is to be read.
+    character(len=*), intent(in)               :: dataset_name
+      !! The name of the dataset to be read from the HDF file
+    integer, intent(out)                       :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    integer :: type_class
+    integer(size_t) :: type_size
+    integer(hsize_t), dimension(1) :: dims
+    character(len=50) :: string
+    real(r8), dimension(1) :: tmp
+    error = 0
+    call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    string, error)
+    if (error < 0 .or. trim(string) /= hdf_scalar_name) then
+      write(stderr,*) 'HDF dataset "'//dataset_name//'" not '// &
+                      'produced by uniform_scalar_field type.'
+      error = -1
+      return
+    end if
+    call h5ltread_dataset_double_f(hdf_id, dataset_name, tmp, &
+                                   [1_hsize_t], error)
+    this%field_data = tmp(1)
+  end subroutine uniform_scalar_read_hdf
   
   subroutine uniform_scalar_write_hdf(this, hdf_id, dataset_name, &
                                             error)
@@ -1901,6 +1945,56 @@ contains
     pos = [0.0_r8]
   end function uniform_vector_id_to_pos
   
+  subroutine uniform_vector_read_hdf(this, hdf_id, dataset_name, &
+                                     error)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Reads the contents of the uniform field from a dataset in an HDF
+    ! file. The dataset will have an attribute specifying the name of
+    ! the field type.
+    !
+    class(uniform_vector_field), intent(inout) :: this
+    integer(hid_t), intent(in)                 :: hdf_id
+      !! The identifier for the HDF file/group from which the field
+      !! data is to be read.
+    character(len=*), intent(in)               :: dataset_name
+      !! The name of the dataset to be read from the HDF file
+    integer, intent(out)                       :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    integer :: type_class
+    integer(size_t) :: type_size
+    integer(hsize_t), dimension(1) :: dims
+    character(len=50) :: string
+    error = 0
+    call h5ltget_dataset_info_f(hdf_id, dataset_name, dims, type_class, &
+                                type_size, error)
+    if (error < 0) then
+      write(stderr,*) 'Error occurred when reading HDF dataset "'// &
+                       dataset_name//'".'
+      return
+    end if
+    call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    string, error)
+    if (error < 0 .or. trim(string) /= hdf_vector_name) then
+      write(stderr,*) 'HDF dataset "'//dataset_name//'" not '// &
+                      'produced by uniform_vector_field type.'
+      error = -1
+      return
+    end if
+    this%vector_dims = dims(1)
+    if (.not. allocated(this%field_data)) then
+      allocate(this%field_data(this%vector_dims))
+    else if (size(this%field_data) /= this%vector_dims) then
+      deallocate(this%field_data)
+      allocate(this%field_data(this%vector_dims))
+    end if
+    call h5ltread_dataset_double_f(hdf_id, dataset_name, this%field_data, &
+                                   dims, error)
+  end subroutine uniform_vector_read_hdf
+
   subroutine uniform_vector_write_hdf(this, hdf_id, dataset_name, &
                                       error)
     !* Author: Chris MacMackin

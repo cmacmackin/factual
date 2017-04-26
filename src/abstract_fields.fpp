@@ -45,7 +45,8 @@ module abstract_fields_mod
   character(len=10), parameter, public :: hdf_field_type_attr = 'field_type'
   character(len=15), parameter, public :: hdf_vector_attr = 'is_vector_field'
   character(len=14), parameter, public :: hdf_grid_attr = 'gridpoints_dim'
-  
+  character(len=11), parameter, public :: hdf_grid_group = '/___grid___'
+
   real(r8) :: tolerance = 1e-10_r8
   public :: set_tol, get_tol
   
@@ -100,6 +101,8 @@ module abstract_fields_mod
     procedure(id_pos), deferred :: id_to_position
       !! Given the ID number of a location in the field, returns the
       !! coordinates of that position
+    procedure(hdf_in), deferred :: read_hdf
+      !! Read field data from an HDF5 file.
     procedure(hdf_out), deferred :: write_hdf
       !! Write field data in an HDF5 file.
     procedure(grid), deferred :: grid_spacing
@@ -145,7 +148,7 @@ module abstract_fields_mod
     ! Damian and Xia, Jim and Xu, Xiaofeng, 2011, ISBN 9780521888134, 
     ! Cambridge University Press, New York, NY, USA.
     !
-   contains
+  contains
     private
     procedure(sf_sf), deferred :: field_multiply_field
       !! \({\rm field} \times {\rm field}\)
@@ -523,6 +526,21 @@ module abstract_fields_mod
       real(r8), dimension(:), allocatable :: id_pos
         !! The coordinates for this location in the field
     end function id_pos
+
+    subroutine hdf_in(this, hdf_id, dataset_name, error)
+      import :: abstract_field
+      import :: hid_t
+      class(abstract_field), intent(inout) :: this
+      integer(hid_t), intent(in)           :: hdf_id
+        !! The identifier for the HDF file/group from which the field
+        !! data is to be read.
+      character(len=*), intent(in)         :: dataset_name
+        !! The name of the dataset to be read from the HDF file.
+      integer, intent(out)                 :: error
+        !! An error code which, upon succesful completion of the
+        !! routine, is 0. Otherwise, contains the error code returned
+        !! by the HDF library.
+    end subroutine hdf_in
 
     subroutine hdf_out(this, hdf_id, dataset_name, error)
       import :: abstract_field

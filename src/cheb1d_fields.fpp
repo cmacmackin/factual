@@ -33,8 +33,9 @@ module cheb1d_fields_mod
   ! collocation nodes and uses a pseudospectral approach to 
   ! differentiate.
   !
-  use iso_fortran_env, only: r8 => real64
-  use utils_mod, only: grid_to_spacing
+  use iso_fortran_env, only: r8 => real64, stderr => error_unit
+  use utils_mod, only: grid_to_spacing, open_or_create_hdf_group, &
+                       create_hdf_dset
   use array_pointer_mod, only: array_1d
   use abstract_fields_mod
   use uniform_fields_mod, only: uniform_scalar_field, &
@@ -42,14 +43,18 @@ module cheb1d_fields_mod
   use array_fields_mod, only: array_scalar_field, array_vector_field, &
                               scalar_init, vector_init
   use chebyshev_mod
-  use h5lt, only: hid_t, size_t, h5ltmake_dataset_double_f, &
-                  h5ltset_attribute_string_f, h5ltset_attribute_int_f, &
-                  h5ltset_attribute_double_f
+  use h5lt, only: hid_t, size_t, hsize_t, h5ltmake_dataset_double_f,     &
+                  h5ltset_attribute_string_f, h5ltset_attribute_int_f,   &
+                  h5ltread_dataset_double_f, h5ltget_attribute_string_f, &
+                  h5ltget_dataset_info_f
+  use hdf5, only: h5gclose_f
   implicit none
   private
 
   character(len=19), parameter, public :: hdf_scalar_name = 'cheb1d_scalar_field'
   character(len=19), parameter, public :: hdf_vector_name = 'cheb1d_vector_field'
+  character(len=34), parameter, public :: hdf_grid_template = &
+                                          '("cheb1d-",i0.5,"-",f0.7,"-",f0.7)'
 
 $:public_unary()
   public :: minval
@@ -109,6 +114,8 @@ $:public_unary()
     procedure, public :: set_boundary => cheb1d_scalar_set_bound
       !! Sets the specified boundary to hold the same values as the
       !! passed field argument.
+    procedure, public :: read_hdf => cheb1d_scalar_read_hdf
+      !! Read field data from a dataset in an HDF5 file.
     procedure, public :: write_hdf => cheb1d_scalar_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: grid_spacing => cheb1d_scalar_grid_spacing
@@ -184,6 +191,8 @@ $:public_unary()
     procedure, public :: set_boundary => cheb1d_vector_set_bound
       !! Sets the specified boundary to hold the same values as the
       !! passed field argument.
+    procedure, public :: read_hdf => cheb1d_vector_read_hdf
+      !! Read field data from a dataset in an HDF5 file.
     procedure, public :: write_hdf => cheb1d_vector_write_hdf
       !! Write field data to a new dataset in an HDF5 file.
     procedure, public :: grid_spacing => cheb1d_vector_grid_spacing
@@ -663,6 +672,64 @@ contains
     call this%clean_temp(); call boundary_field%clean_temp()
   end subroutine cheb1d_scalar_set_bound
 
+  subroutine cheb1d_scalar_read_hdf(this, hdf_id, dataset_name, error)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Reads the contents of the field from a dataset in an HDF
+    ! file. The dataset should have an attribute specifying the name of
+    ! the field type.
+    !
+    ! @Note It is assumed a differentiable field is being read (i.e.,
+    ! one which isn't just a region near the boundary).
+    !
+    class(cheb1d_scalar_field), intent(inout) :: this
+    integer(hid_t), intent(in)                :: hdf_id
+      !! The identifier for the HDF file/group from which the field
+      !! data is to be read.
+    character(len=*), intent(in)              :: dataset_name
+      !! The name of the dataset in the HDF file containing this
+      !! field's data.
+    integer, intent(out)                      :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    integer :: type_class
+    integer(size_t) :: type_size
+    integer(hsize_t), dimension(1) :: dims
+    character(len=50) :: string
+    real(r8), dimension(:), allocatable :: grid
+    call this%guard_temp()
+    error = 0
+    call h5ltget_dataset_info_f(hdf_id, dataset_name, dims, type_class, &
+                                type_size, error)
+    if (error < 0) then
+      write(stderr,*) 'Error occurred when reading HDF dataset "'// &
+                       dataset_name//'".'
+      return
+    end if
+    call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    string, error)
+    if (error < 0 .or. trim(string) /= hdf_scalar_name) then
+      write(stderr,*) 'HDF dataset "'//dataset_name//'" not '// &
+                      'produced by cheb1d_scalar_field type.'
+      error = -1
+      return
+    end if
+    call this%read_hdf_array(hdf_id, dataset_name, dims, error)
+    call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
+                                    string, error)
+    allocate(grid(this%elements()))
+    call h5ltread_dataset_double_f(hdf_id, string, grid, dims, error)
+    this%extent(1) = grid(this%elements())
+    this%extent(2) = grid(1)
+    deallocate(grid)
+    this%colloc_points => collocation_points(this%elements()-1, this%extent(1), &
+                                             this%extent(2))
+    this%differentiable = .true.
+    call this%clean_temp()
+  end subroutine cheb1d_scalar_read_hdf
+
   subroutine cheb1d_scalar_write_hdf(this, hdf_id, dataset_name, error)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -683,19 +750,26 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    integer(hid_t) :: group_id
+    character(len=50) :: grid_name
     call this%guard_temp()
     error = 0
-    call this%write_hdf_array(hdf_id, dataset_name, [this%elements()], error)
-    if (error /= 0) return
+    call this%write_hdf_array(hdf_id, dataset_name, [int(this%elements(), &
+                              hsize_t)], error)
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
                                     hdf_scalar_name, error)
-    if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
                                  1_size_t, error)
-    if (error /= 0) return
-    call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
-                                    this%colloc_points%array, int(this%elements(),size_t), &
-                                    error)
+    ! Create reference to grid
+    write(grid_name,hdf_grid_template) size(this%colloc_points%array), &
+                                       this%extent(1), this%extent(2)
+    call open_or_create_hdf_group(hdf_id, hdf_grid_group, group_id, error)
+    call create_hdf_dset(group_id, trim(grid_name), 1,   &
+                         [int(this%elements(),hsize_t)], &
+                         this%colloc_points%array, error)
+    call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
+                                    hdf_grid_group//'/'//trim(grid_name), error)
+    call h5gclose_f(group_id, error)
     call this%clean_temp()
   end subroutine cheb1d_scalar_write_hdf
 
@@ -1223,7 +1297,65 @@ contains
     end select
     call this%clean_temp(); call boundary_field%clean_temp()
   end subroutine cheb1d_vector_set_bound
-  
+
+  subroutine cheb1d_vector_read_hdf(this, hdf_id, dataset_name, error)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Reads the contents of the field from a dataset in an HDF
+    ! file. The dataset should have an attribute specifying the name of
+    ! the field type.
+    !
+    ! @Note It is assumed a differentiable field is being read (i.e.,
+    ! one which isn't just a region near the boundary).
+    !
+    class(cheb1d_vector_field), intent(inout) :: this
+    integer(hid_t), intent(in)                :: hdf_id
+      !! The identifier for the HDF file/group from which the field
+      !! data is to be read.
+    character(len=*), intent(in)              :: dataset_name
+      !! The name of the dataset in the HDF file containing this
+      !! field's data.
+    integer, intent(out)                      :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    integer :: type_class
+    integer(size_t) :: type_size
+    integer(hsize_t), dimension(2) :: dims
+    character(len=50) :: string
+    real(r8), dimension(:), allocatable :: grid
+    call this%guard_temp()
+    error = 0
+    call h5ltget_dataset_info_f(hdf_id, dataset_name, dims, type_class, &
+                                type_size, error)
+    if (error < 0) then
+      write(stderr,*) 'Error occurred when reading HDF dataset "'// &
+                       dataset_name//'".'
+      return
+    end if
+    call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
+                                    string, error)
+    if (error < 0 .or. trim(string) /= hdf_vector_name) then
+      write(stderr,*) 'HDF dataset "'//dataset_name//'" not '// &
+                      'produced by cheb1d_vector_field type.'
+      error = -1
+      return
+    end if
+    call this%read_hdf_array(hdf_id, dataset_name, dims, error)
+    call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
+                                    string, error)
+    allocate(grid(this%elements()))
+    call h5ltread_dataset_double_f(hdf_id, string, grid, dims, error)
+    this%extent(1) = grid(this%elements())
+    this%extent(2) = grid(1)
+    deallocate(grid)
+    this%colloc_points => collocation_points(this%elements()-1, this%extent(1), &
+                                             this%extent(2))
+    this%differentiable = .true.
+    call this%clean_temp()
+  end subroutine cheb1d_vector_read_hdf
+
   subroutine cheb1d_vector_write_hdf(this, hdf_id, dataset_name, error)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -1244,9 +1376,12 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    integer(hid_t) :: group_id
+    character(len=50) :: grid_name
     call this%guard_temp()
     error = 0
-    call this%write_hdf_array(hdf_id, dataset_name, [this%elements()], error)
+    call this%write_hdf_array(hdf_id, dataset_name, [int(this%elements(), &
+                              hsize_t)], error)
     if (error /= 0) return
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
                                     hdf_vector_name, error)
@@ -1254,9 +1389,16 @@ contains
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
                                  1_size_t, error)
     if (error /= 0) return
-    call h5ltset_attribute_double_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
-                                    this%colloc_points%array, int(this%elements(),size_t), &
-                                    error)
+    ! Create reference to grid
+    write(grid_name,hdf_grid_template) size(this%colloc_points%array), &
+                                       this%extent(1), this%extent(2)
+    call open_or_create_hdf_group(hdf_id, hdf_grid_group, group_id, error)
+    call create_hdf_dset(group_id, trim(grid_name), 1,   &
+                         [int(this%elements(),hsize_t)], &
+                         this%colloc_points%array, error)
+    call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
+                                    hdf_grid_group//'/'//trim(grid_name), error)
+    call h5gclose_f(group_id, error)
     call this%clean_temp()
   end subroutine cheb1d_vector_write_hdf
 

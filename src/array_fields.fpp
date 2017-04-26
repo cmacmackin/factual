@@ -38,7 +38,8 @@ module array_fields_mod
                                  get_tol
   use uniform_fields_mod, only: uniform_scalar_field, uniform_vector_field
   use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
-  use h5lt, only: hid_t, hsize_t, h5ltmake_dataset_double_f
+  use h5lt, only: hid_t, hsize_t, h5ltmake_dataset_double_f, &
+                  h5ltread_dataset_double_f
   implicit none
   private
 
@@ -142,6 +143,8 @@ module array_fields_mod
     procedure, public :: assign_meta_data => array_scalar_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
+    procedure, non_overridable, public :: read_hdf_array => array_scalar_read_hdf
+      !! Reads the array of field data from an HDF file
     procedure, non_overridable, public :: write_hdf_array => array_scalar_write_hdf
       !! Writes the array of field data to an HDF file
     procedure(sf_meta), deferred :: assign_subtype_meta_data
@@ -400,6 +403,8 @@ module array_fields_mod
     procedure, public :: assign_meta_data => array_vector_assign_meta_data
       !! Copies all data other than values stored in field from another
       !! field object to this one.
+    procedure, non_overridable, public :: read_hdf_array => array_vector_read_hdf
+      !! Reads the array of field data from an HDF file
     procedure, non_overridable, public :: write_hdf_array => array_vector_write_hdf
       !! Writes the array of field data to an HDF file
     procedure(vf_meta), deferred :: assign_subtype_meta_data
@@ -1462,6 +1467,41 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end subroutine array_scalar_assign_meta_data
 
+  subroutine array_scalar_read_hdf(this, hdf_id, dataset_name, dims, &
+                                   error)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Reads the contents of the field from a dataset in an HDF file.
+    !
+    class(array_scalar_field), intent(inout)   :: this
+    integer(hid_t), intent(in)                 :: hdf_id
+      !! The identifier for the HDF file/group from which the field
+      !! data is to be read
+    character(len=*), intent(in)               :: dataset_name
+      !! The name of the dataset to be read from the HDF file
+    integer(hsize_t), dimension(:), intent(in) :: dims
+      !! The dimensions of the data set to be read in
+    integer, intent(out)                       :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    call this%guard_temp()
+    error = 0
+    this%numpoints = int(product(dims))
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(this%numpoints))
+    else if (size(this%field_data%array) /= this%numpoints) then
+      deallocate(this%field_data%array)
+      allocate(this%field_data%array(this%numpoints))
+    end if
+    call h5ltread_dataset_double_f(hdf_id, dataset_name,        &
+                                   this%field_data%array, dims, &
+                                   error)
+    call this%clean_temp()
+  end subroutine array_scalar_read_hdf
+
   subroutine array_scalar_write_hdf(this, hdf_id, dataset_name, dims, &
                                     error)
     !* Author: Chris MacMackin
@@ -1469,16 +1509,16 @@ contains
     !
     ! Writes the contents of the field to a dataset in an HDF file.
     !
-    class(array_scalar_field), intent(in) :: this
-    integer(hid_t), intent(in)            :: hdf_id
+    class(array_scalar_field), intent(in)      :: this
+    integer(hid_t), intent(in)                 :: hdf_id
       !! The identifier for the HDF file/group in which the field
       !! data is to be written.
-    character(len=*), intent(in)          :: dataset_name
+    character(len=*), intent(in)               :: dataset_name
       !! The name of the dataset to be created in the HDF file
       !! containing this field's data.
-    integer, dimension(:), intent(in)     :: dims
+    integer(hsize_t), dimension(:), intent(in) :: dims
       !! The number of elements in each dimension of the fields
-    integer, intent(out)                  :: error
+    integer, intent(out)                       :: error
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
@@ -1490,7 +1530,7 @@ contains
                  'number of data-points in the field.')
 #:endif
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims), &
-                                   int(dims,hsize_t), this%field_data%array, error)
+                                   dims, this%field_data%array, error)
     call this%clean_temp()
   end subroutine array_scalar_write_hdf
 
@@ -2908,6 +2948,44 @@ contains
     call this%clean_temp(); call rhs%clean_temp()
   end subroutine array_vector_assign_meta_data
 
+  subroutine array_vector_read_hdf(this, hdf_id, dataset_name, dims, &
+                                   error)
+    !* Author: Chris MacMackin
+    !  Date: April 2017
+    !
+    ! Reads the contents of the field from a dataset in an HDF file.
+    !
+    class(array_vector_field), intent(inout)   :: this
+    integer(hid_t), intent(in)                 :: hdf_id
+      !! The identifier for the HDF file/group from which the field
+      !! data is to be read
+    character(len=*), intent(in)               :: dataset_name
+      !! The name of the dataset to be read from the HDF file
+    integer(hsize_t), dimension(:), intent(in) :: dims
+      !! The dimensions of the data set to be read in. The last of
+      !! these will be the vector dimension.
+    integer, intent(out)                       :: error
+      !! An error code which, upon succesful completion of the
+      !! routine, is 0. Otherwise, contains the error code returned
+      !! by the HDF library.
+    call this%guard_temp()
+    error = 0
+    this%numpoints = int(product(dims(1:size(dims)-1)))
+    this%vector_dims = int(dims(size(dims)))
+    if (.not. associated(this%field_data)) allocate(this%field_data)
+    if (.not. allocated(this%field_data%array)) then
+      allocate(this%field_data%array(this%numpoints, this%vector_dims))
+    else if (size(this%field_data%array,1) /= this%numpoints .and. &
+             size(this%field_data%array,2) /= this%vector_dims) then
+      deallocate(this%field_data%array)
+      allocate(this%field_data%array(this%numpoints,this%vector_dims))
+    end if
+    call h5ltread_dataset_double_f(hdf_id, dataset_name,        &
+                                   this%field_data%array, dims, &
+                                   error)
+    call this%clean_temp()
+  end subroutine array_vector_read_hdf
+
   subroutine array_vector_write_hdf(this, hdf_id, dataset_name, dims, &
                                     error)
     !* Author: Chris MacMackin
@@ -2915,16 +2993,16 @@ contains
     !
     ! Writes the contents of the field to a dataset in an HDF file.
     !
-    class(array_vector_field), intent(in) :: this
-    integer(hid_t), intent(in)            :: hdf_id
+    class(array_vector_field), intent(in)      :: this
+    integer(hid_t), intent(in)                 :: hdf_id
       !! The identifier for the HDF file/group in which the field
       !! data is to be written.
-    character(len=*), intent(in)          :: dataset_name
+    character(len=*), intent(in)               :: dataset_name
       !! The name of the dataset to be created in the HDF file
       !! containing this field's data.
-    integer, dimension(:), intent(in)     :: dims
+    integer(hsize_t), dimension(:), intent(in) :: dims
       !! The number of elements in each dimension of the fields
-    integer, intent(out)                  :: error
+    integer, intent(out)                       :: error
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
@@ -2935,8 +3013,8 @@ contains
                  'number of data-points in the field.')
 #:endif
     error = 0
-    call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims)+1, &
-                                   int([dims,this%vector_dims],hsize_t), &
+    call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims)+1,   &
+                                   [dims,int(this%vector_dims,hsize_t)], &
                                    this%field_data%array, error)
     call this%clean_temp()
   end subroutine array_vector_write_hdf
