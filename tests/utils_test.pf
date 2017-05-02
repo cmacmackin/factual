@@ -36,6 +36,7 @@ contains
     @assertTrue(is_nan(sqrt(arg)),message="NAN not detected.")    
   end subroutine test_is_nan
 
+@Test
   subroutine test_elements_in_slice
     integer, dimension(50) :: test_array
     @assertEqual(size(test_array(1:10:1)),elements_in_slice(1,10,1),message='Wrong number of elements calculated.')

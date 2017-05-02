@@ -181,29 +181,39 @@ contains
       !! Zero corresponds to no derivative and negative values are
       !! treated as zero.
     integer :: ord, order_, i
-    integer(c_int) :: field_size
-    real(c_double), dimension(:), pointer :: array1, array2
+    integer(c_int), parameter :: field_size_init = -565
+    integer(c_int), save :: field_size = field_size_init
+    integer(c_int) :: field_size_new
+    real(c_double), dimension(:), pointer, save :: array1, array2
     real(r8) :: inverse_width, field_centre
-    type(c_ptr) :: plan_dct, plan_dst, array_c1, array_c2
-    field_size = size(field_data,kind=c_size_t)
+    type(c_ptr), save :: plan_dct, plan_dst, array_c1, array_c2
     if (present(order)) then
       order_ = order
     else
       order_ = 1
     end if
     ord = order_
-    inverse_width = 2.0_c_double/(xvals(1) - xvals(field_size))
-    field_centre = xvals(1) - 1.0_r8/(inverse_width)
-    if (ord > 0) then
+    if (ord <= 0) return
+    field_size_new = size(field_data,kind=c_int)
+    if (field_size_new /= field_size) then
+      if (field_size /= field_size_init) then
+        call fftw_free(array_c1)
+        call fftw_free(array_c2)
+        call fftw_destroy_plan(plan_dct)
+        call fftw_destroy_plan(plan_dst)
+      end if
+      field_size = field_size_new
       array_c1 = fftw_alloc_real(int(field_size,c_size_t))
       call c_f_pointer(array_c1, array1, [int(field_size,c_size_t)])
       array_c2 = fftw_alloc_real(int(field_size,c_size_t))
       call c_f_pointer(array_c2, array2, [int(field_size,c_size_t)])
-    else
-      return
+      plan_dct = fftw_plan_r2r_1d(field_size, array1, array2, FFTW_REDFT00, &
+                                  FFTW_MEASURE)
+      plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array1, FFTW_RODFT00, &
+                                  FFTW_MEASURE)
     end if
-    plan_dct = fftw_plan_r2r_1d(field_size, array1, array2, FFTW_REDFT00, FFTW_ESTIMATE)
-    plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array1, FFTW_RODFT00, FFTW_ESTIMATE)
+    inverse_width = 2.0_c_double/(xvals(1) - xvals(field_size))
+    field_centre = xvals(1) - 1.0_r8/(inverse_width)
     array1 = field_data
     do while(ord > 0)
       call fftw_execute_r2r(plan_dct,array1,array2)
@@ -225,10 +235,6 @@ contains
       ord = ord - 1
     end do
     field_data = array1 * inverse_width**order_
-    call fftw_free(array_c1)
-    call fftw_free(array_c2)
-    call fftw_destroy_plan(plan_dct)
-    call fftw_destroy_plan(plan_dst)
   end subroutine differentiate_1d
 
 end module chebyshev_mod

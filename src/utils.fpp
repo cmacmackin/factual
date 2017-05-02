@@ -112,7 +112,7 @@ contains
       !! 1` would read every element, `stride = 2` would read every
       !! second element, etc.
     integer :: res
-    res = (finish - start + 1)/stride
+    res = (finish - start)/stride + 1
   end function elements_in_slice
 
   pure function grid_to_spacing(grid) result(space)
