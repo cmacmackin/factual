@@ -1526,8 +1526,8 @@ contains
     error = 0
 #:if defined('DEBUG')
     if (product(dims) /= this%numpoints) &
-      error stop('Dimensions in requested output array do not match '// &
-                 'number of data-points in the field.')
+      error stop ('Dimensions in requested output array do not match '// &
+                  'number of data-points in the field.')
 #:endif
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims), &
                                    dims, this%field_data%array, error)
@@ -3009,8 +3009,8 @@ contains
     call this%guard_temp()
 #:if defined('DEBUG')
     if (product(dims) /= this%numpoints) &
-      error stop('Dimensions in requested output array do not match '// &
-                 'number of data-points in the field.')
+      error stop ('Dimensions in requested output array do not match '// &
+                  'number of data-points in the field.')
 #:endif
     error = 0
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims)+1,   &
