@@ -1040,6 +1040,7 @@ contains
     call local%assign_meta_data(this)
     local%field_data%array = this%field_data%array / rhs
     call move_alloc(local,res)
+    call res%set_temp()
     call this%clean_temp()
   end function array_scalar_sf_d_r
   
@@ -1390,6 +1391,7 @@ contains
     class is(array_scalar_field)
       if (this%numpoints /= rhs%numpoints) then
         iseq = .false.
+        call this%clean_temp(); call rhs%clean_temp()
         return
       end if
       do i=1,this%numpoints
@@ -1399,7 +1401,10 @@ contains
                             /normalization < get_tol()) .or. &
                            (is_nan(this%field_data%array(i)).and. &
                             is_nan(rhs%field_data%array(i))) )
-        if (.not. iseq) return
+        if (.not. iseq) then
+          call this%clean_temp(); call rhs%clean_temp()
+          return
+        end if
       end do
     class is(uniform_scalar_field)
       do i=1,this%numpoints
@@ -1408,7 +1413,10 @@ contains
         iseq = iseq .and.( ((this%field_data%array(i)-rhs%get_value())/normalization < &
                              get_tol()) .or. (is_nan(this%field_data%array(i)).and. &
                                               is_nan(rhs%get_value())) )
-        if (.not. iseq) return
+        if (.not. iseq) then
+          call this%clean_temp(); call rhs%clean_temp()
+          return
+        end if
       end do
     class default
       iseq = .false.
@@ -1633,7 +1641,10 @@ contains
     integer :: i
     call this%guard_temp()
     if (boundary == 0) then
-      allocate(res, source=this)
+      allocate(res, mold=this)
+      res = this
+      call res%set_temp()
+      call this%clean_temp()
       return
     end if
     allocate(local, mold=this)
@@ -2840,6 +2851,7 @@ contains
     class is(array_vector_field)
       if (this%numpoints/=rhs%numpoints) then
         iseq = .false.
+        call this%clean_temp(); call rhs%clean_temp()
         return
       end if
       if (this%vector_dims > rhs%vector_dims) then
@@ -2851,7 +2863,10 @@ contains
       else
         dims = this%vector_dims
       end if
-      if (.not. iseq) return
+      if (.not. iseq) then
+         call this%clean_temp(); call rhs%clean_temp()
+         return
+       end if
       do i=1,this%numpoints
         normalization = norm2(this%field_data%array(i,:dims))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
@@ -2862,7 +2877,10 @@ contains
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
-        if (.not. iseq) return
+        if (.not. iseq) then
+          call this%clean_temp(); call rhs%clean_temp()
+          return
+        end if
       end do
     class is(uniform_vector_field)
       tmp = rhs%get_value()
@@ -2875,7 +2893,10 @@ contains
       else
         dims = this%vector_dims
       end if
-      if (.not. iseq) return
+      if (.not. iseq) then
+        call this%clean_temp(); call rhs%clean_temp()
+        return
+      end if
       do i=1,this%numpoints
         normalization = norm2(this%field_data%array(i,:dims))
         if (normalization < get_tol()) normalization = 1.0_r8
@@ -2885,7 +2906,10 @@ contains
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
-        if (.not. iseq) return
+        if (.not. iseq) then
+          return
+          call this%clean_temp(); call rhs%clean_temp()
+        end if
       end do
     class default
       iseq = .false.
@@ -3158,7 +3182,10 @@ contains
     integer :: i, j, k
     call this%guard_temp()
     if (boundary == 0) then
-      allocate(res, source=this)
+      allocate(res, mold=this)
+      res = this
+      call res%set_temp()
+      call this%clean_temp()
       return
     end if
     allocate(local, mold=this)
