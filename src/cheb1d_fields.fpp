@@ -706,6 +706,7 @@ contains
     if (error < 0) then
       write(stderr,*) 'Error occurred when reading HDF dataset "'// &
                        dataset_name//'".'
+      call this%clean_temp()
       return
     end if
     call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
@@ -714,6 +715,7 @@ contains
       write(stderr,*) 'HDF dataset "'//dataset_name//'" not '// &
                       'produced by cheb1d_scalar_field type.'
       error = -1
+      call this%clean_temp()
       return
     end if
     call this%read_hdf_array(hdf_id, dataset_name, dims, error)
@@ -1332,6 +1334,7 @@ contains
     if (error < 0) then
       write(stderr,*) 'Error occurred when reading HDF dataset "'// &
                        dataset_name//'".'
+      call this%clean_temp()
       return
     end if
     call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
@@ -1340,6 +1343,7 @@ contains
       write(stderr,*) 'HDF dataset "'//dataset_name//'" not '// &
                       'produced by cheb1d_vector_field type.'
       error = -1
+      call this%clean_temp()
       return
     end if
     call this%read_hdf_array(hdf_id, dataset_name, dims, error)

@@ -774,7 +774,7 @@ contains
     @assertEqual(this%field1%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field1%domain(),field%domain(),message='Result has wrong domain')
     @assertEqual(this%field1%dimensions(),field%dimensions(),message='Result has wrong number of dimensions')
-    field = this%field3 .cross. this%field2 
+    field = this%field3 .cross. this%field2
     @assertTrue(-this%field1==field,message='Error calculating field .cross. field')
     field = this%field3 .cross. this%field3 
     this%field1 = cheb1d_vector_field(this%nodes,zeros,extra_dims=0)
