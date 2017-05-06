@@ -23,7 +23,6 @@
 module chebyshev_test
   use iso_fortran_env, only: r8 => real64
   use pfunit_mod
-  use array_pointer_mod, only: array_1d
   use chebyshev_mod
   implicit none
   
@@ -91,23 +90,18 @@ contains
 @Test
   subroutine test_collocation(this)
     class(test_cheb), intent(inout) :: this
-    type(array_1d) :: tmp
-    real(r8), dimension(:), allocatable :: points
+    real(r8), dimension(:), pointer :: points
     if (this%lower==-1.0) then
       if (this%upper==1.0) then
-        tmp = collocation_points(this%nodes)
-        points = tmp%array
+        points => collocation_points(this%nodes)
       else
-        tmp = collocation_points(this%nodes,upper_bound=this%upper)
-        points = tmp%array
+        points => collocation_points(this%nodes,upper_bound=this%upper)
       end if
     else
       if (this%upper==1.0) then
-        tmp = collocation_points(this%nodes,this%lower)
-        points = tmp%array
+        points => collocation_points(this%nodes,this%lower)
       else
-        tmp = collocation_points(this%nodes,this%lower,this%upper)
-        points = tmp%array
+        points => collocation_points(this%nodes,this%lower,this%upper)
       end if
     end if
     @assertEqual(this%nodes+1,size(points),message="Collocation points array wrong length.")
@@ -136,10 +130,9 @@ contains
   subroutine test_differntiate_1d(this)
     class(test_cheb), intent(inout) :: this
     integer, parameter :: nodes = 24
-    type(array_1d) :: tmp
-    real(r8), dimension(nodes+1) :: xvals, func
-    tmp = collocation_points(nodes,this%lower,this%upper)
-    xvals = tmp%array
+    real(r8), dimension(:), pointer :: xvals
+    real(r8), dimension(nodes+1) :: func
+    xvals => collocation_points(nodes,this%lower,this%upper)
     func = f1(xvals)
     call differentiate_1d(func,xvals)
     @assertEqual(df1(xvals(2:nodes)),func(2:nodes),message="Derivative calculation incorrect.", tolerance=1.e-9_r8)

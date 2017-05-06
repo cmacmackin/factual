@@ -36,7 +36,6 @@ module cheb1d_fields_mod
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use utils_mod, only: grid_to_spacing, open_or_create_hdf_group, &
                        create_hdf_dset
-  use array_pointer_mod, only: array_1d
   use abstract_fields_mod
   use uniform_fields_mod, only: uniform_scalar_field, &
                                 uniform_vector_field
@@ -72,11 +71,11 @@ $:public_unary()
     ! functions.
     !
     private
-    real(r8), dimension(2)  :: extent
+    real(r8), dimension(2)          :: extent
       !! The start and end values of the domain
-    type(array_1d), pointer :: colloc_points => null()
+    real(r8), dimension(:), pointer :: colloc_points => null()
       !! The location of the data-points
-    logical                 :: differentiable = .true.
+    logical                         :: differentiable = .true.
       !! Indicates whether this is a complete Chebyshev field which
       !! can be differentiated using the Psuedo-spectral method.
   contains
@@ -150,11 +149,11 @@ $:public_unary()
     ! differentiate.
     !
     private
-    real(r8), dimension(2)  :: extent
+    real(r8), dimension(2)          :: extent
       !! The start and end values of the domain
-    type(array_1d), pointer :: colloc_points => null()
+    real(r8), dimension(:), pointer :: colloc_points => null()
       !! The location of the data-points
-    logical                 :: differentiable = .true.
+    logical                         :: differentiable = .true.
       !! Indicates whether this is a complete Chebyshev field which
       !! can be differentiated using the Psuedo-spectral method.
   contains
@@ -356,7 +355,7 @@ contains
     call this%guard_temp()
     allocate(pos(1))
     if (id <= this%elements()) then
-      pos(1) = this%colloc_points%array(id)
+      pos(1) = this%colloc_points(id)
     else
       error stop ('cheb1d_scalar_field: Invalid ID number provided.')
     end if
@@ -388,7 +387,7 @@ contains
                    '`cheb1d_scalar_field`.')
 #:endif
       res = data_array
-      call differentiate_1d(res,this%colloc_points%array,order)
+      call differentiate_1d(res,this%colloc_points,order)
     else
       allocate(res(size(data_array)))
       res = 0.0_r8
@@ -445,12 +444,12 @@ contains
        !   allocate(this%colloc_points(this%elements() + 1))
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
-        else
-          allocate(this%colloc_points)
+       else
+          if (associated(this%colloc_points)) nullify(this%colloc_points)
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
-        if (rhs%differentiable) then
+        if (this%differentiable) then
           nullify(this%colloc_points)
         else
           deallocate(this%colloc_points)
@@ -464,11 +463,11 @@ contains
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          allocate(this%colloc_points)
+          if (associated(this%colloc_points)) nullify(this%colloc_points)
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
-        if (rhs%differentiable) then
+        if (this%differentiable) then
           nullify(this%colloc_points)
         else
           deallocate(this%colloc_points)
@@ -547,27 +546,30 @@ contains
     call this%guard_temp(); call src%guard_temp()
     select type(src)
     class is(cheb1d_scalar_field)
-      length = size(src%colloc_points%array)
+      length = size(src%colloc_points)
       select case(boundary)
       case(-1)
-        allocate(this%colloc_points)
-        allocate(this%colloc_points%array(depth))
-        this%colloc_points%array = src%colloc_points%array(length+1-depth:)
-        this%extent = [src%colloc_points%array(length+1-depth), &
-                      src%colloc_points%array(length)]
+        allocate(this%colloc_points(depth))
+        this%colloc_points = src%colloc_points(length+1-depth:)
+        this%extent = [src%colloc_points(length+1-depth), &
+                      src%colloc_points(length)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [length+1-depth,length,1]
       case(1)
-        allocate(this%colloc_points)
-        allocate(this%colloc_points%array(depth))
-        this%colloc_points%array = src%colloc_points%array(1:depth)
-        this%extent = [src%colloc_points%array(depth), src%colloc_points%array(1)]
+        allocate(this%colloc_points(depth))
+        this%colloc_points = src%colloc_points(1:depth)
+        this%extent = [src%colloc_points(depth), src%colloc_points(1)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [1,depth,1]
       case default
-        this%colloc_points => src%colloc_points
+        if (src%differentiable) then
+          this%colloc_points => src%colloc_points
+        else
+          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          this%colloc_points = src%colloc_points
+        end if
         this%extent = src%extent
         allocate(slices(3,1))
         slices(:,1) = [1,length,1]
@@ -623,9 +625,9 @@ contains
       select case(boundary)
       case(-1)
 #:if defined('DEBUG')
-        if (abs(this%colloc_points%array(length+1-depth) - boundary_field%extent(1)) &
+        if (abs(this%colloc_points(length+1-depth) - boundary_field%extent(1)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
-        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+        if (abs(this%colloc_points(length) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
@@ -633,9 +635,9 @@ contains
         end do
       case(1)
 #:if defined('DEBUG')
-        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+        if (abs(this%colloc_points(1) - boundary_field%extent(1)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
-        if (abs(this%colloc_points%array(depth) - boundary_field%extent(2)) &
+        if (abs(this%colloc_points(depth) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
@@ -643,9 +645,9 @@ contains
         end do
       case default
 #:if defined('DEBUG')
-        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+        if (abs(this%colloc_points(1) - boundary_field%extent(1)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
-        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+        if (abs(this%colloc_points(length) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
         if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
 #:endif        
@@ -763,12 +765,12 @@ contains
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
                                  1_size_t, error)
     ! Create reference to grid
-    write(grid_name,hdf_grid_template) size(this%colloc_points%array), &
+    write(grid_name,hdf_grid_template) size(this%colloc_points), &
                                        this%extent(1), this%extent(2)
     call open_or_create_hdf_group(hdf_id, hdf_grid_group, group_id, error)
     call create_hdf_dset(group_id, trim(grid_name), 1,   &
                          [int(this%elements(),hsize_t)], &
-                         this%colloc_points%array, error)
+                         this%colloc_points, error)
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
                                     hdf_grid_group//'/'//trim(grid_name), error)
     call h5gclose_f(group_id, error)
@@ -790,7 +792,7 @@ contains
     call this%guard_temp()
     call local%assign_subtype_meta_data(this)
     allocate(cheb1d_vector_field :: grid)
-    grid = array_vector_field(local, grid_to_spacing(this%colloc_points%array))
+    grid = array_vector_field(local, grid_to_spacing(this%colloc_points))
     call grid%set_temp()
     call this%clean_temp()
   end function cheb1d_scalar_grid_spacing
@@ -802,7 +804,7 @@ contains
     ! Deallocates the field data for this object.
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    if (.not. this%differentiable) deallocate(this%colloc_points%array)
+    !if (.not. this%differentiable) deallocate(this%colloc_points)
     call this%force_finalise_array()
   end subroutine cheb1d_scalar_force_finalise
 
@@ -979,7 +981,7 @@ contains
     call this%guard_temp()
     allocate(pos(1))
     if (id <= this%elements()) then
-      pos(1) = this%colloc_points%array(id)
+      pos(1) = this%colloc_points(id)
     else
       error stop ('cheb1d_vector_field: Invalid ID number provided.')
     end if
@@ -1011,7 +1013,7 @@ contains
                    '`cheb1d_vector_field`.')
 #:endif
       res = data_array
-      call differentiate_1d(res,this%colloc_points%array,order)
+      call differentiate_1d(res,this%colloc_points,order)
     else
       allocate(res, mold=data_array)
       res = 0.0
@@ -1070,11 +1072,11 @@ contains
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          allocate(this%colloc_points)
+          if (associated(this%colloc_points)) nullify(this%colloc_points)
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
-        if (rhs%differentiable) then
+        if (this%differentiable) then
           nullify(this%colloc_points)
         else
           deallocate(this%colloc_points)
@@ -1088,11 +1090,11 @@ contains
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          allocate(this%colloc_points)
+          if (associated(this%colloc_points)) nullify(this%colloc_points)
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
-        if (rhs%differentiable) then
+        if (this%differentiable) then
           nullify(this%colloc_points)
         else
           deallocate(this%colloc_points)
@@ -1171,28 +1173,31 @@ contains
     call this%guard_temp(); call src%guard_temp()
     select type(src)
     class is(cheb1d_vector_field)
-      length = size(src%colloc_points%array)
+      length = size(src%colloc_points)
       select case(boundary)
       case(-1)
-        allocate(this%colloc_points)
-        allocate(this%colloc_points%array(depth))
-        this%colloc_points%array = src%colloc_points%array(length+1-depth:)
-        this%extent = [src%colloc_points%array(length+1-depth), &
-                      src%colloc_points%array(length)]
+        allocate(this%colloc_points(depth))
+        this%colloc_points = src%colloc_points(length+1-depth:)
+        this%extent = [src%colloc_points(length+1-depth), &
+                      src%colloc_points(length)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [length+1-depth,length,1]
       case(1)
-        allocate(this%colloc_points)
-        allocate(this%colloc_points%array(depth))
-        this%colloc_points%array = src%colloc_points%array(1:depth)
-        this%extent = [src%colloc_points%array(depth), &
-                      src%colloc_points%array(1)]
+        allocate(this%colloc_points(depth))
+        this%colloc_points = src%colloc_points(1:depth)
+        this%extent = [src%colloc_points(depth), &
+                      src%colloc_points(1)]
         this%differentiable = .false.
         allocate(slices(3,1))
         slices(:,1) = [1,depth,1]
       case default
-        this%colloc_points => src%colloc_points
+        if (this%differentiable) then
+          this%colloc_points => src%colloc_points
+        else
+          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          this%colloc_points = src%colloc_points
+        end if
         this%extent = src%extent
         allocate(slices(3,1))
         slices(:,1) = [1,length,1]
@@ -1249,9 +1254,9 @@ contains
       select case(boundary)
       case(-1)
 #:if defined('DEBUG')
-        if (abs(this%colloc_points%array(length+1-depth) - boundary_field%extent(1)) &
+        if (abs(this%colloc_points(length+1-depth) - boundary_field%extent(1)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
-        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+        if (abs(this%colloc_points(length) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
@@ -1260,9 +1265,9 @@ contains
         end do
       case(1)
 #:if defined('DEBUG')
-        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+        if (abs(this%colloc_points(1) - boundary_field%extent(1)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
-        if (abs(this%colloc_points%array(depth) - boundary_field%extent(2)) &
+        if (abs(this%colloc_points(depth) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
 #:endif
         do i = 1, depth
@@ -1271,9 +1276,9 @@ contains
         end do
       case default
 #:if defined('DEBUG')
-        if (abs(this%colloc_points%array(1) - boundary_field%extent(1)) &
+        if (abs(this%colloc_points(1) - boundary_field%extent(1)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
-        if (abs(this%colloc_points%array(length) - boundary_field%extent(2)) &
+        if (abs(this%colloc_points(length) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
         if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
 #:endif
@@ -1394,12 +1399,12 @@ contains
                                  1_size_t, error)
     if (error /= 0) return
     ! Create reference to grid
-    write(grid_name,hdf_grid_template) size(this%colloc_points%array), &
+    write(grid_name,hdf_grid_template) size(this%colloc_points), &
                                        this%extent(1), this%extent(2)
     call open_or_create_hdf_group(hdf_id, hdf_grid_group, group_id, error)
     call create_hdf_dset(group_id, trim(grid_name), 1,   &
                          [int(this%elements(),hsize_t)], &
-                         this%colloc_points%array, error)
+                         this%colloc_points, error)
     call h5ltset_attribute_string_f(hdf_id, dataset_name, hdf_grid_attr//'1', &
                                     hdf_grid_group//'/'//trim(grid_name), error)
     call h5gclose_f(group_id, error)
@@ -1419,7 +1424,7 @@ contains
       !! grid in that direction.
     call this%guard_temp()
     allocate(cheb1d_vector_field :: grid)
-    grid = array_vector_field(this, grid_to_spacing(this%colloc_points%array))
+    grid = array_vector_field(this, grid_to_spacing(this%colloc_points))
     call grid%set_temp()
     call this%clean_temp()
   end function cheb1d_vector_grid_spacing
@@ -1431,7 +1436,7 @@ contains
     ! Deallocates the field data for this object.
     !
     class(cheb1d_vector_field), intent(in) :: this
-    if (.not. this%differentiable) deallocate(this%colloc_points%array)
+!    if (.not. this%differentiable) deallocate(this%colloc_points)
     call this%force_finalise_array()
   end subroutine cheb1d_vector_force_finalise
 

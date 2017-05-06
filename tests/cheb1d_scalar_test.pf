@@ -23,7 +23,6 @@
 module cheb1d_scalar_test
   use iso_fortran_env, only: r8 => real64
   use pfunit_mod
-  use array_pointer_mod, only: array_1d
   use abstract_fields_mod, only: scalar_field, vector_field
   use chebyshev_mod
   use cheb1d_fields_mod
@@ -45,6 +44,7 @@ contains
 
   subroutine setup(this)
     class(test_field), intent(inout) :: this
+    !print*,'SETUP'
     this%field1 = cheb1d_scalar_field(this%nodes,f1)
     this%field2 = cheb1d_scalar_field(this%nodes,f2,this%lower2,this%upper2)
   end subroutine setup
@@ -114,13 +114,13 @@ contains
 @Test
   subroutine test_raw(this)
     class(test_field), intent(inout) :: this
-    type(array_1d) :: xvals_array
+    real(r8), dimension(:), pointer :: xvals
     real(r8), allocatable, dimension(:) :: raw, expected
     integer :: i
     raw = this%field1%raw()
-    xvals_array = collocation_points(this%nodes-1,this%lower1,this%upper1)
-    expected = xvals_array%array
-    forall (i = 1:this%nodes) expected(i) = f1([expected(i)])
+    xvals => collocation_points(this%nodes-1,this%lower1,this%upper1)
+    allocate(expected(size(xvals)))
+    forall (i = 1:this%nodes) expected(i) = f1([xvals(i)])
     @assertEqual(expected,raw,message='Wrong raw contents returned')
     raw = this%field1%raw([1])
     @assertEqual(expected(:this%nodes-1),raw,message='Wrong raw contents returned')
@@ -133,11 +133,10 @@ contains
 @Test
   subroutine test_assign_raw(this)
     class(test_field), intent(inout) :: this
-    type(array_1d) :: xvals_array
-    real(r8), dimension(this%nodes) :: raw, xvals
+    real(r8), dimension(:), pointer :: xvals
+    real(r8), dimension(this%nodes) :: raw
     integer :: i
-    xvals_array = collocation_points(this%nodes-1,this%lower1,this%upper1)
-    xvals = xvals_array%array
+    xvals => collocation_points(this%nodes-1,this%lower1,this%upper1)
     forall (i = 1:this%nodes) raw(i) = f2([xvals(i)])
     call this%field1%set_from_raw(raw)
     @assertEqual(raw,this%field2%raw(),message='Error setting field from raw.')
@@ -201,12 +200,10 @@ contains
 @Test
   subroutine test_id_to_position(this)
     class(test_field), intent(inout) :: this
-    type(array_1d) :: xvals_array
-    real(r8), dimension(this%nodes)  :: xvals
+    real(r8), dimension(:), pointer  :: xvals
     real(r8), dimension(:), allocatable :: actual
     integer :: i
-    xvals_array = collocation_points(this%nodes-1,this%lower1,this%upper1)
-    xvals = xvals_array%array
+    xvals => collocation_points(this%nodes-1,this%lower1,this%upper1)
     do i = 1,this%nodes
       actual = this%field1%id_to_position(i)
       @assertEqual(xvals(i),actual(1),message='Wrong location returned for this ID')

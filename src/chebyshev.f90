@@ -31,7 +31,6 @@ module chebyshev_mod
   use iso_fortran_env, only: r8 => real64
   use iso_c_binding
   use fftw3_mod
-  use array_pointer_mod, only: array_1d
   implicit none
   private
   
@@ -46,10 +45,10 @@ module chebyshev_mod
     ! the parameters used in the calculation.
     !
     private
-    type(array_1d), pointer      :: colloc_points => null()
-    integer                      :: nodes
-    real(r8)                     :: lower_bound, upper_bound
-    type(cached_points), pointer :: next => null()
+    real(r8), dimension(:), pointer :: colloc_points => null()
+    integer                         :: nodes
+    real(r8)                        :: lower_bound, upper_bound
+    type(cached_points), pointer    :: next => null()
   end type cached_points
 
   type(cached_points), pointer :: cache_list => null()
@@ -68,13 +67,13 @@ contains
     ! will be on the domain [-1,1], but with optional arguments this
     ! can be changed.
     !
-    integer, intent(in) :: nodes
+    integer, intent(in)             :: nodes
       !! The number of collocation nodes to generate
-    real(r8), optional, intent(in) :: lower_bound
+    real(r8), optional, intent(in)  :: lower_bound
       !! The position of the start of the domain. Default is -1.0.
-    real(r8), optional, intent(in) :: upper_bound
+    real(r8), optional, intent(in)  :: upper_bound
       !! The position of the end of the domain. Default is 1.0.
-    type(array_1d), pointer :: collocation_points
+    real(r8), dimension(:), pointer :: collocation_points
     integer :: i
     real(r8) :: upper, lower, factor
     type(cached_points), pointer :: list_location
@@ -96,12 +95,11 @@ contains
       end if
     end do
     ! If these collocation points have not already been calculated, do so now.
-    allocate(collocation_points)
-    allocate(collocation_points%array(nodes+1))
+    allocate(collocation_points(nodes+1))
     factor = (upper - lower)/2.0_r8
-    collocation_points%array = cos([(real(i,r8), i=0,nodes)] * (pi/real(nodes,r8)))
-    collocation_points%array = factor*collocation_points%array
-    collocation_points%array = (lower + 1.0_r8*factor) + collocation_points%array
+    collocation_points = cos([(real(i,r8), i=0,nodes)] * (pi/real(nodes,r8)))
+    collocation_points = factor*collocation_points
+    collocation_points = (lower + 1.0_r8*factor) + collocation_points
     ! Cache this set of collocation points
     allocate(list_location)
     list_location%colloc_points => collocation_points
@@ -124,7 +122,7 @@ contains
     real(r8), dimension(nodes+1) :: diff
     integer  :: j
     real(r8) :: c_i, c_j
-    type(array_1d), pointer :: collocs
+    real(r8), dimension(:), pointer :: collocs
     collocs => collocation_points(nodes,lower_bound,upper_bound)
     if (row == 1 .or. row == nodes + 1) then
       c_i = 2._r8
@@ -138,7 +136,7 @@ contains
         else if (j == nodes + 1) then
           diff(j) = -(2*nodes**2 + 1.0_r8)/6._r8
         else
-          diff(j) = -0.5_r8*collocs%array(j)/(1 - collocs%array(j)**2)
+          diff(j) = -0.5_r8*collocs(j)/(1 - collocs(j)**2)
         end if
       else
         if (j == 1 .or. j == nodes + 1) then
@@ -147,7 +145,7 @@ contains
           c_j = 1._r8
         end if
         diff(j) = c_i*(-1)**(row+j)/ &
-                  (c_j*(collocs%array(row) - collocs%array(j)))
+                  (c_j*(collocs(row) - collocs(j)))
       end if
     end do
   end function differentiation_row
