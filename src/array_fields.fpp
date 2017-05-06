@@ -33,7 +33,6 @@ module array_fields_mod
   ! Cartesian coordinates are supported.
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
-  use array_pointer_mod, only: array_1d, array_2d
   use abstract_fields_mod, only: abstract_field, scalar_field, vector_field, &
                                  get_tol
   use uniform_fields_mod, only: uniform_scalar_field, uniform_vector_field
@@ -64,9 +63,9 @@ module array_fields_mod
     ! higher dimensional field.
     !
     private
-    integer                 :: numpoints
+    integer                             :: numpoints
       !! The number of datapoints used
-    type(array_1d), pointer :: field_data => null()
+    real(r8), dimension(:), allocatable :: field_data
       !! The value of the scalar field at the data-points. Each
       !! element represents the value at a different location.
   contains
@@ -318,13 +317,13 @@ module array_fields_mod
     ! higher dimensional field.
     !
     private
-    integer                 :: numpoints
+    integer                               :: numpoints
       !! The number of datapoints used
-    type(array_2d), pointer :: field_data => null()
+    real(r8), dimension(:,:), allocatable :: field_data
       !! The value of the vector field at the data-points. Each row
       !! represents a different spatial location, while each column
       !! represents a different component of the vector.
-    integer                 :: vector_dims = 0
+    integer                               :: vector_dims = 0
       !! The number of vector components
   contains
     private
@@ -600,22 +599,21 @@ contains
     integer :: i
     call template%guard_temp()
     allocate(this, source=template)
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (allocated(this%field_data%array)) then
-      if (size(this%field_data%array) /= numpoints) then
-        deallocate(this%field_data%array)
-        allocate(this%field_data%array(numpoints))
+    if (allocated(this%field_data)) then
+      if (size(this%field_data) /= numpoints) then
+        deallocate(this%field_data)
+        allocate(this%field_data(numpoints))
       end if
     else
-      allocate(this%field_data%array(numpoints))
+      allocate(this%field_data(numpoints))
     end if
     this%numpoints = numpoints
     if (present(initializer)) then
       do i = 1, numpoints
-        this%field_data%array(i) = initializer(this%id_to_position(i))
+        this%field_data(i) = initializer(this%id_to_position(i))
       end do
     else
-      this%field_data%array = 0
+      this%field_data = 0
     end if
     call template%clean_temp()
     call this%set_temp()
@@ -639,17 +637,16 @@ contains
     call template%guard_temp()
     allocate(this, mold=template)
     call this%assign_subtype_meta_data(template)
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (.not. allocated(this%field_data%array)) then
-      allocate(this%field_data%array(size(array)))
+    if (.not. allocated(this%field_data)) then
+      allocate(this%field_data(size(array)))
     else
-      if (size(this%field_data%array) /= size(array)) then
-        deallocate(this%field_data%array)
-        allocate(this%field_data%array(size(array)))
+      if (size(this%field_data) /= size(array)) then
+        deallocate(this%field_data)
+        allocate(this%field_data(size(array)))
       end if
     end if
     this%numpoints = size(array)
-    this%field_data%array = array
+    this%field_data = array
     call template%clean_temp()
     call this%set_temp()
   end function array_scalar_constructor2
@@ -736,7 +733,7 @@ contains
     call this%guard_temp()
     slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
     if (this%is_allocated()) then
-      res = [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i)), i=1, &
+      res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), i=1, &
              size(slices,2))]
     else
       allocate(res(0))
@@ -776,14 +773,13 @@ contains
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     slices = this%raw_slices(provide_lower_bound,provide_upper_bound)
     counts = elements_in_slice(slices(1,:),slices(2,:),slices(3,:))
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (.not. allocated(this%field_data%array)) then
-       allocate(this%field_data%array(maxval(slices(2,:))))
+    if (.not. allocated(this%field_data)) then
+       allocate(this%field_data(maxval(slices(2,:))))
     end if
     do concurrent (i = 1:size(counts))
       start = sum(counts(1:i-1)) + 1
       finish = start + counts(i) - 1 
-      this%field_data%array(slices(1,i):slices(2,i):slices(3,i)) = raw(start:finish)
+      this%field_data(slices(1,i):slices(2,i):slices(3,i)) = raw(start:finish)
     end do
     call this%clean_temp()
   end subroutine array_scalar_set_from_raw
@@ -806,9 +802,9 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data%array = this%field_data%array * rhs%field_data%array
+      local%field_data = this%field_data * rhs%field_data
     class is(uniform_scalar_field)
-      local%field_data%array = this%field_data%array * rhs%get_value()
+      local%field_data = this%field_data * rhs%get_value()
     end select
     call move_alloc(local,res)
     call res%set_temp()
@@ -835,7 +831,7 @@ contains
       allocate(local, mold=rhs)
       call local%assign_meta_data(rhs)
       do concurrent (i=1:this%numpoints)
-        local%field_data%array(i,:) = this%field_data%array(i) * rhs%field_data%array(i,:)
+        local%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
       end do
       call move_alloc(local,res)
     class is(uniform_vector_field)
@@ -843,10 +839,10 @@ contains
       select type(res)
       class is(array_vector_field)
         call res%assign_meta_data(rhs, .false.)
-        allocate(res%field_data%array(this%numpoints,rhs%vector_dimensions()))
+        allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
         res%vector_dims = size(rhs%get_value())
         do i = 1, this%numpoints
-          res%field_data%array(i,:) = this%field_data%array(i) * rhs%get_value()
+          res%field_data(i,:) = this%field_data(i) * rhs%get_value()
         end do
       class default
         error stop ('Non-array_scalar_field type allocated by '//&
@@ -870,7 +866,7 @@ contains
     call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data%array = lhs * rhs%field_data%array
+    local%field_data = lhs * rhs%field_data
     call move_alloc(local,res)
     call res%set_temp()
     call rhs%clean_temp()
@@ -891,10 +887,10 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      allocate(res%field_data%array(rhs%numpoints,size(lhs)))
+      allocate(res%field_data(rhs%numpoints,size(lhs)))
       res%vector_dims = size(lhs)
       do concurrent (i=1:rhs%numpoints)
-        res%field_data%array(i,:) = rhs%field_data%array(i) * lhs
+        res%field_data(i,:) = rhs%field_data(i) * lhs
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -917,7 +913,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array * rhs
+    local%field_data = this%field_data * rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -938,10 +934,10 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data%array(this%numpoints,size(rhs)))
+      allocate(res%field_data(this%numpoints,size(rhs)))
       res%vector_dims = size(rhs)
       do concurrent (i=1:this%numpoints)
-        res%field_data%array(i,:) = this%field_data%array(i) * rhs
+        res%field_data(i,:) = this%field_data(i) * rhs
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -969,9 +965,9 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data%array = this%field_data%array / rhs%field_data%array
+      local%field_data = this%field_data / rhs%field_data
     class is(uniform_scalar_field)
-      local%field_data%array = this%field_data%array / rhs%get_value()
+      local%field_data = this%field_data / rhs%get_value()
     end select
     call move_alloc(local,res)
     call res%set_temp()
@@ -991,7 +987,7 @@ contains
     call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data%array = lhs / rhs%field_data%array
+    local%field_data = lhs / rhs%field_data
     call move_alloc(local,res)
     call res%set_temp()
     call rhs%clean_temp()
@@ -1012,10 +1008,10 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      allocate(res%field_data%array(size(lhs),rhs%numpoints))
+      allocate(res%field_data(size(lhs),rhs%numpoints))
       res%vector_dims = size(lhs)
       do concurrent (i=1:rhs%numpoints)
-        res%field_data%array(i,:) = lhs / rhs%field_data%array(i)
+        res%field_data(i,:) = lhs / rhs%field_data(i)
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1038,7 +1034,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array / rhs
+    local%field_data = this%field_data / rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -1062,9 +1058,9 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data%array = this%field_data%array - rhs%field_data%array
+      local%field_data = this%field_data - rhs%field_data
     class is(uniform_scalar_field)
-      local%field_data%array = this%field_data%array - rhs%get_value()
+      local%field_data = this%field_data - rhs%get_value()
     end select
     call move_alloc(local,res)
     call res%set_temp() 
@@ -1084,7 +1080,7 @@ contains
     call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data%array = lhs - rhs%field_data%array
+    local%field_data = lhs - rhs%field_data
     call move_alloc(local,res)
     call res%set_temp()
     call rhs%clean_temp()
@@ -1103,7 +1099,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array - rhs
+    local%field_data = this%field_data - rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -1127,9 +1123,9 @@ contains
     call local%assign_meta_data(this)
     select type(rhs)
     class is(array_scalar_field)
-      local%field_data%array = this%field_data%array + rhs%field_data%array
+      local%field_data = this%field_data + rhs%field_data
     class is(uniform_scalar_field)
-      local%field_data%array = this%field_data%array + rhs%get_value()
+      local%field_data = this%field_data + rhs%get_value()
     end select
     call move_alloc(local,res)
     call res%set_temp()
@@ -1149,7 +1145,7 @@ contains
     call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data%array = lhs + rhs%field_data%array
+    local%field_data = lhs + rhs%field_data
     call move_alloc(local,res)
     call res%set_temp()
     call rhs%clean_temp()
@@ -1168,7 +1164,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array + rhs
+    local%field_data = this%field_data + rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -1187,7 +1183,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array ** rhs
+    local%field_data = this%field_data ** rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -1206,7 +1202,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array ** rhs
+    local%field_data = this%field_data ** rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -1225,7 +1221,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array ** rhs
+    local%field_data = this%field_data ** rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -1245,8 +1241,8 @@ contains
     class(array_scalar_field), intent(in) :: this
     real(r8) :: res !! The result of this operation
     call this%guard_temp()
-    if (allocated(this%field_data%array)) then
-      res = minval(this%field_data%array)
+    if (allocated(this%field_data)) then
+      res = minval(this%field_data)
     else
       res = 0.0_r8
     end if
@@ -1262,8 +1258,8 @@ contains
     class(array_scalar_field), intent(in) :: this
     real(r8) :: res !! The result of this operation
     call this%guard_temp()
-    if (allocated(this%field_data%array)) then
-      res = maxval(this%field_data%array)
+    if (allocated(this%field_data)) then
+      res = maxval(this%field_data)
     else
       res = 0.0_r8
     end if
@@ -1284,7 +1280,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%array_dx(this%field_data%array, dir, order)
+    local%field_data = this%array_dx(this%field_data, dir, order)
     call move_alloc(local, res)
     call res%set_temp()
     call this%clean_temp()
@@ -1304,9 +1300,9 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data%array = this%array_dx(this%field_data%array,1,2)
+      res%field_data = this%array_dx(this%field_data,1,2)
       do i = 2, this%dimensions()
-        res%field_data%array = res%field_data%array + this%array_dx(this%field_data%array,i,2)
+        res%field_data = res%field_data + this%array_dx(this%field_data,i,2)
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1331,9 +1327,9 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data%array(size(this%field_data%array),this%dimensions()))
+      allocate(res%field_data(size(this%field_data),this%dimensions()))
       do i = 1, this%dimensions()
-        res%field_data%array(:,i) = this%array_dx(this%field_data%array,i,1)
+        res%field_data(:,i) = this%array_dx(this%field_data,i,1)
       end do
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -1355,17 +1351,17 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       call this%assign_meta_data(rhs, .not. rhs%memory_reusable())
-      if (allocated(rhs%field_data%array)) then
+      if (allocated(rhs%field_data)) then
         if (rhs%memory_reusable()) then
-          if (allocated(this%field_data%array)) deallocate(this%field_data%array)
-          call move_alloc(rhs%field_data%array, this%field_data%array)
+          if (allocated(this%field_data)) deallocate(this%field_data)
+          call move_alloc(rhs%field_data, this%field_data)
         else
-          this%field_data%array = rhs%field_data%array
+          this%field_data = rhs%field_data
         end if
       end if
     class is(uniform_scalar_field)
-      if (allocated(this%field_data%array)) then
-        this%field_data%array = rhs%get_value()
+      if (allocated(this%field_data)) then
+        this%field_data = rhs%get_value()
       else
         error stop ('Trying to assign `uniform_scalar_field` to '// &
                    '`array_scalar_field` with unallocated contents.')
@@ -1395,12 +1391,12 @@ contains
         return
       end if
       do i=1,this%numpoints
-        normalization = abs(this%field_data%array(i))
+        normalization = abs(this%field_data(i))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = iseq .and.( ((this%field_data%array(i)-rhs%field_data%array(i)) &
+        iseq = iseq .and.( ((this%field_data(i)-rhs%field_data(i)) &
                             /normalization < get_tol()) .or. &
-                           (is_nan(this%field_data%array(i)).and. &
-                            is_nan(rhs%field_data%array(i))) )
+                           (is_nan(this%field_data(i)).and. &
+                            is_nan(rhs%field_data(i))) )
         if (.not. iseq) then
           call this%clean_temp(); call rhs%clean_temp()
           return
@@ -1408,10 +1404,10 @@ contains
       end do
     class is(uniform_scalar_field)
       do i=1,this%numpoints
-        normalization = abs(this%field_data%array(i))
+        normalization = abs(this%field_data(i))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = iseq .and.( ((this%field_data%array(i)-rhs%get_value())/normalization < &
-                             get_tol()) .or. (is_nan(this%field_data%array(i)).and. &
+        iseq = iseq .and.( ((this%field_data(i)-rhs%get_value())/normalization < &
+                             get_tol()) .or. (is_nan(this%field_data(i)).and. &
                                               is_nan(rhs%get_value())) )
         if (.not. iseq) then
           call this%clean_temp(); call rhs%clean_temp()
@@ -1446,30 +1442,28 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      if (.not. associated(this%field_data)) allocate(this%field_data)
-      if (allocated(this%field_data%array)) then
+      if (allocated(this%field_data)) then
         if (.not. rhs%is_allocated()) then
-          deallocate(this%field_data%array)
-        else if (al .and. size(this%field_data%array)/=size(rhs%field_data%array)) then
-          deallocate(this%field_data%array)
-          allocate(this%field_data%array(size(rhs%field_data%array)))
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data)/=size(rhs%field_data)) then
+          deallocate(this%field_data)
+          allocate(this%field_data(size(rhs%field_data)))
         end if
-      else if (allocated(rhs%field_data%array) .and. al) then
-        allocate(this%field_data%array(size(rhs%field_data%array)))
+      else if (allocated(rhs%field_data) .and. al) then
+        allocate(this%field_data(size(rhs%field_data)))
       else
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
-      if (.not. associated(this%field_data)) allocate(this%field_data)
-      if (allocated(this%field_data%array)) then
+      if (allocated(this%field_data)) then
         if (.not. rhs%is_allocated()) then
-          deallocate(this%field_data%array)
-        else if (al .and. size(this%field_data%array)/=size(rhs%field_data%array,1)) then
-          deallocate(this%field_data%array)
-          allocate(this%field_data%array(size(rhs%field_data%array,1)))
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data)/=size(rhs%field_data,1)) then
+          deallocate(this%field_data)
+          allocate(this%field_data(size(rhs%field_data,1)))
         end if
-      else if (allocated(rhs%field_data%array) .and. al) then
-        allocate(this%field_data%array(size(rhs%field_data%array,1)))
+      else if (allocated(rhs%field_data) .and. al) then
+        allocate(this%field_data(size(rhs%field_data,1)))
       end if
     end select
     call this%clean_temp(); call rhs%clean_temp()
@@ -1497,15 +1491,14 @@ contains
     call this%guard_temp()
     error = 0
     this%numpoints = int(product(dims))
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (.not. allocated(this%field_data%array)) then
-      allocate(this%field_data%array(this%numpoints))
-    else if (size(this%field_data%array) /= this%numpoints) then
-      deallocate(this%field_data%array)
-      allocate(this%field_data%array(this%numpoints))
+    if (.not. allocated(this%field_data)) then
+      allocate(this%field_data(this%numpoints))
+    else if (size(this%field_data) /= this%numpoints) then
+      deallocate(this%field_data)
+      allocate(this%field_data(this%numpoints))
     end if
     call h5ltread_dataset_double_f(hdf_id, dataset_name,        &
-                                   this%field_data%array, dims, &
+                                   this%field_data, dims, &
                                    error)
     call this%clean_temp()
   end subroutine array_scalar_read_hdf
@@ -1538,7 +1531,7 @@ contains
                   'number of data-points in the field.')
 #:endif
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims), &
-                                   dims, this%field_data%array, error)
+                                   dims, this%field_data, error)
     call this%clean_temp()
   end subroutine array_scalar_write_hdf
 
@@ -1561,18 +1554,18 @@ contains
     class is(array_scalar_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class is(array_vector_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_scalar_field)
-      if (.not.(allocated(this%field_data%array))) &
+      if (.not.(allocated(this%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_vector_field)
-      if (.not.(allocated(this%field_data%array))) &
+      if (.not.(allocated(this%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class default
       error stop (err_message//'    incompatible types.')
@@ -1593,7 +1586,7 @@ contains
     real(r8) :: val
       !! The value of the field corresponding to the specified ID
     call this%guard_temp()
-    val = this%field_data%array(element)
+    val = this%field_data(element)
     call this%clean_temp()
   end function array_scalar_get_element
 
@@ -1610,7 +1603,7 @@ contains
     real(r8), intent(in) :: val
       !! The new value the field element is to be set to
     call this%guard_temp()
-    this%field_data%array(element) = val
+    this%field_data(element) = val
     call this%clean_temp()
   end subroutine array_scalar_set_element
 
@@ -1649,11 +1642,10 @@ contains
     end if
     allocate(local, mold=this)
     call local%subtype_boundary(this,boundary,depth,slices)
-    allocate(local%field_data)
     local%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
-    allocate(local%field_data%array(local%numpoints))
-    local%field_data%array = &
-         [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i)), &
+    allocate(local%field_data(local%numpoints))
+    local%field_data = &
+         [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), &
           i=1,size(slices,2))]
     call move_alloc(local, res)
     call res%set_temp()
@@ -1668,9 +1660,7 @@ contains
     ! of any memory leaks.
     !
     class(array_scalar_field), intent(in) :: this
-    if (associated(this%field_data)) then
-      if (allocated(this%field_data%array)) deallocate(this%field_data%array)
-    end if
+!      if (allocated(this%field_data)) deallocate(this%field_data)
   end subroutine array_scalar_force_finalise
 
   elemental subroutine array_scalar_finalise(this)
@@ -1681,7 +1671,7 @@ contains
     ! 'temporary' setting.
     !
     class(array_scalar_field), intent(inout) :: this
-    if (associated(this%field_data)) deallocate(this%field_data)
+    if (allocated(this%field_data)) deallocate(this%field_data)
     call this%unset_temp()
   end subroutine array_scalar_finalise
 
@@ -1695,8 +1685,7 @@ contains
     class(array_scalar_field), intent(in) :: this
     logical :: res
     call this%guard_temp()
-    res = associated(this%field_data)
-    if (res) res = allocated(this%field_data%array)
+    res = allocated(this%field_data)
     call this%clean_temp()
   end function array_scalar_is_allocated
 
@@ -1731,17 +1720,16 @@ contains
     integer :: i
     call template%guard_temp()
     allocate(this, source=template)
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (allocated(this%field_data%array)) deallocate(this%field_data%array)
-    allocate(this%field_data%array(numpoints,vector_dims))
+    if (allocated(this%field_data)) deallocate(this%field_data)
+    allocate(this%field_data(numpoints,vector_dims))
     this%numpoints = numpoints
     this%vector_dims = vector_dims
     if (present(initializer)) then
       do i = 1, numpoints
-        this%field_data%array(i,:) = initializer(this%id_to_position(i))
+        this%field_data(i,:) = initializer(this%id_to_position(i))
       end do
     else
-      this%field_data%array = 0.0_r8
+      this%field_data = 0.0_r8
     end if
     call template%clean_temp()
     call this%set_temp()
@@ -1766,18 +1754,17 @@ contains
     call template%guard_temp()
     allocate(this, mold=template)
     call this%assign_subtype_meta_data(template)
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (.not. allocated(this%field_data%array)) then
-      allocate(this%field_data%array(size(array,1),size(array,2)))
+    if (.not. allocated(this%field_data)) then
+      allocate(this%field_data(size(array,1),size(array,2)))
     else
-      if (any(shape(this%field_data%array) /= shape(array))) then
-        deallocate(this%field_data%array)
-        allocate(this%field_data%array(size(array,1),size(array,2)))
+      if (any(shape(this%field_data) /= shape(array))) then
+        deallocate(this%field_data)
+        allocate(this%field_data(size(array,1),size(array,2)))
       end if
     end if
     this%numpoints = size(array,1)
     this%vector_dims = size(array,2)
-    this%field_data%array = array
+    this%field_data = array
     call template%clean_temp()
     call this%set_temp()
   end function array_vector_constructor2
@@ -1879,7 +1866,7 @@ contains
     call this%guard_temp()
     slices = this%raw_slices(exclude_lower_bound,exclude_upper_bound)
     if (this%is_allocated()) then
-      res = [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i),:), i=1, &
+      res = [(this%field_data(slices(1,i):slices(2,i):slices(3,i),:), i=1, &
              size(slices,2))]
     else
       allocate(res(0))
@@ -1919,14 +1906,13 @@ contains
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     slices = this%raw_slices(provide_lower_bound,provide_upper_bound)
     counts = elements_in_slice(slices(1,:),slices(2,:),slices(3,:)) * this%vector_dims
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (.not. allocated(this%field_data%array)) then
-      allocate(this%field_data%array(maxval(slices(2,:)),this%vector_dims))
+    if (.not. allocated(this%field_data)) then
+      allocate(this%field_data(maxval(slices(2,:)),this%vector_dims))
     end if
     do concurrent (i = 1:size(counts))
       start = sum(counts(1:i-1)) + 1
       finish = start + counts(i) - 1
-      this%field_data%array(slices(1,i):slices(2,i):slices(3,i),:) = reshape(raw(start:finish), &
+      this%field_data(slices(1,i):slices(2,i):slices(3,i),:) = reshape(raw(start:finish), &
            [counts(i)/this%vector_dims,this%vector_dims])
     end do
     call this%clean_temp()
@@ -1952,10 +1938,10 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       do concurrent(i=1:this%vector_dims)
-        local%field_data%array(:,i) = this%field_data%array(:,i) * rhs%field_data%array
+        local%field_data(:,i) = this%field_data(:,i) * rhs%field_data
       end do
     class is(uniform_scalar_field)
-      local%field_data%array = this%field_data%array * rhs%get_value()
+      local%field_data = this%field_data * rhs%get_value()
     end select
     call move_alloc(local,res)
     call res%set_temp()
@@ -1975,7 +1961,7 @@ contains
     call rhs%guard_temp()
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs)
-    local%field_data%array = lhs * rhs%field_data%array
+    local%field_data = lhs * rhs%field_data
     call move_alloc(local,res)
     call res%set_temp()
     call rhs%clean_temp()
@@ -1994,7 +1980,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array * rhs
+    local%field_data = this%field_data * rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -2020,10 +2006,10 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       do concurrent(i=1:this%vector_dims)
-        local%field_data%array(:,i) = this%field_data%array(:,i) / rhs%field_data%array
+        local%field_data(:,i) = this%field_data(:,i) / rhs%field_data
       end do
     class is(uniform_scalar_field)
-      local%field_data%array = this%field_data%array / rhs%get_value()
+      local%field_data = this%field_data / rhs%get_value()
     end select
     call move_alloc(local,res)
     call res%set_temp()
@@ -2043,7 +2029,7 @@ contains
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    local%field_data%array = this%field_data%array / rhs
+    local%field_data = this%field_data / rhs
     call move_alloc(local,res)
     call res%set_temp()
     call this%clean_temp()
@@ -2072,39 +2058,39 @@ contains
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(this, .false.)
-        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
       end if
-      local%field_data%array(:,1:min_dims) = this%field_data%array(:,1:min_dims) &
-                                     - rhs%field_data%array(:,1:min_dims)
+      local%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
+                                     - rhs%field_data(:,1:min_dims)
       if (rhs%vector_dims > this%vector_dims) then
-        local%field_data%array(:,min_dims+1:max_dims) = -rhs%field_data%array(:,min_dims+1:max_dims)
+        local%field_data(:,min_dims+1:max_dims) = -rhs%field_data(:,min_dims+1:max_dims)
       else
-        local%field_data%array(:,min_dims+1:max_dims) = this%field_data%array(:,min_dims+1:max_dims)
+        local%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
       end if
     class is(uniform_vector_field)
       min_dims = min(this%vector_dims,rhs%vector_dimensions())
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(this, .false.)
-        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
       end if
       vec = rhs%get_value()
       do concurrent(i=1:min_dims)
-        local%field_data%array(:,i) = this%field_data%array(:,i) - vec(i)
+        local%field_data(:,i) = this%field_data(:,i) - vec(i)
       end do
       if (rhs%vector_dimensions() > this%vector_dims) then
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data%array(:,i) = -vec(i)
+          local%field_data(:,i) = -vec(i)
         end do
       else
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data%array(:,i) = this%field_data%array(:,i)
+          local%field_data(:,i) = this%field_data(:,i)
         end do
       end if
     end select
@@ -2129,16 +2115,16 @@ contains
     call local%assign_meta_data(rhs,.false.)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data%array(local%numpoints, max_dims))
+    allocate(local%field_data(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data%array(i,:min_dims) = lhs(:min_dims) - rhs%field_data%array(i,:min_dims)
+      local%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
     end do
     if (rhs%vector_dims > size(lhs)) then
-      local%field_data%array(:,min_dims+1:) = -rhs%field_data%array(:,min_dims+1:)
+      local%field_data(:,min_dims+1:) = -rhs%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(lhs)
       do concurrent (i=1:local%numpoints)
-        local%field_data%array(i,min_dims+1:) = lhs(min_dims+1:)
+        local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
@@ -2162,16 +2148,16 @@ contains
     call local%assign_meta_data(this,.false.)
     min_dims = min(this%vector_dims, size(rhs))
     max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data%array(local%numpoints, max_dims))
+    allocate(local%field_data(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data%array(i,:min_dims) = this%field_data%array(i,:min_dims) - rhs(:min_dims)
+      local%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
     end do
     if (this%vector_dims > size(rhs)) then
-      local%field_data%array(:,min_dims+1:) = this%field_data%array(:,min_dims+1:)
+      local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(rhs)
       do concurrent (i=1:local%numpoints)
-        local%field_data%array(i,min_dims+1:) = -rhs(min_dims+1:)
+        local%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
@@ -2200,24 +2186,24 @@ contains
     class is(array_vector_field)
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(rhs, .false.)
-        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
       end if
       min_dims = min(this%vector_dims,rhs%vector_dimensions())
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
-      local%field_data%array(:,1:min_dims) = this%field_data%array(:,1:min_dims) &
-                                     + rhs%field_data%array(:,1:min_dims)
+      local%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
+                                     + rhs%field_data(:,1:min_dims)
       if (rhs%vector_dims > this%vector_dims) then
-        local%field_data%array(:,min_dims+1:max_dims) = rhs%field_data%array(:,min_dims+1:max_dims)
+        local%field_data(:,min_dims+1:max_dims) = rhs%field_data(:,min_dims+1:max_dims)
       else
-        local%field_data%array(:,min_dims+1:max_dims) = this%field_data%array(:,min_dims+1:max_dims)
+        local%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
       end if
     class is(uniform_vector_field)
       if (rhs%vector_dimensions() > this%vector_dims) then
         call local%assign_meta_data(rhs, .false.)
-        allocate(local%field_data%array(this%numpoints,rhs%vector_dimensions()))
+        allocate(local%field_data(this%numpoints,rhs%vector_dimensions()))
         local%vector_dims = rhs%vector_dimensions()
       else
         call local%assign_meta_data(this)
@@ -2226,15 +2212,15 @@ contains
       max_dims = max(this%vector_dims,rhs%vector_dimensions())
       vec = rhs%get_value()
       do concurrent(i=1:min_dims)
-        local%field_data%array(:,i) = this%field_data%array(:,i) + vec(i)
+        local%field_data(:,i) = this%field_data(:,i) + vec(i)
       end do
       if (rhs%vector_dimensions() > this%vector_dims) then
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data%array(:,i) = vec(i)
+          local%field_data(:,i) = vec(i)
         end do
       else
         do concurrent(i=min_dims+1:max_dims)
-          local%field_data%array(:,i) = this%field_data%array(:,i)
+          local%field_data(:,i) = this%field_data(:,i)
         end do
       end if
     end select
@@ -2259,16 +2245,16 @@ contains
     call local%assign_meta_data(rhs,.false.)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data%array(local%numpoints, max_dims))
+    allocate(local%field_data(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data%array(i,:min_dims) = lhs(:min_dims) + rhs%field_data%array(i,:min_dims)
+      local%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
     end do
     if (rhs%vector_dims > size(lhs)) then
-      local%field_data%array(:,min_dims+1:) = rhs%field_data%array(:,min_dims+1:)
+      local%field_data(:,min_dims+1:) = rhs%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(lhs)
       do concurrent (i=1:local%numpoints)
-        local%field_data%array(i,min_dims+1:) = lhs(min_dims+1:)
+        local%field_data(i,min_dims+1:) = lhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
@@ -2292,16 +2278,16 @@ contains
     call local%assign_meta_data(this,.false.)
     min_dims = min(this%vector_dims, size(rhs))
     max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data%array(local%numpoints, max_dims))
+    allocate(local%field_data(local%numpoints, max_dims))
     do concurrent (i=1:local%numpoints)
-      local%field_data%array(i,:min_dims) = this%field_data%array(i,:min_dims) + rhs(:min_dims)
+      local%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
     end do
     if (this%vector_dims > size(rhs)) then
-      local%field_data%array(:,min_dims+1:) = this%field_data%array(:,min_dims+1:)
+      local%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
     else
       local%vector_dims = size(rhs)
       do concurrent (i=1:local%numpoints) 
-        local%field_data%array(i,min_dims+1:) = rhs(min_dims+1:)
+        local%field_data(i,min_dims+1:) = rhs(min_dims+1:)
       end do
     end if
     call move_alloc(local,res)
@@ -2323,19 +2309,19 @@ contains
     call this%assign_meta_data(rhs, .not. this%memory_reusable())
     select type(rhs)
     class is(array_vector_field)
-      if (allocated(rhs%field_data%array)) then
+      if (allocated(rhs%field_data)) then
         if (rhs%memory_reusable()) then
-          if (allocated(this%field_data%array)) deallocate(this%field_data%array)
-          call move_alloc(rhs%field_data%array, this%field_data%array)
+          if (allocated(this%field_data)) deallocate(this%field_data)
+          call move_alloc(rhs%field_data, this%field_data)
         else
-          this%field_data%array = rhs%field_data%array
+          this%field_data = rhs%field_data
         end if
       end if
     class is(uniform_vector_field)
-      if (allocated(this%field_data%array)) then
+      if (allocated(this%field_data)) then
         tmp = rhs%get_value()
         do concurrent (i=1:this%vector_dims)
-          this%field_data%array(:,i) = tmp(i)
+          this%field_data(:,i) = tmp(i)
         end do
       else
         error stop ('Trying to assign `uniform_vector_field` to '// &
@@ -2362,22 +2348,22 @@ contains
     class is(array_scalar_field)
       this%vector_dims = size(rhs)
       this%numpoints = rhs(1)%numpoints
-      if (allocated(this%field_data%array)) then
-        if (size(this%field_data%array,1) /= this%numpoints .or. &
-            size(this%field_data%array,2) /= this%vector_dims) then
-          deallocate(this%field_data%array)
+      if (allocated(this%field_data)) then
+        if (size(this%field_data,1) /= this%numpoints .or. &
+            size(this%field_data,2) /= this%vector_dims) then
+          deallocate(this%field_data)
         end if
       end if
-      if (.not. allocated(this%field_data%array)) then
-        allocate(this%field_data%array(this%numpoints,this%vector_dims))
+      if (.not. allocated(this%field_data)) then
+        allocate(this%field_data(this%numpoints,this%vector_dims))
       end if
       do concurrent (i=1:this%vector_dims)
-        this%field_data%array(:,i) = rhs(i)%field_data%array
+        this%field_data(:,i) = rhs(i)%field_data
       end do
     class is(uniform_scalar_field)
-      if (allocated(this%field_data%array)) then
+      if (allocated(this%field_data)) then
         do i = 1, this%vector_dims
-          this%field_data%array(:,i) = rhs(i)%get_value()
+          this%field_data(:,i) = rhs(i)%get_value()
         end do
       else
         error stop ('Trying to assign `uniform_scalar_field` to '// &
@@ -2401,7 +2387,7 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data%array = sqrt(sum(this%field_data%array**2,2))
+      res%field_data = sqrt(sum(this%field_data**2,2))
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -2426,9 +2412,9 @@ contains
     class is(array_scalar_field)
       call res%assign_meta_data(this)
       if (comp <= this%vector_dims) then
-        res%field_data%array = this%field_data%array(:,comp)
+        res%field_data = this%field_data(:,comp)
       else
-        res%field_data%array = 0.0_r8
+        res%field_data = 0.0_r8
       end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2452,11 +2438,10 @@ contains
     integer :: i
     call this%guard_temp()
     allocate(local, mold=this)
-    allocate(local%field_data)
-    allocate(local%field_data%array, mold=this%field_data%array)
+    allocate(local%field_data, mold=this%field_data)
     call local%assign_meta_data(this)
     do i = 1, this%vector_dims
-      local%field_data%array(:,i) = this%array_dx(this%field_data%array(:,i), &
+      local%field_data(:,i) = this%array_dx(this%field_data(:,i), &
                                                      dir, order)
     end do
     call move_alloc(local, res)
@@ -2480,7 +2465,7 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data%array(:) = this%array_dx(this%field_data%array(:,component), &
+      res%field_data(:) = this%array_dx(this%field_data(:,component), &
                                         dir, order)
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2504,12 +2489,12 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data%array(size(this%field_data%array,1),this%vector_dims))
+      allocate(res%field_data(size(this%field_data,1),this%vector_dims))
       do i = 1, this%vector_dims
-        res%field_data%array(:,i) = this%array_dx(this%field_data%array(:,i),1,2)
+        res%field_data(:,i) = this%array_dx(this%field_data(:,i),1,2)
         do j = 2, this%dimensions()
-          res%field_data%array(:,i) = res%field_data%array(:,i) + &
-                              this%array_dx(this%field_data%array(:,i),j,2)
+          res%field_data(:,i) = res%field_data(:,i) + &
+                              this%array_dx(this%field_data(:,i),j,2)
         end do
       end do
     class default
@@ -2534,10 +2519,10 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data%array = this%array_dx(this%field_data%array(:,1),1,1)
+      res%field_data = this%array_dx(this%field_data(:,1),1,1)
       do i = 2, this%dimensions()
-        res%field_data%array = res%field_data%array + &
-                         this%array_dx(this%field_data%array(:,i),i,1)
+        res%field_data = res%field_data + &
+                         this%array_dx(this%field_data(:,i),i,1)
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2564,48 +2549,48 @@ contains
     class is(array_vector_field)
       call res%assign_meta_data(this,.false.)
       res%vector_dims = 3
-      allocate(res%field_data%array(res%numpoints,3))
+      allocate(res%field_data(res%numpoints,3))
       if (this%dimensions() >= 3) then
-        res%field_data%array(:,2) = this%array_dx(this%field_data%array(:,1),3)
+        res%field_data(:,2) = this%array_dx(this%field_data(:,1),3)
         been_set(2) = .true.
       end if
       if (this%dimensions() >= 2) then
-        res%field_data%array(:,3) = -this%array_dx(this%field_data%array(:,1),2)
+        res%field_data(:,3) = -this%array_dx(this%field_data(:,1),2)
         been_set(3) = .true.
       end if
       if (this%vector_dims >= 2) then
         if (this%dimensions() >= 3) then
-          res%field_data%array(:,1) = -this%array_dx(this%field_data%array(:,2),3)
+          res%field_data(:,1) = -this%array_dx(this%field_data(:,2),3)
           been_set(1) = .true.
         end if
         if (been_set(3)) then
-          res%field_data%array(:,3) = res%field_data%array(:,3) &
-                             + this%array_dx(this%field_data%array(:,2),1)
+          res%field_data(:,3) = res%field_data(:,3) &
+                             + this%array_dx(this%field_data(:,2),1)
         else
-          res%field_data%array(:,3) = this%array_dx(this%field_data%array(:,2),1)
+          res%field_data(:,3) = this%array_dx(this%field_data(:,2),1)
           been_set(3) = .true.
         end if
       end if
       if (this%vector_dims >= 3) then
         if (this%dimensions() >= 2) then
           if (been_set(1)) then
-            res%field_data%array(:,1) = res%field_data%array(:,1) &
-                               + this%array_dx(this%field_data%array(:,3),2)
+            res%field_data(:,1) = res%field_data(:,1) &
+                               + this%array_dx(this%field_data(:,3),2)
           else
-            res%field_data%array(:,1) = this%array_dx(this%field_data%array(:,3),2)
+            res%field_data(:,1) = this%array_dx(this%field_data(:,3),2)
             been_set(1) = .true.
           end if
         end if
         if (been_set(2)) then
-          res%field_data%array(:,2) = res%field_data%array(:,2) &
-                             - this%array_dx(this%field_data%array(:,3),1)
+          res%field_data(:,2) = res%field_data(:,2) &
+                             - this%array_dx(this%field_data(:,3),1)
         else
-          res%field_data%array(:,2) = -this%array_dx(this%field_data%array(:,3),1)
+          res%field_data(:,2) = -this%array_dx(this%field_data(:,3),1)
           been_set(2) = .true.
         end if
       end if
       do i = 1, 3
-        if (.not. been_set(i)) res%field_data%array(:,i) = 0.0_r8
+        if (.not. been_set(i)) res%field_data(:,i) = 0.0_r8
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2638,7 +2623,7 @@ contains
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     local%vector_dims = 3
-    allocate(local%field_data%array(this%numpoints,3))
+    allocate(local%field_data(this%numpoints,3))
     vec1 = 0
     vec2 = 0
     dims1 = min(3,this%vector_dims)
@@ -2646,9 +2631,9 @@ contains
     class is(array_vector_field)
       dims2 = min(3,rhs%vector_dimensions())
       do concurrent(i=1:this%numpoints)
-        vec1(:dims1) = this%field_data%array(i,:dims1)
-        vec2(:dims2) = rhs%field_data%array(i,:dims2)
-        local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        vec1(:dims1) = this%field_data(i,:dims1)
+        vec2(:dims2) = rhs%field_data(i,:dims2)
+        local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                  vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                  vec1(1)*vec2(2) - vec2(1)*vec1(2)]
       end do
@@ -2657,8 +2642,8 @@ contains
       tmp = rhs%get_value()
       vec2(:dims2) = tmp(:dims2)
       do concurrent(i=1:this%numpoints)
-        vec1(:dims1) = this%field_data%array(i,:dims1)
-        local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        vec1(:dims1) = this%field_data(i,:dims1)
+        local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                  vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                  vec1(1)*vec2(2) - vec2(1)*vec1(2)]
       end do
@@ -2687,15 +2672,15 @@ contains
     allocate(local, mold=this)
     call local%assign_meta_data(this,.false.)
     local%vector_dims = 3
-    allocate(local%field_data%array(this%numpoints,3))
+    allocate(local%field_data(this%numpoints,3))
     dims1 = min(3,this%vector_dims)
     dims2 = min(3,size(rhs))
     vec1 = 0.0_r8
     vec2 = 0.0_r8
     do concurrent(i=1:this%numpoints)
-      vec1(:dims1) = this%field_data%array(i,:dims1)
+      vec1(:dims1) = this%field_data(i,:dims1)
       vec2(:dims2) = rhs(:dims2)
-      local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+      local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                vec1(1)*vec2(2) - vec2(1)*vec1(2)]
     end do
@@ -2723,15 +2708,15 @@ contains
     allocate(local, mold=rhs)
     call local%assign_meta_data(rhs,.false.)
     local%vector_dims = 3
-    allocate(local%field_data%array(rhs%numpoints,3))
+    allocate(local%field_data(rhs%numpoints,3))
     dims1 = min(3,size(lhs))
     dims2 = min(3,rhs%vector_dims)
     vec1 = 0.0_r8
     vec2 = 0.0_r8
     do concurrent(i=1:rhs%numpoints)
       vec1(:dims1) = lhs(:dims1)
-      vec2(:dims2) = rhs%field_data%array(i,:dims2)
-      local%field_data%array(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+      vec2(:dims2) = rhs%field_data(i,:dims2)
+      local%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                vec1(1)*vec2(2) - vec2(1)*vec1(2)]
     end do
@@ -2762,13 +2747,13 @@ contains
       select type(rhs)
       class is(array_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
-        res%field_data%array = &
-          sum(this%field_data%array(:,1:min_dims)*rhs%field_data%array(:,1:min_dims),2)
+        res%field_data = &
+          sum(this%field_data(:,1:min_dims)*rhs%field_data(:,1:min_dims),2)
       class is(uniform_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         tmp = rhs%get_value()
         do concurrent(i=1:this%numpoints)
-          res%field_data%array(i) = dot_product(this%field_data%array(i,1:min_dims),tmp(1:min_dims))
+          res%field_data(i) = dot_product(this%field_data(i,1:min_dims),tmp(1:min_dims))
         end do
       end select
     class default
@@ -2796,7 +2781,7 @@ contains
       call res%assign_meta_data(this)
       min_dims = min(this%vector_dims,size(rhs))
       do concurrent(i=1:this%numpoints)
-        res%field_data%array(i) = sum(this%field_data%array(i,1:min_dims)*rhs(1:min_dims))
+        res%field_data(i) = sum(this%field_data(i,1:min_dims)*rhs(1:min_dims))
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2823,7 +2808,7 @@ contains
       call res%assign_meta_data(rhs)
       min_dims = min(size(lhs),rhs%vector_dims)
       do concurrent(i=1:rhs%numpoints)
-        res%field_data%array(i) = sum(lhs(1:min_dims)*rhs%field_data%array(i,1:min_dims))
+        res%field_data(i) = sum(lhs(1:min_dims)*rhs%field_data(i,1:min_dims))
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2856,10 +2841,10 @@ contains
       end if
       if (this%vector_dims > rhs%vector_dims) then
         dims = rhs%vector_dims
-        iseq = all(abs(this%field_data%array(:,dims:)) < get_tol())
+        iseq = all(abs(this%field_data(:,dims:)) < get_tol())
       else if (this%vector_dims < rhs%vector_dims) then
         dims = this%vector_dims
-        iseq = all(abs(rhs%field_data%array(:,dims:)) < get_tol())
+        iseq = all(abs(rhs%field_data(:,dims:)) < get_tol())
       else
         dims = this%vector_dims
       end if
@@ -2868,12 +2853,12 @@ contains
          return
        end if
       do i=1,this%numpoints
-        normalization = norm2(this%field_data%array(i,:dims))
+        normalization = norm2(this%field_data(i,:dims))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
-        iseq = (norm2(this%field_data%array(i,1:dims) - rhs%field_data%array(i,1:dims))/ &
+        iseq = (norm2(this%field_data(i,1:dims) - rhs%field_data(i,1:dims))/ &
                 normalization < get_tol()) .or. &
-               all(is_nan(this%field_data%array(i,1:dims)) .eqv. &
-                   is_nan(rhs%field_data%array(i,1:dims)))
+               all(is_nan(this%field_data(i,1:dims)) .eqv. &
+                   is_nan(rhs%field_data(i,1:dims)))
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
@@ -2886,7 +2871,7 @@ contains
       tmp = rhs%get_value()
       if (this%vector_dims > rhs%vector_dimensions()) then
         dims = rhs%vector_dimensions()
-        iseq = all(abs(this%field_data%array(:,dims:)) < get_tol())
+        iseq = all(abs(this%field_data(:,dims:)) < get_tol())
       else if (this%vector_dims < rhs%vector_dimensions()) then
         dims = this%vector_dimensions()
         iseq = all(abs(tmp(dims:)) < get_tol())
@@ -2898,11 +2883,11 @@ contains
         return
       end if
       do i=1,this%numpoints
-        normalization = norm2(this%field_data%array(i,:dims))
+        normalization = norm2(this%field_data(i,:dims))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = (norm2(this%field_data%array(i,1:dims) - tmp(1:dims))/normalization &
+        iseq = (norm2(this%field_data(i,1:dims) - tmp(1:dims))/normalization &
                 < get_tol()) .or. &
-               all(is_nan(this%field_data%array(i,1:dims)) .eqv. is_nan(tmp(1:dims))) 
+               all(is_nan(this%field_data(i,1:dims)) .eqv. is_nan(tmp(1:dims))) 
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
@@ -2940,33 +2925,31 @@ contains
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = this%dimensions()
-      if (.not. associated(this%field_data)) allocate(this%field_data)
-      if (allocated(this%field_data%array)) then
-        if (.not. allocated(rhs%field_data%array)) then
-          deallocate(this%field_data%array)
-        else if (al .and. size(this%field_data%array,1)/=size(rhs%field_data%array)) then
-          deallocate(this%field_data%array)
-          allocate(this%field_data%array(size(rhs%field_data%array),1))
+      if (allocated(this%field_data)) then
+        if (.not. allocated(rhs%field_data)) then
+          deallocate(this%field_data)
+        else if (al .and. size(this%field_data,1)/=size(rhs%field_data)) then
+          deallocate(this%field_data)
+          allocate(this%field_data(size(rhs%field_data),1))
         end if
-      else if (allocated(rhs%field_data%array) .and. al) then
-        allocate(this%field_data%array(size(rhs%field_data%array),1))
+      else if (allocated(rhs%field_data) .and. al) then
+        allocate(this%field_data(size(rhs%field_data),1))
       end if
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = rhs%vector_dims
-      if (.not. associated(this%field_data)) allocate(this%field_data)
-      if (allocated(this%field_data%array)) then
-        if (.not. allocated(rhs%field_data%array)) then
-          deallocate(this%field_data%array)
+      if (allocated(this%field_data)) then
+        if (.not. allocated(rhs%field_data)) then
+          deallocate(this%field_data)
         else if (al .and. &
-                 any(shape(this%field_data%array) /= shape(rhs%field_data%array))) then
-          deallocate(this%field_data%array)
-          allocate(this%field_data%array(size(rhs%field_data%array,1), &
-                                         size(rhs%field_data%array,2)))
+                 any(shape(this%field_data) /= shape(rhs%field_data))) then
+          deallocate(this%field_data)
+          allocate(this%field_data(size(rhs%field_data,1), &
+                                         size(rhs%field_data,2)))
         end if
-      else if (allocated(rhs%field_data%array) .and. al) then
-        allocate(this%field_data%array(size(rhs%field_data%array,1), &
-                                       size(rhs%field_data%array,2)))
+      else if (allocated(rhs%field_data) .and. al) then
+        allocate(this%field_data(size(rhs%field_data,1), &
+                                       size(rhs%field_data,2)))
       end if
     end select
     call this%clean_temp(); call rhs%clean_temp()
@@ -2996,16 +2979,15 @@ contains
     error = 0
     this%numpoints = int(product(dims(1:size(dims)-1)))
     this%vector_dims = int(dims(size(dims)))
-    if (.not. associated(this%field_data)) allocate(this%field_data)
-    if (.not. allocated(this%field_data%array)) then
-      allocate(this%field_data%array(this%numpoints, this%vector_dims))
-    else if (size(this%field_data%array,1) /= this%numpoints .and. &
-             size(this%field_data%array,2) /= this%vector_dims) then
-      deallocate(this%field_data%array)
-      allocate(this%field_data%array(this%numpoints,this%vector_dims))
+    if (.not. allocated(this%field_data)) then
+      allocate(this%field_data(this%numpoints, this%vector_dims))
+    else if (size(this%field_data,1) /= this%numpoints .and. &
+             size(this%field_data,2) /= this%vector_dims) then
+      deallocate(this%field_data)
+      allocate(this%field_data(this%numpoints,this%vector_dims))
     end if
     call h5ltread_dataset_double_f(hdf_id, dataset_name,        &
-                                   this%field_data%array, dims, &
+                                   this%field_data, dims, &
                                    error)
     call this%clean_temp()
   end subroutine array_vector_read_hdf
@@ -3039,7 +3021,7 @@ contains
     error = 0
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, size(dims)+1,   &
                                    [dims,int(this%vector_dims,hsize_t)], &
-                                   this%field_data%array, error)
+                                   this%field_data, error)
     call this%clean_temp()
   end subroutine array_vector_write_hdf
   
@@ -3062,18 +3044,18 @@ contains
     class is(array_scalar_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class is(array_vector_field)
       if (this%numpoints /= other%numpoints) &
            error stop (err_message//'    different resolutions.')
-      if (.not.(allocated(this%field_data%array).and.allocated(other%field_data%array))) &
+      if (.not.(allocated(this%field_data).and.allocated(other%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_scalar_field)
-      if (.not.(allocated(this%field_data%array))) &
+      if (.not.(allocated(this%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class is(uniform_vector_field)
-      if (.not.(allocated(this%field_data%array))) &
+      if (.not.(allocated(this%field_data))) &
            error stop (err_message//'    uninitialised fields.')
     class default
       error stop (err_message//'    incompatible types.')
@@ -3094,7 +3076,7 @@ contains
     real(r8), allocatable, dimension(:) :: val
       !! The vector in the field corresponding to the specified ID
     call this%guard_temp()
-    val = this%field_data%array(element,:)
+    val = this%field_data(element,:)
     call this%clean_temp()
   end function array_vector_get_element_vec
   
@@ -3114,7 +3096,7 @@ contains
       !! The vector component in the field corresponding to the 
       !! specified ID
     call this%guard_temp()
-    val = this%field_data%array(element,component)
+    val = this%field_data(element,component)
     call this%clean_temp()
   end function array_vector_get_element_comp
 
@@ -3131,7 +3113,7 @@ contains
     real(r8), dimension(:), intent(in) :: val
       !! The new vector value the field element is to be set to
     call this%guard_temp()
-    this%field_data%array(element,:) = val
+    this%field_data(element,:) = val
     call this%clean_temp()
   end subroutine array_vector_set_element_vec
 
@@ -3150,7 +3132,7 @@ contains
     real(r8), intent(in) :: val
       !! The new value of the vector component in the field element
     call this%guard_temp()
-    this%field_data%array(element,component) = val
+    this%field_data(element,component) = val
     call this%clean_temp()
   end subroutine array_vector_set_element_comp
 
@@ -3192,11 +3174,10 @@ contains
     call local%subtype_boundary(this,boundary,depth,slices)
     local%vector_dims = this%vector_dims
     local%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
-    allocate(local%field_data)
-    allocate(local%field_data%array(local%numpoints,local%vector_dims))
+    allocate(local%field_data(local%numpoints,local%vector_dims))
     do concurrent (j=1:local%vector_dims)
-      local%field_data%array(:,j) = &
-           [(this%field_data%array(slices(1,i):slices(2,i):slices(3,i),j), &
+      local%field_data(:,j) = &
+           [(this%field_data(slices(1,i):slices(2,i):slices(3,i),j), &
            i=1, size(slices,2))]
     end do
     call move_alloc(local, res)
@@ -3214,8 +3195,8 @@ contains
     class(array_vector_field), intent(in) :: this
     logical :: res
     call this%guard_temp()
-    res = associated(this%field_data)
-    if (res) res = allocated(this%field_data%array)
+    res = allocated(this%field_data)
+    if (res) res = allocated(this%field_data)
     call this%clean_temp()
   end function array_vector_is_allocated
 
@@ -3227,9 +3208,7 @@ contains
     ! of any memory leaks.
     !
     class(array_vector_field), intent(in) :: this
-    if (associated(this%field_data)) then
-      if (allocated(this%field_data%array)) deallocate(this%field_data%array)
-    end if
+      !if (allocated(this%field_data)) deallocate(this%field_data)
   end subroutine array_vector_force_finalise
 
   elemental subroutine array_vector_finalise(this)
@@ -3239,7 +3218,7 @@ contains
     ! Deallocates the field data for this object.
     !
     class(array_vector_field), intent(inout) :: this
-    if (associated(this%field_data)) deallocate(this%field_data)
+    if (allocated(this%field_data)) deallocate(this%field_data)
     call this%unset_temp()
   end subroutine array_vector_finalise
 

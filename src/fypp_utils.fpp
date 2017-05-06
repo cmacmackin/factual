@@ -18,8 +18,8 @@
     call this%guard_temp()
     allocate(local, mold=this)
     call local%assign_meta_data(this)
-    if (associated(this%field_data)) then
-      local%field_data%array = ${func}$(this%field_data%array)
+    if (allocated(this%field_data)) then
+      local%field_data = ${func}$(this%field_data)
     end if
     call move_alloc(local, res)
     call res%set_temp()
