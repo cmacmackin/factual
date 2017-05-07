@@ -13,16 +13,19 @@
     ! \(${tex}$({\rm field})\)
     !
     class(${field_name}$_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    class(${field_name}$_field), allocatable :: local
+    class(scalar_field), pointer :: res !! The result of this operation
     call this%guard_temp()
-    allocate(local, mold=this)
-    call local%assign_meta_data(this)
-    if (allocated(this%field_data)) then
-      local%field_data = ${func}$(this%field_data)
-    end if
-    call move_alloc(local, res)
-    call res%set_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(${field_name}$_field)
+      if (allocated(this%field_data)) then
+        res%field_data = ${func}$(this%field_data)
+      end if
+    class default
+      error stop ('Non-${field_name}$_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
     call this%clean_temp()
   end function ${field_name}$_${func}$
 #:enddef

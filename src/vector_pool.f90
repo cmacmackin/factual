@@ -72,10 +72,14 @@ contains
     class(vector_field), intent(in) :: prototype
       !! Dynamic type of the fields in the new pool
     type(vector_pool)               :: this
+    integer :: i
     this%num_fields = num_fields
     allocate(this%pool(num_fields), mold=prototype)
     allocate(this%in_use(num_fields))
     this%in_use = .false.
+    do concurrent (i=1:num_fields)
+      call this%pool(i)%set_pool_id(i)
+    end do
   end function constructor
 
   function acquire(this) result(field)
@@ -91,6 +95,7 @@ contains
       if (.not. this%in_use(i)) then
         this%in_use(i) = .true.
         field => this%pool(i)
+        call field%set_temp()
         return
       end if
     end do

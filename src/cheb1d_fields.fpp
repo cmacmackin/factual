@@ -37,6 +37,8 @@ module cheb1d_fields_mod
   use utils_mod, only: grid_to_spacing, open_or_create_hdf_group, &
                        create_hdf_dset
   use abstract_fields_mod
+  use scalar_pool_mod, only: scalar_pool
+  use vector_pool_mod, only: vector_pool
   use uniform_fields_mod, only: uniform_scalar_field, &
                                 uniform_vector_field
   use array_fields_mod, only: array_scalar_field, array_vector_field, &
@@ -58,6 +60,8 @@ module cheb1d_fields_mod
 $:public_unary()
   public :: minval
   public :: maxval
+
+  logical :: initialised = .false.
   
   type, extends(array_scalar_field), public :: cheb1d_scalar_field
     !* Author: Chris MacMackin
@@ -138,6 +142,8 @@ $:public_unary()
     module procedure scalar_constructor
   end interface
 
+  type(scalar_pool) :: scalars
+
   type, extends(array_vector_field), public :: cheb1d_vector_field
     !* Author: Chris MacMackin
     !  Date: March 2016
@@ -214,7 +220,9 @@ $:public_unary()
   interface cheb1d_vector_field
     module procedure vector_constructor
   end interface cheb1d_vector_field
- 
+
+  type(vector_pool) :: vectors
+  
 contains
 
   !=====================================================================
@@ -248,7 +256,6 @@ contains
     end if
     field%colloc_points => collocation_points(numpoints-1,lower_bound,upper_bound)
     field = array_scalar_field(field,numpoints,initializer)
-    call field%set_temp()
   end function scalar_constructor
 
   function cheb1d_scalar_domain(this) result(res)
@@ -435,7 +442,7 @@ contains
     !
     class(cheb1d_scalar_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
-    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%guard_temp()
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
@@ -474,7 +481,7 @@ contains
         end if
       end if
     end select
-    call this%clean_temp(); call rhs%clean_temp()
+    call rhs%clean_temp()
   end subroutine cheb1d_scalar_assign_meta
 
   subroutine cheb1d_scalar_allocate_scalar(this, new_field)
@@ -485,13 +492,20 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce scalars.
     !
-    class(cheb1d_scalar_field), intent(in)          :: this
-    class(scalar_field), allocatable, intent(inout) :: new_field
+    class(cheb1d_scalar_field), intent(in)      :: this
+    class(scalar_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as scalar fields produced by `this`.
     call this%guard_temp()
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(cheb1d_scalar_field :: new_field)
+    if (.not. initialised) then
+      scalars = scalar_pool(object_pool_size, this)
+      block
+        type(cheb1d_vector_field) :: vf
+        vectors = vector_pool(object_pool_size, vf)
+      end block
+      initialised = .true.
+    end if
+    new_field => scalars%acquire()
     call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_scalar
 
@@ -503,13 +517,20 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce vectors.
     !
-    class(cheb1d_scalar_field), intent(in)          :: this
-    class(vector_field), allocatable, intent(inout) :: new_field
+    class(cheb1d_scalar_field), intent(in)      :: this
+    class(vector_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
-      !! concrete type as vector fields produced by `this`.
+      !! concrete type as scalar fields produced by `this`.
     call this%guard_temp()
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(cheb1d_vector_field :: new_field)
+    if (.not. initialised) then
+      scalars = scalar_pool(object_pool_size, this)
+      block
+        type(cheb1d_vector_field) :: vf
+        vectors = vector_pool(object_pool_size, vf)
+      end block
+      initialised = .true.
+    end if
+    new_field => vectors%acquire()
     call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_vector
 
@@ -543,7 +564,7 @@ contains
       !! slices(3,i) = stride
       !! ```
     integer :: length
-    call this%guard_temp(); call src%guard_temp()
+    call src%guard_temp()
     select type(src)
     class is(cheb1d_scalar_field)
       length = size(src%colloc_points)
@@ -578,7 +599,7 @@ contains
       error stop ('Trying to compute boundary metadata for type other '// &
                  'than `cheb1d_scalar_field`.')
     end select
-    call this%clean_temp(); call src%clean_temp()
+    call src%clean_temp()
   end subroutine cheb1d_scalar_bound
 
   subroutine cheb1d_scalar_set_bound(this,boundary,depth,boundary_field)
@@ -784,16 +805,16 @@ contains
     ! Returns a field containing the grid spacing at each point.
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    class(vector_field), allocatable       :: grid
+    class(vector_field), pointer           :: grid
       !! A field where the values indicate the grid spacing that
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
-    type(cheb1d_vector_field) :: local
     call this%guard_temp()
-    call local%assign_subtype_meta_data(this)
-    allocate(cheb1d_vector_field :: grid)
-    grid = array_vector_field(local, grid_to_spacing(this%colloc_points))
-    call grid%set_temp()
+    call this%allocate_vector_field(grid)
+    select type(grid)
+    class is(array_vector_field)
+      grid = array_vector_field(grid, grid_to_spacing(this%colloc_points))
+    end select
     call this%clean_temp()
   end function cheb1d_scalar_grid_spacing
 
@@ -804,8 +825,7 @@ contains
     ! Deallocates the field data for this object.
     !
     class(cheb1d_scalar_field), intent(in) :: this
-    !if (.not. this%differentiable) deallocate(this%colloc_points)
-    call this%force_finalise_array()
+    if (this%get_pool_id() /= non_pool_id) call scalars%release(this%get_pool_id())
   end subroutine cheb1d_scalar_force_finalise
 
   subroutine cheb1d_scalar_finalise(this)
@@ -874,7 +894,6 @@ contains
     end if
     field%colloc_points => collocation_points(numpoints-1,lower_bound,upper_bound)
     field = array_vector_field(field,numpoints,dims,initializer)
-    call field%set_temp()
   end function vector_constructor
 
   function cheb1d_vector_domain(this) result(res)
@@ -1112,13 +1131,20 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce scalars.
     !
-    class(cheb1d_vector_field), intent(in)          :: this
-    class(scalar_field), allocatable, intent(inout) :: new_field
+    class(cheb1d_vector_field), intent(in)      :: this
+    class(scalar_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as scalar fields produced by `this`.
     call this%guard_temp()
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(cheb1d_scalar_field :: new_field)
+    if (.not. initialised) then
+      vectors = vector_pool(object_pool_size, this)
+      block
+        type(cheb1d_scalar_field) :: sf
+        scalars = scalar_pool(object_pool_size, sf)
+      end block
+      initialised = .true.
+    end if
+    new_field => scalars%acquire()
     call this%clean_temp()
   end subroutine cheb1d_vector_allocate_scalar
 
@@ -1130,13 +1156,20 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce vectors.
     !
-    class(cheb1d_vector_field), intent(in)          :: this
-    class(vector_field), allocatable, intent(inout) :: new_field
+    class(cheb1d_vector_field), intent(in)      :: this
+    class(vector_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as vector fields produced by `this`.
     call this%guard_temp()
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(cheb1d_vector_field :: new_field)
+    if (.not. initialised) then
+      vectors = vector_pool(object_pool_size, this)
+      block
+        type(cheb1d_scalar_field) :: sf
+        scalars = scalar_pool(object_pool_size, sf)
+      end block
+      initialised = .true.
+    end if
+    new_field => vectors%acquire()
     call this%clean_temp()
   end subroutine cheb1d_vector_allocate_vector
 
@@ -1170,7 +1203,7 @@ contains
       !! slices(3,i) = stride
       !! ```
     integer :: length
-    call this%guard_temp(); call src%guard_temp()
+    call src%guard_temp()
     select type(src)
     class is(cheb1d_vector_field)
       length = size(src%colloc_points)
@@ -1206,7 +1239,7 @@ contains
       error stop ('Trying to compute boundary metadata for type other '// &
                  'than `cheb1d_vector_field`.')
     end select
-    call this%clean_temp(); call src%clean_temp()
+    call src%clean_temp()
   end subroutine cheb1d_vector_bound
 
   subroutine cheb1d_vector_set_bound(this,boundary,depth,boundary_field)
@@ -1418,14 +1451,16 @@ contains
     ! Returns a field containing the grid spacing at each point.
     !
     class(cheb1d_vector_field), intent(in) :: this
-    class(vector_field), allocatable       :: grid
+    class(vector_field), pointer           :: grid
       !! A field where the values indicate the grid spacing that
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
     call this%guard_temp()
-    allocate(cheb1d_vector_field :: grid)
-    grid = array_vector_field(this, grid_to_spacing(this%colloc_points))
-    call grid%set_temp()
+    call this%allocate_vector_field(grid)
+    select type(grid)
+    class is(array_vector_field)
+      grid = array_vector_field(grid, grid_to_spacing(this%colloc_points))
+    end select
     call this%clean_temp()
   end function cheb1d_vector_grid_spacing
 
@@ -1436,8 +1471,7 @@ contains
     ! Deallocates the field data for this object.
     !
     class(cheb1d_vector_field), intent(in) :: this
-!    if (.not. this%differentiable) deallocate(this%colloc_points)
-    call this%force_finalise_array()
+    if (this%get_pool_id() /= non_pool_id) call vectors%release(this%get_pool_id())
   end subroutine cheb1d_vector_force_finalise
 
   subroutine cheb1d_vector_finalise(this)

@@ -34,6 +34,8 @@ module uniform_fields_mod
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use abstract_fields_mod
+  use scalar_pool_mod, only: scalar_pool
+  use vector_pool_mod, only: vector_pool
   use utils_mod, only: is_nan, check_set_from_raw, elements_in_slice
   use h5lt, only: hid_t, size_t, hsize_t, h5ltmake_dataset_double_f,     &
                   h5ltset_attribute_string_f, h5ltset_attribute_int_f,   &
@@ -46,6 +48,7 @@ module uniform_fields_mod
   character(len=20), parameter, public :: hdf_vector_name = 'uniform_vector_field'
 
   integer, parameter :: grid_spacing_size = 10
+  logical :: initialised = .false.
   
   $:public_unary()
   public :: minval
@@ -186,6 +189,7 @@ module uniform_fields_mod
     module procedure uniform_scalar_constructor
   end interface uniform_scalar_field
 
+  type(scalar_pool) :: scalars
 
   type, extends(vector_field), public :: uniform_vector_field
     !* Author: Chris MacMackin
@@ -340,6 +344,8 @@ module uniform_fields_mod
     module procedure uniform_vector_constructor
   end interface uniform_vector_field
 
+  type(vector_pool) :: vectors
+
   
 contains
 
@@ -370,7 +376,9 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     integer :: elements
+    call this%guard_temp()
     elements = 1
+    call this%clean_temp()
   end function uniform_scalar_elements
 
   function uniform_scalar_domain(this) result(domain)
@@ -383,9 +391,11 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), dimension(:,:), allocatable :: domain
+    call this%guard_temp()
     allocate(domain(1,2))
     domain(1,1) = 0.0_r8
     domain(1,2) = 0.0_r8
+    call this%clean_temp()
   end function uniform_scalar_domain
 
   impure elemental function uniform_scalar_dimensions(this) result(dims)
@@ -397,7 +407,9 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     integer :: dims
+    call this%guard_temp()
     dims = 0
+    call this%clean_temp()
   end function uniform_scalar_dimensions
 
   function uniform_scalar_raw_size(this,exclude_lower_bound, &
@@ -422,7 +434,9 @@ contains
       !! of cells at the upper boundary normal to dimension `n` will
       !! be ignored. For a uniform field, this argument has no effect.
     integer :: res
+    call this%guard_temp()
     res = 1
+    call this%clean_temp()
   end function uniform_scalar_raw_size
   
   function uniform_scalar_raw(this,exclude_lower_bound, &
@@ -454,8 +468,10 @@ contains
       !! be ignored. For a uniform field, this argument has no effect.
     real(r8), dimension(:), allocatable :: res
       !! Uniform containing data needed to describe field
+    call this%guard_temp()
     allocate(res(1))
     res(1) = this%field_data
+    call this%clean_temp()
   end function uniform_scalar_raw
 
   function uniform_scalar_get_value(this) result(res)
@@ -468,7 +484,9 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8) :: res
+    call this%guard_temp()
     res = this%field_data
+    call this%clean_temp()
   end function uniform_scalar_get_value
 
   subroutine uniform_scalar_set_from_raw(this,raw,provide_lower_bound, &
@@ -496,8 +514,10 @@ contains
       !! dimension. The number in element `n` of the array indicates
       !! how many layers of cells at the upper boundary normal to
       !! dimension `n` are missed. Defaults to 0 for all.
+    call this%guard_temp()
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     this%field_data = raw(1)
+    call this%clean_temp()
   end subroutine uniform_scalar_set_from_raw
 
   function uniform_scalar_resolution(this) result(resolution)
@@ -511,7 +531,9 @@ contains
     class(uniform_scalar_field), intent(in)  :: this
     integer, dimension(:), allocatable :: resolution
       !! Array specifying the number of data points in each dimension.
+    call this%guard_temp()
     allocate(resolution(0))
+    call this%clean_temp()
   end function uniform_scalar_resolution
   
   function uniform_scalar_sf_m_sf(this,rhs) result(res)
@@ -522,9 +544,11 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
-    allocate(res, mold=rhs)
+    class(scalar_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
     res = this%field_data * rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_m_sf
 
   function uniform_scalar_sf_m_vf(this,rhs) result(res)
@@ -535,9 +559,11 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    allocate(res, mold=rhs)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
     res = this%field_data * rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_m_vf
 
   function uniform_scalar_r_m_sf(lhs,rhs) result(res)
@@ -548,11 +574,17 @@ contains
     !
     real(r8), intent(in) :: lhs
     class(uniform_scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = lhs * rhs%field_data
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = lhs * rhs%field_data
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_scalar_r_m_sf
 
   function uniform_scalar_vr_m_sf(lhs,rhs) result(res)
@@ -563,13 +595,19 @@ contains
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(uniform_scalar_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    allocate(local%field_data(size(lhs)))
-    local%vector_dims = size(lhs)
-    local%field_data = lhs * rhs%field_data
-    call move_alloc(local,res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(size(lhs)))
+      res%vector_dims = size(lhs)
+      res%field_data = lhs * rhs%field_data
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_scalar_vr_m_sf
 
   function uniform_scalar_sf_m_r(this,rhs) result(res)
@@ -580,11 +618,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data * rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data * rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_m_r
 
   function uniform_scalar_sf_m_vr(this,rhs) result(res)
@@ -595,13 +639,19 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    allocate(local%field_data(size(rhs)))
-    local%vector_dims = size(rhs)
-    local%field_data = this%field_data * rhs
-    call move_alloc(local,res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(size(rhs)))
+      res%vector_dims = size(rhs)
+      res%field_data = this%field_data * rhs
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_m_vr
   
   function uniform_scalar_sf_d_sf(this,rhs) result(res)
@@ -612,9 +662,11 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
-    allocate(res, mold=rhs)
-    res = this%field_data / rhs    
+    class(scalar_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
+    res = this%field_data / rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_d_sf
 
   function uniform_scalar_r_d_sf(lhs,rhs) result(res)
@@ -625,11 +677,17 @@ contains
     !
     real(r8), intent(in) :: lhs
     class(uniform_scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = lhs / rhs%field_data
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = lhs / rhs%field_data
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call rhs%guard_temp()
   end function uniform_scalar_r_d_sf
 
   function uniform_scalar_vr_d_sf(lhs,rhs) result(res)
@@ -640,13 +698,19 @@ contains
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(uniform_scalar_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    allocate(local%field_data(size(lhs)))
-    local%vector_dims = size(lhs)
-    local%field_data = lhs / rhs%field_data
-    call move_alloc(local,res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(size(lhs)))
+      res%vector_dims = size(lhs)
+      res%field_data = lhs / rhs%field_data
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_scalar_vr_d_sf
 
   function uniform_scalar_sf_d_r(this,rhs) result(res)
@@ -657,11 +721,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data / rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data / rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_d_r
   
   function uniform_scalar_sf_s_sf(this,rhs) result(res)
@@ -672,9 +742,11 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
-    allocate(res, mold=rhs)
+    class(scalar_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
     res = this%field_data - rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_s_sf
 
   function uniform_scalar_r_s_sf(lhs,rhs) result(res)
@@ -685,11 +757,17 @@ contains
     !
     real(r8), intent(in) :: lhs
     class(uniform_scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = lhs - rhs%field_data
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = lhs - rhs%field_data
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_scalar_r_s_sf
 
   function uniform_scalar_sf_s_r(this,rhs) result(res)
@@ -700,11 +778,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data - rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data - rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_s_r
   
   function uniform_scalar_sf_a_sf(this,rhs) result(res)
@@ -715,9 +799,11 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
-    allocate(res, mold=this)
+    class(scalar_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
+    call this%allocate_scalar_field(res)
     res = this%field_data + rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_a_sf
 
   function uniform_scalar_r_a_sf(lhs,rhs) result(res)
@@ -728,11 +814,17 @@ contains
     !
     real(r8), intent(in) :: lhs
     class(uniform_scalar_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = lhs + rhs%field_data
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = lhs + rhs%field_data
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_scalar_r_a_sf
 
   function uniform_scalar_sf_a_r(this,rhs) result(res)
@@ -743,11 +835,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data + rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data + rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_a_r
 
   function uniform_scalar_sf_p_r(this,rhs) result(res)
@@ -758,11 +856,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data ** rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data ** rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_p_r
 
   function uniform_scalar_sf_p_r4(this,rhs) result(res)
@@ -773,11 +877,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real, intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data ** rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call res%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data ** rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_p_r4
 
   function uniform_scalar_sf_p_i(this,rhs) result(res)
@@ -788,11 +898,17 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     integer, intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = this%field_data ** rhs
-    call move_alloc(local,res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = this%field_data ** rhs
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_sf_p_i
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
@@ -803,11 +919,17 @@ contains
     ! \(${TEX}$({\rm field})\)
     !
     class(uniform_scalar_field), intent(in)  :: this
-    class(scalar_field), allocatable        :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = ${FUNC}$(this%field_data)
-    call move_alloc(local, res)
+    class(scalar_field), pointer             :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = ${FUNC}$(this%field_data)
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_${FUNC}$
 
 #:endfor
@@ -820,7 +942,9 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8) :: res !! The result of this operation
+    call this%guard_temp()
     res = this%field_data
+    call this%clean_temp()
   end function uniform_scalar_minval
 
   function uniform_scalar_maxval(this) result(res)
@@ -831,7 +955,9 @@ contains
     !
     class(uniform_scalar_field), intent(in) :: this
     real(r8) :: res !! The result of this operation
+    call this%guard_temp()
     res = this%field_data
+    call this%clean_temp()
   end function uniform_scalar_maxval
 
   function uniform_scalar_d_dx(this, dir, order) result(res)
@@ -843,11 +969,17 @@ contains
     class(uniform_scalar_field), intent(in) :: this
     integer, intent(in) :: dir !! Direction in which to differentiate
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
-    class(scalar_field), allocatable :: res
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = 0.0_r8
-    call move_alloc(local, res)
+    class(scalar_field), pointer :: res
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = 0.0_r8
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_d_dx
 
   function uniform_scalar_laplacian(this) result(res)
@@ -857,11 +989,17 @@ contains
     ! \(\nabla^2 {\rm field}\)
     !
     class(uniform_scalar_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = 0.0_r8
-    call move_alloc(local, res)
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = 0.0_r8
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_laplacian
   
   function uniform_scalar_gradient(this) result(res)
@@ -871,12 +1009,18 @@ contains
     ! \(\nabla{\rm field}\)
     !
     class(uniform_scalar_field), intent(in) :: this
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    allocate(local%field_data(1))
-    local%field_data = 0.0_r8
-    call move_alloc(local, res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(1))
+      res%field_data = 0.0_r8
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_gradient
   
   impure elemental subroutine uniform_scalar_assign(this,rhs)
@@ -887,12 +1031,15 @@ contains
     !
     class(uniform_scalar_field), intent(inout) :: this
     class(scalar_field), intent(in) :: rhs
+    call rhs%guard_temp()
     select type(rhs)
     class is(uniform_scalar_field)
       this%field_data = rhs%field_data
     class default
       error stop ('Assigning incompatible type to uniform_scalar_field')
     end select
+    call rhs%clean_temp()
+    call this%unset_temp()
   end subroutine uniform_scalar_assign
 
   logical function uniform_scalar_is_equal(this,rhs) result(iseq)
@@ -905,6 +1052,7 @@ contains
     class(uniform_scalar_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
     real(r8) :: normalization
+    call this%guard_temp(); call rhs%guard_temp()
     iseq = .true.
     select type(rhs)
     class is(uniform_scalar_field)
@@ -916,6 +1064,7 @@ contains
     class default
       iseq = (rhs == this)
     end select
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_is_equal
 
   subroutine uniform_scalar_assign_meta_data(this, rhs, alloc)
@@ -932,6 +1081,8 @@ contains
       !! copied
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
+    call rhs%guard_temp()
+    call rhs%clean_temp()
   end subroutine uniform_scalar_assign_meta_data
 
   subroutine uniform_scalar_allocate_scalar(this, new_field)
@@ -942,12 +1093,21 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce scalars.
     !
-    class(uniform_scalar_field), intent(in)         :: this
-    class(scalar_field), allocatable, intent(inout) :: new_field
+    class(uniform_scalar_field), intent(in)     :: this
+    class(scalar_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as scalar fields produced by `this`.
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(uniform_scalar_field :: new_field)
+    call this%guard_temp()
+    if (.not. initialised) then
+      scalars = scalar_pool(object_pool_size, this)
+      block
+        type(uniform_vector_field) :: vf
+        vectors = vector_pool(object_pool_size, vf)
+      end block
+      initialised = .true.
+    end if
+    new_field => scalars%acquire()
+    call this%clean_temp()
   end subroutine uniform_scalar_allocate_scalar
 
   subroutine uniform_scalar_allocate_vector(this, new_field)
@@ -958,12 +1118,21 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce vectors.
     !
-    class(uniform_scalar_field), intent(in)         :: this
-    class(vector_field), allocatable, intent(inout) :: new_field
+    class(uniform_scalar_field), intent(in)     :: this
+    class(vector_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as vector fields produced by `this`.
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(uniform_vector_field :: new_field)
+    call this%guard_temp()
+    if (.not. initialised) then
+      scalars = scalar_pool(object_pool_size, this)
+      block
+        type(uniform_vector_field) :: vf
+        vectors = vector_pool(object_pool_size, vf)
+      end block
+      initialised = .true.
+    end if
+    new_field => vectors%acquire()
+    call this%clean_temp()
   end subroutine uniform_scalar_allocate_vector
 
   function uniform_scalar_id_to_pos(this, id) result(pos)
@@ -979,7 +1148,9 @@ contains
       !! The ID number for some location in the field
     real(r8), dimension(:), allocatable :: pos
       !! The coordinates for this location in the field
+    call this%guard_temp()
     pos = [0.0_r8]
+    call this%clean_temp()
   end function uniform_scalar_id_to_pos
   
   subroutine uniform_scalar_read_hdf(this, hdf_id, dataset_name, &
@@ -1006,6 +1177,7 @@ contains
     integer(hsize_t), dimension(1) :: dims
     character(len=50) :: string
     real(r8), dimension(1) :: tmp
+    call this%guard_temp()
     error = 0
     call h5ltget_attribute_string_f(hdf_id, dataset_name, hdf_field_type_attr, &
                                     string, error)
@@ -1018,6 +1190,7 @@ contains
     call h5ltread_dataset_double_f(hdf_id, dataset_name, tmp, &
                                    [1_hsize_t], error)
     this%field_data = tmp(1)
+    call this%clean_temp()
   end subroutine uniform_scalar_read_hdf
   
   subroutine uniform_scalar_write_hdf(this, hdf_id, dataset_name, &
@@ -1041,6 +1214,7 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    call this%guard_temp()
     error = 0
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, 1, [1_hsize_t], &
                                    [this%field_data], error)
@@ -1050,6 +1224,7 @@ contains
     if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [0], &
                                  1_size_t, error)
+    call this%clean_temp()
   end subroutine uniform_scalar_write_hdf
 
   function uniform_scalar_grid_spacing(this) result(grid)
@@ -1060,15 +1235,22 @@ contains
     ! uniform field, this is not a meaningful concept
     !
     class(uniform_scalar_field), intent(in) :: this
-    class(vector_field), allocatable        :: grid
+    class(vector_field), pointer            :: grid
       !! A field where the values indicate the grid spacing that
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    allocate(local%field_data(grid_spacing_size))
-    local%vector_dims = grid_spacing_size
-    local%field_data = huge(local%field_data)
+    call this%guard_temp()
+    call this%allocate_vector_field(grid)
+    select type(grid)
+    class is(uniform_vector_field)
+      allocate(grid%field_data(grid_spacing_size))
+      grid%vector_dims = grid_spacing_size
+      grid%field_data = huge(grid%field_data)
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_scalar_grid_spacing
 
   function uniform_scalar_get_element(this,element) result(val)
@@ -1084,7 +1266,9 @@ contains
       !! The ID number of the field element to be returned
     real(r8) :: val
       !! The value of the field corresponding to the specified ID
+    call this%guard_temp()
     val = this%field_data
+    call this%clean_temp()
   end function uniform_scalar_get_element
 
   subroutine uniform_scalar_set_element(this,element,val)
@@ -1100,7 +1284,9 @@ contains
       !! The ID number of the field element to be set
     real(r8), intent(in) :: val
       !! The new value the field element is to be set to
+    call this%guard_temp()
     this%field_data = val
+    call this%clean_temp()
   end subroutine uniform_scalar_set_element
   
   function uniform_scalar_get_bound(this,boundary,depth) result(res)
@@ -1121,12 +1307,15 @@ contains
     integer, intent(in) :: depth
       !! The number of layers of data-points to return at the
       !! specified boundary.
-    class(scalar_field), allocatable :: res
+    class(scalar_field), pointer :: res
       !! A field, of the same type as `this` and with the same
       !! resolution, number of dimensions etc., but containing only
       !! the points within the specified number of layers of cells
       !! adjecent to the specified boundary.
-    allocate(res, source=this)
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    res = this
+    call this%clean_temp()
   end function uniform_scalar_get_bound
 
   subroutine uniform_scalar_set_bound(this,boundary,depth,boundary_field)
@@ -1155,9 +1344,13 @@ contains
       !! the points within the specified number of layers of cells
       !! adjecent to the specified boundary. Alternatively, it may
       !! be a [[uniform_scalar_field]].
+    call this%guard_temp(); call boundary_field%guard_temp()
     select type(boundary_field)
     class is(uniform_scalar_field)
-      if (this%field_data == boundary_field%field_data) return
+      if (this%field_data == boundary_field%field_data) then
+        call this%clean_temp(); call boundary_field%clean_temp()
+        return
+      end if
     end select
     error stop ('Can not set boundary values for a uniform field.')
   end subroutine uniform_scalar_set_bound
@@ -1170,7 +1363,20 @@ contains
     ! there is no array of any significant size, so nothing happens.
     !
     class(uniform_scalar_field), intent(in) :: this
+    if (this%get_pool_id() /= non_pool_id) call scalars%release(this%get_pool_id())
   end subroutine uniform_scalar_force_finalise
+
+  impure elemental subroutine uniform_scalar_finalize(this)
+    !* Author: Chris MacMackin
+    !  Date: May 2017
+    !
+    ! Deallocates the field data for this object.
+    !
+    type(uniform_scalar_field), intent(inout) :: this
+    if (this%get_pool_id() /= non_pool_id) then
+      call scalars%release(this%get_pool_id())
+    end if
+  end subroutine uniform_scalar_finalize
 
 
   !=====================================================================
@@ -1202,7 +1408,9 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     integer :: dims !! Number of vector components
+    call this%guard_temp()
     dims = this%vector_dims
+    call this%clean_temp()
   end function uniform_vector_vector_dimensions
 
   function uniform_vector_elements(this) result(elements)
@@ -1214,7 +1422,9 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     integer :: elements
+    call this%guard_temp()
     elements = 1
+    call this%clean_temp()
   end function uniform_vector_elements
 
   impure elemental function uniform_vector_dimensions(this) result(dims)
@@ -1226,7 +1436,9 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     integer :: dims
+    call this%guard_temp()
     dims = 0
+    call this%clean_temp()
   end function uniform_vector_dimensions
   
   function uniform_vector_domain(this) result(domain)
@@ -1239,9 +1451,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), dimension(:,:), allocatable :: domain
+    call this%guard_temp()
     allocate(domain(1,2))
     domain(1,1) = 0.0_r8
     domain(1,2) = 0.0_r8
+    call this%clean_temp()
   end function uniform_vector_domain
 
   function uniform_vector_raw_size(this,exclude_lower_bound, &
@@ -1269,11 +1483,13 @@ contains
     integer :: res
     integer, dimension(:,:), allocatable :: slices
     integer :: i
+    call this%guard_temp()
     if (allocated(this%field_data)) then
       res = this%vector_dims
     else
       res = 0
     end if
+    call this%clean_temp()
   end function uniform_vector_raw_size
   
   function uniform_vector_raw(this,exclude_lower_bound, &
@@ -1305,11 +1521,13 @@ contains
       !! be ignored. For a uniform field, this argument has no effect.
     real(r8), dimension(:), allocatable :: res
       !! Uniform containing data needed to describe field
+    call this%guard_temp()
     if (allocated(this%field_data)) then
       res = this%field_data
     else
       allocate(res(0))
     end if
+    call this%clean_temp()
   end function uniform_vector_raw
 
   function uniform_vector_get_value(this) result(res)
@@ -1321,8 +1539,10 @@ contains
     ! uniform field.
     !
     class(uniform_vector_field), intent(in) :: this
-    real(r8), dimension(:), allocatable :: res
+    real(r8), dimension(:), pointer :: res
+    call this%guard_temp()
     res = this%field_data
+    call this%clean_temp()
   end function uniform_vector_get_value
   
   subroutine uniform_vector_set_from_raw(this,raw,provide_lower_bound, &
@@ -1350,8 +1570,10 @@ contains
       !! dimension. The number in element `n` of the array indicates
       !! how many layers of cells at the upper boundary normal to
       !! dimension `n` are missed. Defaults to 0 for all.
+    call this%guard_temp()
     call check_set_from_raw(this,raw,provide_lower_bound,provide_upper_bound)
     this%field_data = raw
+    call this%clean_temp()
   end subroutine uniform_vector_set_from_raw
 
   function uniform_vector_resolution(this) result(resolution)
@@ -1363,9 +1585,11 @@ contains
     ! uniform array, as only a single data-point is needed.
     !
     class(uniform_vector_field), intent(in)  :: this
-    integer, dimension(:), allocatable :: resolution
+    integer, dimension(:), allocatable       :: resolution
       !! Array specifying the number of data points in each dimension.
+    call this%guard_temp()
     allocate(resolution(0))
+    call this%clean_temp()
   end function uniform_vector_resolution
 
   function uniform_vector_vf_m_sf(this,rhs) result(res)
@@ -1376,9 +1600,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The restult of this operation
+    class(vector_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
     call rhs%allocate_vector_field(res)
     res = this%field_data * rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_m_sf
 
   function uniform_vector_r_m_vf(lhs,rhs) result(res)
@@ -1389,12 +1615,18 @@ contains
     !
     real(r8), intent(in) :: lhs
     class(uniform_vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    local%vector_dims = rhs%vector_dims
-    local%field_data = lhs * rhs%field_data
-    call move_alloc(local,res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      res%vector_dims = rhs%vector_dims
+      res%field_data = lhs * rhs%field_data
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_vector_r_m_vf
 
   function uniform_vector_vf_m_r(this,rhs) result(res)
@@ -1405,12 +1637,18 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    local%vector_dims = this%vector_dims
-    local%field_data = this%field_data * rhs
-    call move_alloc(local,res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      res%vector_dims = this%vector_dims
+      res%field_data = this%field_data * rhs
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_vf_m_r
   
   function uniform_vector_vf_d_sf(this,rhs) result(res)
@@ -1421,9 +1659,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     class(scalar_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The restult of this operation
+    class(vector_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
     call rhs%allocate_vector_field(res)
     res = this%field_data / rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_d_sf
 
   function uniform_vector_vf_d_r(this,rhs) result(res)
@@ -1434,12 +1674,18 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    local%vector_dims = this%vector_dims
-    local%field_data = this%field_data / rhs
-    call move_alloc(local,res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      res%vector_dims = this%vector_dims
+      res%field_data = this%field_data / rhs
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_vf_d_r
   
   function uniform_vector_vf_s_vf(this,rhs) result(res)
@@ -1450,9 +1696,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The restult of this operation
-    allocate(res, mold=rhs)
+    class(vector_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
     res = this%field_data - rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_s_vf
 
   function uniform_vector_r_s_vf(lhs,rhs) result(res)
@@ -1463,21 +1711,27 @@ contains
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(uniform_vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
+    class(vector_field), pointer :: res !! The result of this operation
     integer :: min_dims, max_dims
-    allocate(local)
+    call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data(max_dims))
-    local%vector_dims = max_dims
-    local%field_data(:min_dims) = lhs(:min_dims) - rhs%field_data(:min_dims)
-    if (rhs%vector_dims > size(lhs)) then
-      local%field_data(min_dims+1:) = -rhs%field_data(min_dims+1:)
-    else
-      local%field_data(min_dims+1:) = lhs(min_dims+1:)
-    end if
-    call move_alloc(local,res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(max_dims))
+      res%vector_dims = max_dims
+      res%field_data(:min_dims) = lhs(:min_dims) - rhs%field_data(:min_dims)
+      if (rhs%vector_dims > size(lhs)) then
+        res%field_data(min_dims+1:) = -rhs%field_data(min_dims+1:)
+      else
+        res%field_data(min_dims+1:) = lhs(min_dims+1:)
+      end if
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_vector_r_s_vf
 
   function uniform_vector_vf_s_r(this,rhs) result(res)
@@ -1488,21 +1742,27 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
+    class(vector_field), pointer :: res !! The result of this operation
     integer :: min_dims, max_dims
-    allocate(local)
-    min_dims = min(this%vector_dims, size(rhs))
-    max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data(max_dims))
-    local%vector_dims = max_dims
-    local%field_data(:min_dims) = this%field_data(:min_dims) - rhs(:min_dims)
-    if (this%vector_dims > size(rhs)) then
-      local%field_data(min_dims+1:) = this%field_data(min_dims+1:)
-    else
-      local%field_data(min_dims+1:) = -rhs(min_dims+1:)
-    end if
-    call move_alloc(local,res)
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      min_dims = min(this%vector_dims, size(rhs))
+      max_dims = max(this%vector_dims, size(rhs))
+      allocate(res%field_data(max_dims))
+      res%vector_dims = max_dims
+      res%field_data(:min_dims) = this%field_data(:min_dims) - rhs(:min_dims)
+      if (this%vector_dims > size(rhs)) then
+        res%field_data(min_dims+1:) = this%field_data(min_dims+1:)
+      else
+        res%field_data(min_dims+1:) = -rhs(min_dims+1:)
+      end if
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_vf_s_r
   
   function uniform_vector_vf_a_vf(this,rhs) result(res)
@@ -1513,10 +1773,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The restult of this operation
+    class(vector_field), pointer :: res !! The restult of this operation
     integer :: max_dims, min_dims
-    allocate(res, mold=this)
-    res = this%field_data + rhs
+    call this%guard_temp(); call rhs%guard_temp()
+    res => this%field_data + rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_a_vf
 
   function uniform_vector_r_a_vf(lhs,rhs) result(res)
@@ -1527,21 +1788,27 @@ contains
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(uniform_vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
+    class(vector_field), pointer :: res !! The result of this operation
     integer :: min_dims, max_dims
-    allocate(local)
+    call rhs%guard_temp()
     min_dims = min(rhs%vector_dims, size(lhs))
     max_dims = max(rhs%vector_dims, size(lhs))
-    allocate(local%field_data(max_dims))
-    local%vector_dims = max_dims
-    local%field_data(:min_dims) = lhs(:min_dims) + rhs%field_data(:min_dims)
-    if (rhs%vector_dims > size(lhs)) then
-      local%field_data(min_dims+1:) = rhs%field_data(min_dims+1:)
-    else
-      local%field_data(min_dims+1:) = lhs(min_dims+1:)
-    end if
-    call move_alloc(local,res)
+    call rhs%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(max_dims))
+      res%vector_dims = max_dims
+      res%field_data(:min_dims) = lhs(:min_dims) + rhs%field_data(:min_dims)
+      if (rhs%vector_dims > size(lhs)) then
+        res%field_data(min_dims+1:) = rhs%field_data(min_dims+1:)
+      else
+        res%field_data(min_dims+1:) = lhs(min_dims+1:)
+      end if
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_vector_r_a_vf
 
   function uniform_vector_vf_a_r(this,rhs) result(res)
@@ -1552,21 +1819,27 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
+    class(vector_field), pointer :: res !! The result of this operation
     integer :: min_dims, max_dims
-    allocate(local)
-    min_dims = min(this%vector_dims, size(rhs))
-    max_dims = max(this%vector_dims, size(rhs))
-    allocate(local%field_data(max_dims))
-    local%vector_dims = max_dims
-    local%field_data(:min_dims) = this%field_data(:min_dims) + rhs(:min_dims)
-    if (this%vector_dims > size(rhs)) then
-      local%field_data(min_dims+1:) = this%field_data(min_dims+1:)
-    else
-      local%field_data(min_dims+1:) = rhs(min_dims+1:)
-    end if
-    call move_alloc(local,res)
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      min_dims = min(this%vector_dims, size(rhs))
+      max_dims = max(this%vector_dims, size(rhs))
+      allocate(res%field_data(max_dims))
+      res%vector_dims = max_dims
+      res%field_data(:min_dims) = this%field_data(:min_dims) + rhs(:min_dims)
+      if (this%vector_dims > size(rhs)) then
+        res%field_data(min_dims+1:) = this%field_data(min_dims+1:)
+      else
+        res%field_data(min_dims+1:) = rhs(min_dims+1:)
+      end if
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_vf_a_r
 
   impure elemental subroutine uniform_vector_assign(this,rhs)
@@ -1577,6 +1850,7 @@ contains
     !
     class(uniform_vector_field), intent(inout) :: this
     class(vector_field), intent(in) :: rhs
+    call rhs%guard_temp()
     select type(rhs)
     class is(uniform_vector_field)
       if (allocated(rhs%field_data)) then
@@ -1588,6 +1862,7 @@ contains
     class default
       error stop ('Assigning incompatible type to uniform_vector_field')
     end select
+    call rhs%clean_temp()
   end subroutine uniform_vector_assign
 
   subroutine uniform_vector_assign_scalar(this,rhs)
@@ -1598,6 +1873,7 @@ contains
     !
     class(uniform_vector_field), intent(inout)    :: this
     class(scalar_field), dimension(:), intent(in) :: rhs
+    call rhs%guard_temp()
     select type(rhs)
     class is(uniform_scalar_field)
       this%vector_dims = size(rhs)
@@ -1605,6 +1881,7 @@ contains
     class default
       error stop ('Assigning incompatible type to uniform_vector_field')
     end select
+    call rhs%clean_temp()
   end subroutine uniform_vector_assign_scalar
 
   function uniform_vector_norm(this) result(res)
@@ -1614,11 +1891,17 @@ contains
     ! \(\lVert \vec{\rm field} \rVert\)
     !
     class(uniform_vector_field), intent(in) :: this
-    class(scalar_field), allocatable :: res
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = sqrt(sum(this%field_data**2))
-    call move_alloc(local, res)
+    class(scalar_field), pointer :: res
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = sqrt(sum(this%field_data**2))
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_norm
 
   function uniform_vector_component(this,comp) result(res)
@@ -1629,15 +1912,21 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     integer, intent(in) :: comp
-    class(scalar_field), allocatable :: res
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    if (comp <= this%vector_dims) then
-      local%field_data = this%field_data(comp)
-    else
-      local%field_data = 0.0_r8
-    end if
-    call move_alloc(local, res)
+    class(scalar_field), pointer :: res
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      if (comp <= this%vector_dims) then
+        res%field_data = this%field_data(comp)
+      else
+        res%field_data = 0.0_r8
+      end if
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_component
 
   function uniform_vector_d_dx(this, dir, order) result(res)
@@ -1649,12 +1938,18 @@ contains
     class(uniform_vector_field), intent(in) :: this
     integer, intent(in) :: dir !! Direction in which to differentiate
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
-    class(vector_field), allocatable :: res
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    local%vector_dims = 1
-    local%field_data = [0.0_r8]
-    call move_alloc(local, res)
+    class(vector_field), pointer :: res
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      res%vector_dims = 1
+      res%field_data = [0.0_r8]
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_d_dx
 
   function uniform_vector_component_d_dx(this, dir, component, order) result(res)
@@ -1667,11 +1962,17 @@ contains
     integer, intent(in) :: dir !! Direction in which to differentiate
     integer, intent(in) :: component !! Which component of the vector is being differentiated
     integer, optional, intent(in) :: order !! Order of the derivative, default = 1
-    class(scalar_field), allocatable :: res
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = 0.0_r8
-    call move_alloc(local, res)
+    class(scalar_field), pointer :: res
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = 0.0_r8
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_component_d_dx
 
   function uniform_vector_laplacian(this) result(res)
@@ -1681,12 +1982,18 @@ contains
     ! \(\nabla^2 \vec{\rm field}\)
     !
     class(uniform_vector_field), intent(in) :: this
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    local%vector_dims = 1
-    local%field_data = [0.0_r8]
-    call move_alloc(local, res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      res%vector_dims = 1
+      res%field_data = [0.0_r8]
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_laplacian
   
   function uniform_vector_divergence(this) result(res)
@@ -1696,10 +2003,17 @@ contains
     ! \(\nabla\cdot \vec{\rm field}\)
     !
     class(uniform_vector_field), intent(in) :: this
-    class(scalar_field), allocatable :: res !! The result of this operation
-    type(uniform_scalar_field), allocatable :: local
-    allocate(local)
-    local%field_data = 0.0_r8
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      res%field_data = 0.0_r8
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_divergence
   
   function uniform_vector_curl(this) result(res)
@@ -1709,12 +2023,18 @@ contains
     ! \(\nabla\times \vec{\rm field}\)
     !
     class(uniform_vector_field), intent(in) :: this
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    local%vector_dims = 1
-    local%field_data = [0.0_r8]
-    call move_alloc(local, res)
+    class(vector_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      res%vector_dims = 1
+      res%field_data = [0.0_r8]
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_curl
 
   function uniform_vector_vf_cross_vf(this,rhs) result(res)
@@ -1728,9 +2048,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The restult of this operation
-    allocate(res, mold=this)
+    class(vector_field), pointer :: res !! The restult of this operation
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
     res = this%field_data .cross. rhs
+    call this%clean_temp()
   end function uniform_vector_vf_cross_vf
 
   function uniform_vector_vf_cross_vr(this,rhs) result(res)
@@ -1744,23 +2066,29 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
+    class(vector_field), pointer :: res !! The result of this operation
     real(r8), dimension(3) :: vec1, vec2
     integer :: dims1, dims2
-    allocate(local)
-    allocate(local%field_data(3))
-    local%vector_dims = 3
-    dims1 = min(3,this%vector_dims)
-    dims2 = min(3,size(rhs))
-    vec1 = 0.0_r8
-    vec2 = 0.0_r8
-    vec1(:dims1) = this%field_data(:dims1)
-    vec2(:dims2) = rhs(:dims2)
-    local%field_data = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
-                        vec1(3)*vec2(1) - vec2(3)*vec1(1), &
-                        vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-    call move_alloc(local, res)
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(3))
+      res%vector_dims = 3
+      dims1 = min(3,this%vector_dims)
+      dims2 = min(3,size(rhs))
+      vec1 = 0.0_r8
+      vec2 = 0.0_r8
+      vec1(:dims1) = this%field_data(:dims1)
+      vec2(:dims2) = rhs(:dims2)
+      res%field_data = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                          vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                          vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_vf_cross_vr
 
   function uniform_vector_vr_cross_vf(lhs,rhs) result(res)
@@ -1774,23 +2102,29 @@ contains
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(uniform_vector_field), intent(in) :: rhs
-    class(vector_field), allocatable :: res !! The result of this operation
-    type(uniform_vector_field), allocatable :: local
+    class(vector_field), pointer :: res !! The result of this operation
     real(r8), dimension(3) :: vec1, vec2
     integer :: dims1, dims2
-    allocate(local)
-    allocate(local%field_data(3))
-    local%vector_dims = 3
-    dims1 = min(3,size(lhs))
-    dims2 = min(3,rhs%vector_dims)
-    vec1 = 0.0_r8
-    vec2 = 0.0_r8
-    vec1(:dims1) = lhs(:dims1)
-    vec2(:dims2) = rhs%field_data(:dims2)
-    local%field_data = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
-                        vec1(3)*vec2(1) - vec2(3)*vec1(1), &
-                        vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-    call move_alloc(local, res)
+    call rhs%guard_temp()
+    call rhs%allocate_vector_field(res)
+    select type(res)
+    class is(uniform_vector_field)
+      allocate(res%field_data(3))
+      res%vector_dims = 3
+      dims1 = min(3,size(lhs))
+      dims2 = min(3,rhs%vector_dims)
+      vec1 = 0.0_r8
+      vec2 = 0.0_r8
+      vec1(:dims1) = lhs(:dims1)
+      vec2(:dims2) = rhs%field_data(:dims2)
+      res%field_data = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                          vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                          vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_vector_vr_cross_vf
   
   function uniform_vector_vf_dot_vf(this,rhs) result(res)
@@ -1801,9 +2135,11 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
+    class(scalar_field), pointer :: res !! The restult of this operation
+    call this%guard_temp(); call rhs%guard_temp()
     call rhs%allocate_scalar_field(res)
     res = this%field_data .dot. rhs
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_dot_vf
 
   function uniform_vector_vf_dot_vr(this,rhs) result(res)
@@ -1814,13 +2150,19 @@ contains
     !
     class(uniform_vector_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
-    type(uniform_scalar_field), allocatable :: local
+    class(scalar_field), pointer :: res !! The restult of this operation
     integer :: dims
-    allocate(local)
-    dims = min(this%vector_dims,size(rhs))
-    local%field_data = sum(this%field_data(:dims)*rhs(:dims))
-    call move_alloc(local, res)
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      dims = min(this%vector_dims,size(rhs))
+      res%field_data = sum(this%field_data(:dims)*rhs(:dims))
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_vf_dot_vr
 
   function uniform_vector_vr_dot_vf(lhs,rhs) result(res)
@@ -1831,13 +2173,19 @@ contains
     !
     real(r8), dimension(:), intent(in) :: lhs
     class(uniform_vector_field), intent(in) :: rhs
-    class(scalar_field), allocatable :: res !! The restult of this operation
-    type(uniform_scalar_field), allocatable :: local
+    class(scalar_field), pointer :: res !! The restult of this operation
     integer :: dims
-    allocate(local)
-    dims = min(size(lhs),rhs%vector_dims)
-    local%field_data = sum(lhs(:dims) * rhs%field_data(:dims))
-    call move_alloc(local, res)
+    call rhs%guard_temp()
+    call rhs%allocate_scalar_field(res)
+    select type(res)
+    class is(uniform_scalar_field)
+      dims = min(size(lhs),rhs%vector_dims)
+      res%field_data = sum(lhs(:dims) * rhs%field_data(:dims))
+    class default
+      error stop ('Non-uniform_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call rhs%clean_temp()
   end function uniform_vector_vr_dot_vf
 
   logical function uniform_vector_is_equal(this,rhs) result(iseq)
@@ -1851,6 +2199,7 @@ contains
     class(vector_field), intent(in) :: rhs
     integer :: dims
     real(r8) :: normalization
+    call this%guard_temp(); call rhs%guard_temp()
     iseq = .true.
     select type(rhs)
     class is(uniform_vector_field)
@@ -1874,6 +2223,7 @@ contains
     class default
       iseq = (rhs == this)
     end select
+    call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_is_equal
 
   subroutine uniform_vector_assign_meta_data(this, rhs, alloc)
@@ -1889,12 +2239,14 @@ contains
       !! copied
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
+    call rhs%guard_temp()
     select type(rhs)
     class is(uniform_scalar_field)
       this%vector_dims = 1
     class is(uniform_vector_field)
       this%vector_dims = rhs%vector_dims
     end select
+    call rhs%clean_temp()
   end subroutine uniform_vector_assign_meta_data
 
   subroutine uniform_vector_allocate_scalar(this, new_field)
@@ -1905,12 +2257,21 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce scalars.
     !
-    class(uniform_vector_field), intent(in)         :: this
-    class(scalar_field), allocatable, intent(inout) :: new_field
+    class(uniform_vector_field), intent(in)     :: this
+    class(scalar_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as scalar fields produced by `this`.
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(uniform_scalar_field :: new_field)
+    call this%guard_temp()
+    if (.not. initialised) then
+      vectors = vector_pool(object_pool_size, this)
+      block
+        type(uniform_scalar_field) :: sf
+        scalars = scalar_pool(object_pool_size, sf)
+      end block
+      initialised = .true.
+    end if
+    new_field => scalars%acquire()
+    call this%clean_temp()
   end subroutine uniform_vector_allocate_scalar
 
   subroutine uniform_vector_allocate_vector(this, new_field)
@@ -1921,12 +2282,21 @@ contains
     ! compatible for operations on this field and to be the type
     ! returned by this field's methods which produce vectors.
     !
-    class(uniform_vector_field), intent(in)         :: this
-    class(vector_field), allocatable, intent(inout) :: new_field
+    class(uniform_vector_field), intent(in)     :: this
+    class(vector_field), pointer, intent(inout) :: new_field
       !! A field which, upon return, is allocated to be of the same
       !! concrete type as vector fields produced by `this`.
-    if (allocated(new_field)) deallocate(new_field)
-    allocate(uniform_vector_field :: new_field)
+    call this%guard_temp()
+    if (.not. initialised) then
+      vectors = vector_pool(object_pool_size, this)
+      block
+        type(uniform_scalar_field) :: sf
+        scalars = scalar_pool(object_pool_size, sf)
+      end block
+      initialised = .true.
+    end if
+    new_field => vectors%acquire()
+    call this%clean_temp()
   end subroutine uniform_vector_allocate_vector
 
   function uniform_vector_id_to_pos(this, id) result(pos)
@@ -1942,7 +2312,9 @@ contains
       !! The ID number for some location in the field
     real(r8), dimension(:), allocatable :: pos
       !! The coordinates for this location in the field
+    call this%guard_temp()
     pos = [0.0_r8]
+    call this%clean_temp()
   end function uniform_vector_id_to_pos
   
   subroutine uniform_vector_read_hdf(this, hdf_id, dataset_name, &
@@ -1968,6 +2340,7 @@ contains
     integer(size_t) :: type_size
     integer(hsize_t), dimension(1) :: dims
     character(len=50) :: string
+    call this%guard_temp()
     error = 0
     call h5ltget_dataset_info_f(hdf_id, dataset_name, dims, type_class, &
                                 type_size, error)
@@ -1993,6 +2366,7 @@ contains
     end if
     call h5ltread_dataset_double_f(hdf_id, dataset_name, this%field_data, &
                                    dims, error)
+    call this%clean_temp()
   end subroutine uniform_vector_read_hdf
 
   subroutine uniform_vector_write_hdf(this, hdf_id, dataset_name, &
@@ -2016,6 +2390,7 @@ contains
       !! An error code which, upon succesful completion of the
       !! routine, is 0. Otherwise, contains the error code returned
       !! by the HDF library.
+    call this%guard_temp()
     error = 0
     call h5ltmake_dataset_double_f(hdf_id, dataset_name, 1, &
                                    [int(this%vector_dims,hsize_t)], &
@@ -2026,6 +2401,7 @@ contains
     if (error /= 0) return
     call h5ltset_attribute_int_f(hdf_id, dataset_name, hdf_vector_attr, [1], &
                                  1_size_t, error)
+    call this%clean_temp()
   end subroutine uniform_vector_write_hdf
   
   function uniform_vector_grid_spacing(this) result(grid)
@@ -2036,15 +2412,22 @@ contains
     ! uniform field, this is not a meaningful concept
     !
     class(uniform_vector_field), intent(in) :: this
-    class(vector_field), allocatable        :: grid
-    !! A field where the values indicate the grid spacing that
-    !! point. Each vector dimension representes the spacing of the
-    !! grid in that direction.
-    type(uniform_vector_field), allocatable :: local
-    allocate(local)
-    allocate(local%field_data(grid_spacing_size))
-    local%vector_dims = grid_spacing_size
-    local%field_data = huge(local%field_data)
+    class(vector_field), pointer            :: grid
+      !! A field where the values indicate the grid spacing that
+      !! point. Each vector dimension representes the spacing of the
+      !! grid in that direction.
+    call this%guard_temp()
+    call this%allocate_vector_field(grid)
+    select type(grid)
+    class is(uniform_vector_field)
+      allocate(grid%field_data(grid_spacing_size))
+      grid%vector_dims = grid_spacing_size
+      grid%field_data = huge(grid%field_data)
+    class default
+      error stop ('Non-uniform_vector_field type allocated by '//&
+                  '`allocate_vector_field` routine.')
+    end select
+    call this%clean_temp()
   end function uniform_vector_grid_spacing
 
   function uniform_vector_get_element_vec(this,element) result(val)
@@ -2060,7 +2443,9 @@ contains
       !! The ID number of the field element to be returned
     real(r8), allocatable, dimension(:) :: val
       !! The vector in the field corresponding to the specified ID
+    call this%guard_temp()
     val = this%field_data
+    call this%clean_temp()
   end function uniform_vector_get_element_vec
   
   function uniform_vector_get_element_comp(this,element,component) result(val)
@@ -2079,7 +2464,9 @@ contains
     real(r8) :: val
       !! The vector component in the field corresponding to the 
       !! specified ID
+    call this%guard_temp()
     val = this%field_data(component)
+    call this%clean_temp()
   end function uniform_vector_get_element_comp
 
   subroutine uniform_vector_set_element_vec(this,element,val)
@@ -2095,7 +2482,9 @@ contains
       !! The ID number of the field element to be set
     real(r8), dimension(:), intent(in) :: val
       !! The new vector value the field element is to be set to
+    call this%guard_temp()
     this%field_data(:) = val
+    call this%clean_temp()
   end subroutine uniform_vector_set_element_vec
 
   subroutine uniform_vector_set_element_comp(this,element,component,val)
@@ -2113,7 +2502,9 @@ contains
       !! The number of the vector component to be returned
     real(r8), intent(in) :: val
       !! The new value of the vector component in the field element
+    call this%guard_temp()
     this%field_data(component) = val
+    call this%clean_temp()
   end subroutine uniform_vector_set_element_comp
 
   function uniform_vector_get_bound(this,boundary,depth) result(res)
@@ -2134,12 +2525,15 @@ contains
     integer, intent(in) :: depth
       !! The number of layers of data-points to return at the
       !! specified boundary.
-    class(vector_field), allocatable :: res
+    class(vector_field), pointer :: res
       !! A field, of the same type as `this` and with the same
       !! resolution, number of dimensions etc., but containing only
       !! the points within the specified number of layers of cells
       !! adjecent to the specified boundary.
-    allocate(res, source=this)
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    res = this
+    call this%clean_temp()
   end function uniform_vector_get_bound
 
   subroutine uniform_vector_set_bound(this,boundary,depth,boundary_field)
@@ -2168,9 +2562,13 @@ contains
       !! the points within the specified number of layers of cells
       !! adjecent to the specified boundary. Alternatively, it may
       !! be a [[uniform_vector_field]].
+    call this%guard_temp(); call boundary_field%guard_temp()
     select type(boundary_field)
     class is(uniform_vector_field)
-      if (all(this%field_data == boundary_field%field_data)) return
+      if (all(this%field_data == boundary_field%field_data)) then
+        call this%clean_temp(); call boundary_field%clean_temp()
+        return
+      end if
     end select
     error stop ('Can not set boundary values for a uniform field.')
   end subroutine uniform_vector_set_bound
@@ -2183,6 +2581,7 @@ contains
     ! there is no array of any significant size, so nothing happens.
     !
     class(uniform_vector_field), intent(in) :: this
+    if (this%get_pool_id() /= non_pool_id) call vectors%release(this%get_pool_id())
   end subroutine uniform_vector_force_finalise
 
   impure elemental subroutine uniform_vector_finalize(this)
@@ -2192,7 +2591,11 @@ contains
     ! Deallocates the field data for this object.
     !
     type(uniform_vector_field), intent(inout) :: this
-    if (allocated(this%field_data)) deallocate(this%field_data)
+    if (this%get_pool_id() /= non_pool_id) then
+      call vectors%release(this%get_pool_id())
+    else
+      if (allocated(this%field_data)) deallocate(this%field_data)
+    end if
   end subroutine uniform_vector_finalize
 
 end module uniform_fields_mod

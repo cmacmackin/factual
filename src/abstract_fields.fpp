@@ -47,8 +47,12 @@ module abstract_fields_mod
   character(len=14), parameter, public :: hdf_grid_attr = 'gridpoints_dim'
   character(len=11), parameter, public :: hdf_grid_group = '/___grid___'
 
-  real(r8) :: tolerance = 1e-10_r8
-  public :: set_tol, get_tol
+  integer, parameter, public :: object_pool_size = ${POOL_SIZE}$
+    !! Number of fields kept in the object pool for each concrete type.
+  integer, parameter, public :: non_pool_id = -27
+    !! The ID number a field will have if it is not in an object pool
+  real(r8)           :: tolerance = 1e-10_r8
+  public             :: set_tol, get_tol
   
   type, abstract, public :: abstract_field
     !* Author: Chris MacMackin
@@ -68,6 +72,7 @@ module abstract_fields_mod
     ! Cambridge University Press, New York, NY, USA.
     !
     private
+    integer          :: id_num = non_pool_id
     integer, pointer :: temporary => null()
   contains
     procedure :: elements
@@ -112,6 +117,12 @@ module abstract_fields_mod
       !! steps for integration.
     procedure :: set_temp
       !! Specifies that this field is temporary.
+    procedure :: get_pool_id
+      !! Gets the ID number for this object within an object pool.
+    procedure :: set_pool_id
+      !! Sets the ID number for this object within an object
+      !! pool. __Should only be used by the [[vector_pool]] and
+      !! [[scalar_pool]] clases.__
     procedure :: unset_temp
       !! Specifies that this field is not temporary and deallocates an
       !! integer pointer.
@@ -502,8 +513,8 @@ module abstract_fields_mod
     subroutine scalar_factory(this, new_field)
       import :: abstract_field
       import :: scalar_field
-      class(abstract_field), intent(in)               :: this
-      class(scalar_field), allocatable, intent(inout) :: new_field
+      class(abstract_field), intent(in)           :: this
+      class(scalar_field), pointer, intent(inout) :: new_field
         !! A field which, upon return, is allocated to be of the same
         !! concrete type as scalar fields produced by `this`.
     end subroutine scalar_factory
@@ -511,8 +522,8 @@ module abstract_fields_mod
     subroutine vector_factory(this, new_field)
       import :: abstract_field
       import :: vector_field
-      class(abstract_field), intent(in)               :: this
-      class(vector_field), allocatable, intent(inout) :: new_field
+      class(abstract_field), intent(in)           :: this
+      class(vector_field), pointer, intent(inout) :: new_field
         !! A field which, upon return, is allocated to be of the same
         !! concrete type as vector fields produced by `this`.
     end subroutine vector_factory
@@ -562,7 +573,7 @@ module abstract_fields_mod
       import :: abstract_field
       import :: vector_field
       class(abstract_field), intent(in) :: this
-      class(vector_field), allocatable   :: grid
+      class(vector_field), pointer      :: grid
         !! A field where the values indicate the grid spacing that
         !! point. Each vector dimension representes the spacing of the
         !! grid in that direction.
@@ -572,7 +583,7 @@ module abstract_fields_mod
       !! \({\rm field} [{\rm operator}] {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this, rhs
-      class(scalar_field), allocatable :: sf_sf !! The restult of this operation
+      class(scalar_field), pointer    :: sf_sf !! The restult of this operation
     end function sf_sf
 
     function sf_vf(this,rhs)
@@ -581,7 +592,7 @@ module abstract_fields_mod
       import :: vector_field
       class(scalar_field), intent(in) :: this
       class(vector_field), intent(in) :: rhs
-      class(vector_field), allocatable :: sf_vf !! The result of this operation
+      class(vector_field), pointer    :: sf_vf !! The result of this operation
     end function sf_vf
 
     function r_sf(lhs,rhs)
@@ -590,7 +601,7 @@ module abstract_fields_mod
       import :: r8
       real(r8), intent(in) :: lhs
       class(scalar_field), intent(in) :: rhs
-      class(scalar_field), allocatable :: r_sf !! The result of this operation
+      class(scalar_field), pointer    :: r_sf !! The result of this operation
     end function r_sf
 
     function r1d_sf(lhs,rhs)
@@ -600,7 +611,7 @@ module abstract_fields_mod
       import :: r8
       real(r8), dimension(:), intent(in) :: lhs
       class(scalar_field), intent(in) :: rhs
-      class(vector_field), allocatable :: r1d_sf !! The result of this operation
+      class(vector_field), pointer    :: r1d_sf !! The result of this operation
     end function r1d_sf
   
     function sf_r(this,rhs)
@@ -608,8 +619,8 @@ module abstract_fields_mod
       import :: scalar_field
       import :: r8
       class(scalar_field), intent(in) :: this
-      real(r8), intent(in) :: rhs
-      class(scalar_field), allocatable :: sf_r !! The result of this operation
+      real(r8), intent(in)            :: rhs
+      class(scalar_field), pointer    :: sf_r !! The result of this operation
     end function sf_r
   
     function sf_r1d(this,rhs)
@@ -617,25 +628,25 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       import :: r8
-      class(scalar_field), intent(in) :: this
+      class(scalar_field), intent(in)    :: this
       real(r8), dimension(:), intent(in) :: rhs
-      class(vector_field), allocatable :: sf_r1d !! The result of this operation
+      class(vector_field), pointer       :: sf_r1d !! The result of this operation
     end function sf_r1d
   
     function sf_r4(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm real}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
-      real, intent(in) :: rhs
-      class(scalar_field), allocatable :: sf_r4 !! The result of this operation
+      real, intent(in)                :: rhs
+      class(scalar_field), pointer    :: sf_r4 !! The result of this operation
     end function sf_r4
   
     function sf_i(this,rhs)
       !! \({\rm field} [{\rm operator}] {\rm integer}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
-      integer, intent(in) :: rhs
-      class(scalar_field), allocatable :: sf_i !! The result of this operation
+      integer, intent(in)             :: rhs
+      class(scalar_field), pointer    :: sf_i !! The result of this operation
     end function sf_i
 
     function sf_elem(this,element)
@@ -666,7 +677,7 @@ module abstract_fields_mod
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
-      class(scalar_field), allocatable :: sf_ret_sf !! The result of this operation
+      class(scalar_field), pointer    :: sf_ret_sf !! The result of this operation
     end function sf_ret_sf
 
     function sf_ret_r(this)
@@ -682,21 +693,21 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       class(scalar_field), intent(in) :: this
-      class(vector_field), allocatable :: sf_grad !! The result of this operation
+      class(vector_field), pointer    :: sf_grad !! The result of this operation
     end function sf_grad
   
     function sf_laplace(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(in) :: this
-      class(scalar_field), allocatable :: sf_laplace !! The result of this operation
+      class(scalar_field), pointer    :: sf_laplace !! The result of this operation
     end function sf_laplace
     
     impure elemental subroutine sf_eq_sf(this,rhs)
       !! \({\rm field} = {\rm field}\)
       import :: scalar_field
       class(scalar_field), intent(inout) :: this
-      class(scalar_field), intent(in) :: rhs
+      class(scalar_field), intent(in)    :: rhs
     end subroutine sf_eq_sf
 
     function sf_bound(this,boundary,depth)
@@ -712,7 +723,7 @@ module abstract_fields_mod
       integer, intent(in) :: depth
         !! The number of layers of data-points to return at the
         !! specified boundary.
-      class(scalar_field), allocatable :: sf_bound
+      class(scalar_field), pointer :: sf_bound
         !! A field, of the same type as `this` and with the same
         !! resolution, number of dimensions etc., but containing only
         !! the points within the specified number of layers of cells
@@ -746,14 +757,14 @@ module abstract_fields_mod
       import :: vector_field
       class(vector_field), intent(in) :: this
       class(scalar_field), intent(in) :: rhs
-      class(vector_field), allocatable :: vf_sf !! The restult of this operation
+      class(vector_field), pointer    :: vf_sf !! The restult of this operation
     end function vf_sf
 
     function vf_vf(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{field}}\)
       import :: vector_field
       class(vector_field), intent(in) :: this, rhs
-      class(vector_field), allocatable :: vf_vf !! The result of this operation
+      class(vector_field), pointer    :: vf_vf !! The result of this operation
     end function vf_vf
 
     function r_vf(lhs,rhs)
@@ -762,7 +773,7 @@ module abstract_fields_mod
       import :: r8
       real(r8), intent(in) :: lhs
       class(vector_field), intent(in) :: rhs
-      class(vector_field), allocatable :: r_vf !! The result of this operation
+      class(vector_field), pointer    :: r_vf !! The result of this operation
     end function r_vf
   
     function vf_r(this,rhs)
@@ -770,8 +781,8 @@ module abstract_fields_mod
       import :: vector_field
       import :: r8
       class(vector_field), intent(in) :: this
-      real(r8), intent(in) :: rhs
-      class(vector_field), allocatable :: vf_r !! The result of this operation
+      real(r8), intent(in)            :: rhs
+      class(vector_field), pointer    :: vf_r !! The result of this operation
     end function vf_r
     
     function vf_elem_vec(this,element)
@@ -832,7 +843,7 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this
-      class(scalar_field), allocatable :: vf_ret_sf !! The result of this operation
+      class(scalar_field), pointer    :: vf_ret_sf !! The result of this operation
     end function vf_ret_sf
 
     function impure_vf_ret_sf(this)
@@ -840,21 +851,21 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this
-      class(scalar_field), allocatable :: impure_vf_ret_sf !! The result of this operation
+      class(scalar_field), pointer    :: impure_vf_ret_sf !! The result of this operation
     end function impure_vf_ret_sf
     
     function vf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: vector_field
       class(vector_field), intent(in) :: this
-      class(vector_field), allocatable :: vf_ret_vf !! The result of this operation
+      class(vector_field), pointer    :: vf_ret_vf !! The result of this operation
     end function vf_ret_vf
     
     function impure_vf_ret_vf(this)
       !! \([{\rm operator}] {\rm field}\)
       import :: vector_field
       class(vector_field), intent(in) :: this
-      class(vector_field), allocatable :: impure_vf_ret_vf !! The result of this operation
+      class(vector_field), pointer    :: impure_vf_ret_vf !! The result of this operation
     end function impure_vf_ret_vf
     
     function vf_norm(this)
@@ -862,7 +873,7 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this
-      class(scalar_field), allocatable :: vf_norm !! The result of this operation
+      class(scalar_field), pointer    :: vf_norm !! The result of this operation
     end function vf_norm
     
     function vf_vf_ret_sf(this,rhs)
@@ -870,7 +881,7 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this, rhs
-      class(scalar_field), allocatable :: vf_vf_ret_sf !! The result of this operation
+      class(scalar_field), pointer    :: vf_vf_ret_sf !! The result of this operation
     end function vf_vf_ret_sf
 
     function vr_vf_ret_sf(lhs,rhs)
@@ -879,8 +890,8 @@ module abstract_fields_mod
       import :: vector_field
       import :: r8
       real(r8), dimension(:), intent(in) :: lhs
-      class(vector_field), intent(in) :: rhs
-      class(scalar_field), allocatable :: vr_vf_ret_sf !! The result of this operation
+      class(vector_field), intent(in)    :: rhs
+      class(scalar_field), pointer       :: vr_vf_ret_sf !! The result of this operation
     end function vr_vf_ret_sf
 
     function vf_vr_ret_sf(this,rhs)
@@ -888,9 +899,9 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       import :: r8
-      class(vector_field), intent(in) :: this
+      class(vector_field), intent(in)    :: this
       real(r8), dimension(:), intent(in) :: rhs
-      class(scalar_field), allocatable :: vf_vr_ret_sf !! The result of this operation
+      class(scalar_field), pointer       :: vf_vr_ret_sf !! The result of this operation
     end function vf_vr_ret_sf
 
     function sf_dx(this, dir, order)
@@ -908,7 +919,7 @@ module abstract_fields_mod
       class(vector_field), intent(in) :: this
       integer, intent(in) :: dir !! Direction in which to differentiation
       integer, optional, intent(in) :: order !! Order of the derivative, default = 1
-      class(vector_field), allocatable :: vf_dx !! The derivative
+      class(vector_field), pointer  :: vf_dx !! The derivative
     end function vf_dx
 
     function vf_comp_dx(this, dir, component, order)
@@ -942,17 +953,17 @@ module abstract_fields_mod
       import :: vector_field
       import :: r8
       real(r8), dimension(:), intent(in) :: lhs
-      class(vector_field), intent(in) :: rhs
-      class(vector_field), allocatable :: vr_vf !! The result of this operation
+      class(vector_field), intent(in)    :: rhs
+      class(vector_field), pointer       :: vr_vf !! The result of this operation
     end function vr_vf
 
     function vf_vr(this,rhs)
       !! \({\rm \vec{field}} [{\rm operator}] {\rm \vec{real}}\)
       import :: vector_field
       import :: r8
-      class(vector_field), intent(in) :: this
+      class(vector_field), intent(in)    :: this
       real(r8), dimension(:), intent(in) :: rhs
-      class(vector_field), allocatable :: vf_vr !! The result of this operation
+      class(vector_field), pointer       :: vf_vr !! The result of this operation
     end function vf_vr
 
     function vf_comp(this,comp)
@@ -960,8 +971,8 @@ module abstract_fields_mod
       import :: scalar_field
       import :: vector_field
       class(vector_field), intent(in) :: this
-      integer, intent(in) :: comp !! The index of the component
-      class(scalar_field), allocatable :: vf_comp !! Component number `comp`
+      integer, intent(in)             :: comp !! The index of the component
+      class(scalar_field), pointer    :: vf_comp !! Component number `comp`
     end function vf_comp
 
     function vf_bound(this,boundary,depth)
@@ -977,7 +988,7 @@ module abstract_fields_mod
       integer, intent(in) :: depth
         !! The number of layers of data-points to return at the
         !! specified boundary.
-      class(vector_field), allocatable :: vf_bound
+      class(vector_field), pointer :: vf_bound
         !! A field, of the same type as `this` and with the same
         !! resolution, number of dimensions etc., but containing only
         !! the points within the specified number of layers of cells
@@ -1103,15 +1114,6 @@ contains
     ! memory. If the depth count reaches one then the
     ! [[force_finalise]] method is called.
     !
-    ! In order to make it possible to call this procedure from
-    ! type-bound operators, the field must have `intent_in`. As such,
-    ! it is not possible to deallocate the `temporary` component. This
-    ! will result in a small memory leak unless the component is
-    ! deallocated in a finalisation routine. However, the leak is much
-    ! smaller in volume than if the memory-management system is not
-    ! implemented and the compiler fails to automatically deallocate
-    ! the field.
-    !
     class(abstract_field), intent(in) :: this
     if (associated(this%temporary)) then
       if (this%temporary > 1) this%temporary = this%temporary - 1
@@ -1119,6 +1121,32 @@ contains
     end if
   end subroutine clean_temp
 
+  pure function get_pool_id(this) result(id)
+    !* Author: Chris MacMackin
+    !  Date: May 2017
+    !
+    ! Gets the ID number for this object within an object pool.
+    !
+    class(abstract_field), intent(in) :: this
+    integer                           :: id
+    id = this%id_num
+  end function get_pool_id
+
+  pure subroutine set_pool_id(this, id)
+    !* Author: Chris MacMackin
+    !  Date: May 2017
+    !
+    ! Sets the ID number for this object within an object pool.
+    !
+    ! @Warning This method should only be called by the
+    ! [[scalar_pool]] or [[vector_pool]] class, or it may result in
+    ! the incorrect object being released back into the pool.
+    !
+    class(abstract_field), intent(inout) :: this
+    integer, intent(in)                  :: id
+    this%id_num = id
+  end subroutine set_pool_id
+  
   pure logical function memory_reusable(this)
     !* Author: Chris MacMackin
     !  Date: February 2017
@@ -1153,11 +1181,9 @@ contains
     ! Computes and returns \(${TEX}$({\rm field})\) for a scalar field.
     !
     class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res 
-    class(scalar_field), allocatable :: tmp
-    allocate(res, mold=field)
+    class(scalar_field), pointer    :: res 
+    call field%allocate_scalar_field(res)
     res = field%${FUNC}$()
-    call res%set_temp()
   end function scalar_field_${FUNC}$
   
 #:endfor
@@ -1190,11 +1216,10 @@ contains
     !
     ! Computes the negative version of the scalar field.
     !
-    class(scalar_field), intent(in) :: field
-    class(scalar_field), allocatable :: res
-    allocate(res,mold=field)
+    class(scalar_field), intent(in)  :: field
+    class(scalar_field), pointer     :: res
+    call field%allocate_scalar_field(res)
     res = 0.0_r8 - field
-    call res%set_temp()
   end function scalar_field_negation
 
   function vector_field_negation(field) result(res)
@@ -1204,7 +1229,7 @@ contains
     ! Computes the negative version of the vector field.
     !
     class(vector_field), intent(in) :: field
-    class(vector_field), allocatable :: res
+    class(vector_field), pointer    :: res
     allocate(res,mold=field)
     res = [0.0_r8] - field
     call res%set_temp()
