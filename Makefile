@@ -54,7 +54,7 @@ else
 endif
 
 FPP := fypp
-FPP_FLAGS := -DDEBUG -n
+FPP_FLAGS := -DDEBUG -n -DPOOL_SIZE=100
 
 # Include paths
 FCFLAGS += $(PROJECT_INCDIRS:%=-I%) -I$(INCDIR) -I/usr/include -I$(PFUNIT)/mod

@@ -231,7 +231,7 @@ contains
 @Test
   subroutine test_allocate_scalar(this)
     class(test_field), intent(inout) :: this
-    class(scalar_field), allocatable :: scalar
+    class(scalar_field), pointer :: scalar
     call this%field1%allocate_scalar_field(scalar)
     select type(scalar)
     type is(cheb1d_scalar_field)
@@ -239,12 +239,13 @@ contains
     class default
       @assertTrue(.false., message='Type other than cheb1d_scalar_field returned')
     end select
+    call scalar%clean_temp()
   end subroutine test_allocate_scalar
 
 @Test
   subroutine test_allocate_vector(this)
     class(test_field), intent(inout) :: this
-    class(vector_field), allocatable :: vector
+    class(vector_field), pointer :: vector
     call this%field1%allocate_vector_field(vector)
     select type(vector)
     type is(cheb1d_vector_field)
@@ -252,6 +253,7 @@ contains
     class default
       @assertTrue(.false., message='Type other than cheb1d_vector_field returned')
     end select
+    call vector%clean_temp()
   end subroutine test_allocate_vector
 
 @Test
