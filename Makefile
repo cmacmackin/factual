@@ -28,7 +28,7 @@ PFUNIT = $(HOME)/Code/pfunit-$(F90)
 # Output
 EXEC := 
 TEXEC := tests.x
-LIB := factual.a
+LIB := libfactual.a
 PREFIX := $(HOME)/.local
 LIBDIR := $(PREFIX)/lib
 INCDIR := $(PREFIX)/include
@@ -43,14 +43,19 @@ VENDOR_ = $(shell echo $(VENDOR) | tr A-Z a-z)
 
 ifeq ($(VENDOR_),intel)
   F90      := ifort
-  FCFLAGS  := -O0 -g -I$(INC) -module $(MDIR) -traceback -assume realloc_lhs
-  LDFLAGS  := -O0 -g -traceback
+  #FCFLAGS  := -O0 -g -module $(MDIR) -traceback -assume realloc_lhs
+  #LDFLAGS  := -O0 -g -traceback
+  FCFLAGS  := -Ofast -module $(MDIR) -assume realloc_lhs
+  LDFLAGS  := -Ofast
   COVFLAGS := 
 else
   F90      := gfortran-6
-  FCFLAGS  := -O0 -g -fcheck=all -J$(MDIR)
-  LDFLAGS  := -O0 -g
-  COVFLAGS := -fprofile-arcs -ftest-coverage
+  #FCFLAGS  := -O0 -g -fcheck=all -J$(MDIR)
+  #LDFLAGS  := -O0 -g
+  #COVFLAGS := -fprofile-arcs -ftest-coverage
+  FCFLAGS  := -O3 -J$(MDIR)
+  LDFLAGS  := -O3
+  COVFLAGS :=
 endif
 
 FPP := fypp
