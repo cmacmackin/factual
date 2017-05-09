@@ -1,5 +1,5 @@
 !
-!  scalar_pool.f90
+!  vector_pool.f90
 !  This file is part of FACTUAL.
 !
 !  Copyright 2017 Christopher MacMackin <cmacmackin@gmail.com>
@@ -20,44 +20,44 @@
 !  MA 02110-1301, USA.
 !  
 
-module scalar_pool_mod
+module vector_pool_mod
   !* Author: Chris MacMackin
   !  Date: May 2017
   !  License: GPLv3
   !
   ! An [object
   ! pool](https://en.wikipedia.org/wiki/Object_pool_pattern) which can
-  ! be used for "dynamically" allocating scalar fields.
+  ! be used for "dynamically" allocating vector fields.
   !
-  use abstract_fields_mod, only: scalar_field
+  use abstract_fields_mod, only: vector_field
   implicit none
 
   private
   
-  type, public :: scalar_pool
+  type, public :: vector_pool
     !* Author: Chris MacMackin
     !  Date: May 2017
     !
-    ! Provides a number of scalar fields which can be "dynamically"
+    ! Provides a number of vector fields which can be "dynamically"
     ! allocated as function results, without fear of memory
     ! leaks. This is an implementation of the [object
     ! pool](https://en.wikipedia.org/wiki/Object_pool_pattern)
     ! pattern.
     !
     integer                                    :: num_fields
-      !! The maximum number of scalar fields which can be used 
-    class(scalar_field), dimension(:), pointer :: pool => null()
-      !! An array of scalar fields which cane be used
+      !! The maximum number of vector fields which can be used 
+    class(vector_field), dimension(:), pointer :: pool => null()
+      !! An array of vector fields which cane be used
     logical, dimension(:), allocatable         :: in_use
-      !! Indicates whether a particular scalar field is in use.
+      !! Indicates whether a particular vector field is in use.
   contains
     procedure :: acquire
     procedure :: release
-  end type scalar_pool
+  end type vector_pool
 
-  interface scalar_pool
+  interface vector_pool
     module procedure :: constructor
-  end interface scalar_pool
+  end interface vector_pool
   
 contains
 
@@ -65,13 +65,13 @@ contains
     !* Author: Chris MacMackin
     !  Date: May 2017
     !
-    ! Creates a new scalar pool of the specified size and type.
+    ! Creates a new vector pool of the specified size and type.
     !
     integer, intent(in)             :: num_fields
       !! Number of fields to be available in the new pool
-    class(scalar_field), intent(in) :: prototype
+    class(vector_field), intent(in) :: prototype
       !! Dynamic type of the fields in the new pool
-    type(scalar_pool)               :: this
+    type(vector_pool)               :: this
     integer :: i
     this%num_fields = num_fields
     allocate(this%pool(num_fields), mold=prototype)
@@ -86,10 +86,10 @@ contains
     !* Author: Chris MacMackin
     !  Date: May 2017
     !
-    ! Returns a reference to an available scalar field.
+    ! Returns a reference to an available vector field.
     !
-    class(scalar_pool), intent(inout) :: this
-    class(scalar_field), pointer      :: field
+    class(vector_pool), intent(inout) :: this
+    class(vector_field), pointer      :: field
     integer :: i
     do i = 1, this%num_fields
       if (.not. this%in_use(i)) then
@@ -99,16 +99,20 @@ contains
         return
       end if
     end do
-    error stop ('Attempting to use more scalar fields than '// &
+    error stop ('Attempting to use more vector fields than '// &
                 'allocated in this pool.')
   end function acquire
 
   pure subroutine release(this, id)
-    class(scalar_pool), intent(inout) :: this
+    class(vector_pool), intent(inout) :: this
     integer, intent(in)               :: id
       !! The ID number/array subscript of the field object to be
       !! released.
+#:if defined('DEBUG')
+    if (.not. this%in_use(id)) error stop ('Attempting to release '// &
+                                           'unused field.')
+#:endif
     this%in_use(id) = .false.
   end subroutine release
   
-end module scalar_pool_mod
+end module vector_pool_mod

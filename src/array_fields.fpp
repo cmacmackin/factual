@@ -587,6 +587,7 @@ contains
     integer :: i
     call template%guard_temp()
     call template%allocate_scalar_field(this)
+    call this%unset_temp()
     select type(this)
     class is(array_scalar_field)
       call this%assign_subtype_meta_data(template)
@@ -611,6 +612,7 @@ contains
                   '`allocate_scalar_field` routine.')
     end select
     call template%clean_temp()
+    call this%set_temp()
   end function array_scalar_constructor1
 
   function array_scalar_constructor2(template, array) result(this)
@@ -1365,7 +1367,15 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data(size(this%field_data),this%dimensions()))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data,1) /= this%numpoints .or. &
+            size(res%field_data,2) /= this%dimensions()) then
+          deallocate(res%field_data)
+          allocate(res%field_data(this%numpoints,this%dimensions()))
+        end if
+      else
+        allocate(res%field_data(this%numpoints,this%dimensions()))
+      end if
       do i = 1, this%dimensions()
         res%field_data(:,i) = this%array_dx(this%field_data,i,1)
       end do
@@ -1680,7 +1690,12 @@ contains
     class is(array_scalar_field)
       call res%subtype_boundary(this,boundary,depth,slices)
       res%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
-      allocate(res%field_data(res%numpoints))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(res%numpoints))
+      else if (size(res%field_data) /= res%numpoints) then
+        deallocate(res%field_data)
+        allocate(res%field_data(res%numpoints))
+      end if
       res%field_data = &
            [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), &
             i=1,size(slices,2))]
@@ -1749,6 +1764,7 @@ contains
     integer :: i
     call template%guard_temp()
     call template%allocate_vector_field(this)
+    call this%unset_temp()
     select type(this)
     class is(array_vector_field)
       call this%assign_subtype_meta_data(template)
@@ -1768,6 +1784,7 @@ contains
                   '`allocate_vector_field` routine.')
     end select
     call template%clean_temp()
+    call this%set_temp()
   end function array_vector_constructor1
 
   function array_vector_constructor2(template,array) result(this)
@@ -2174,7 +2191,15 @@ contains
     class is(array_vector_field)
       min_dims = min(rhs%vector_dims, size(lhs))
       max_dims = max(rhs%vector_dims, size(lhs))
-      allocate(res%field_data(res%numpoints, max_dims))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data,1) /= res%numpoints .and. &
+            size(res%field_data,2) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(res%numpoints, max_dims))
+        end if
+      else
+        allocate(res%field_data(res%numpoints, max_dims))
+      end if
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
       end do
@@ -2210,7 +2235,15 @@ contains
     max_dims = max(this%vector_dims, size(rhs))
     select type(res)
     class is(array_vector_field)
-      allocate(res%field_data(res%numpoints, max_dims))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data,1) /= res%numpoints .and. &
+            size(res%field_data,2) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(res%numpoints, max_dims))
+        end if
+      else
+        allocate(res%field_data(res%numpoints, max_dims))
+      end if
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
       end do
@@ -2251,7 +2284,15 @@ contains
       class is(array_vector_field)
         if (rhs%vector_dimensions() > this%vector_dims) then
           call res%assign_meta_data(rhs, .false.)
-          allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
+          if (allocated(res%field_data)) then
+            if (size(res%field_data,1) /= this%numpoints .and. &
+                size(res%field_data,2) /= rhs%vector_dimensions()) then
+              deallocate(res%field_data)
+              allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+            end if
+          else
+            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+          end if
           res%vector_dims = rhs%vector_dimensions()
         else
           call res%assign_meta_data(this)
@@ -2268,6 +2309,15 @@ contains
       class is(uniform_vector_field)
         if (rhs%vector_dimensions() > this%vector_dims) then
           call res%assign_meta_data(rhs, .false.)
+          if (allocated(res%field_data)) then
+            if (size(res%field_data,1) /= this%numpoints .and. &
+                size(res%field_data,2) /= rhs%vector_dimensions()) then
+              deallocate(res%field_data)
+              allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+            end if
+          else
+            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+          end if
           allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
           res%vector_dims = rhs%vector_dimensions()
         else
@@ -2313,7 +2363,15 @@ contains
     max_dims = max(rhs%vector_dims, size(lhs))
     select type(res)
     class is(array_vector_field)
-      allocate(res%field_data(res%numpoints, max_dims))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data,1) /= res%numpoints .and. &
+            size(res%field_data,2) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(res%numpoints, max_dims))
+        end if
+      else
+        allocate(res%field_data(res%numpoints, max_dims))
+      end if
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
       end do
@@ -2349,7 +2407,15 @@ contains
     max_dims = max(this%vector_dims, size(rhs))
     select type(res)
     class is(array_vector_field)
-      allocate(res%field_data(res%numpoints, max_dims))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data,1) /= res%numpoints .and. &
+            size(res%field_data,2) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(res%numpoints, max_dims))
+        end if
+      else
+        allocate(res%field_data(res%numpoints, max_dims))
+      end if
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
       end do
@@ -2509,7 +2575,6 @@ contains
     call this%allocate_vector_field(res)
     select type(res)
     class is(array_vector_field)
-      allocate(res%field_data, mold=this%field_data)
       call res%assign_meta_data(this)
       do i = 1, this%vector_dims
         res%field_data(:,i) = this%array_dx(this%field_data(:,i), &
@@ -2999,7 +3064,7 @@ contains
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      this%vector_dims = this%dimensions()
+      this%vector_dims = rhs%dimensions()
       if (allocated(this%field_data)) then
         if (.not. allocated(rhs%field_data)) then
           deallocate(this%field_data)
@@ -3249,7 +3314,13 @@ contains
       call res%subtype_boundary(this,boundary,depth,slices)
       res%vector_dims = this%vector_dims
       res%numpoints = sum(elements_in_slice(slices(1,:), slices(2,:), slices(3,:)))
-      allocate(res%field_data(res%numpoints,res%vector_dims))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(res%numpoints,res%vector_dims))
+      else if (size(res%field_data,1) /= res%numpoints .or. &
+               size(res%field_data,2) /= res%vector_dims) then
+        deallocate(res%field_data)
+        allocate(res%field_data(res%numpoints,res%vector_dims))
+      end if
       do concurrent (j=1:res%vector_dims)
         res%field_data(:,j) = &
              [(this%field_data(slices(1,i):slices(2,i):slices(3,i),j), &

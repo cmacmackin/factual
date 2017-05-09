@@ -1039,7 +1039,6 @@ contains
       error stop ('Assigning incompatible type to uniform_scalar_field')
     end select
     call rhs%clean_temp()
-    call this%unset_temp()
   end subroutine uniform_scalar_assign
 
   logical function uniform_scalar_is_equal(this,rhs) result(iseq)
@@ -1539,7 +1538,7 @@ contains
     ! uniform field.
     !
     class(uniform_vector_field), intent(in) :: this
-    real(r8), dimension(:), pointer :: res
+    real(r8), dimension(:), allocatable     :: res
     call this%guard_temp()
     res = this%field_data
     call this%clean_temp()

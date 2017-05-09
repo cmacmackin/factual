@@ -451,8 +451,15 @@ contains
        !   allocate(this%colloc_points(this%elements() + 1))
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
-       else
-          if (associated(this%colloc_points)) nullify(this%colloc_points)
+        else
+          if (associated(this%colloc_points)) then
+            if (this%differentiable) then
+              nullify(this%colloc_points)
+            else
+              deallocate(this%colloc_points)
+            end if
+          end if
+          allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
@@ -462,6 +469,7 @@ contains
           deallocate(this%colloc_points)
         end if
       end if
+      this%differentiable = rhs%differentiable
     class is(cheb1d_vector_field)
       this%extent = rhs%extent
       if (associated(rhs%colloc_points)) then
@@ -470,7 +478,14 @@ contains
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          if (associated(this%colloc_points)) then
+            if (this%differentiable) then
+              nullify(this%colloc_points)
+            else
+              deallocate(this%colloc_points)
+            end if
+          end if
+          allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
@@ -480,6 +495,7 @@ contains
           deallocate(this%colloc_points)
         end if
       end if
+      this%differentiable = rhs%differentiable
     end select
     call rhs%clean_temp()
   end subroutine cheb1d_scalar_assign_meta
@@ -806,15 +822,18 @@ contains
     !
     class(cheb1d_scalar_field), intent(in) :: this
     class(vector_field), pointer           :: grid
+    class(vector_field), pointer           :: tmp
       !! A field where the values indicate the grid spacing that
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
     call this%guard_temp()
     call this%allocate_vector_field(grid)
+    call grid%assign_meta_data(this)
     select type(grid)
     class is(array_vector_field)
-      grid = array_vector_field(grid, grid_to_spacing(this%colloc_points))
+      tmp => array_vector_field(grid, grid_to_spacing(this%colloc_points))
     end select
+    grid => tmp
     call this%clean_temp()
   end function cheb1d_scalar_grid_spacing
 
@@ -828,7 +847,7 @@ contains
     if (this%get_pool_id() /= non_pool_id) call scalars%release(this%get_pool_id())
   end subroutine cheb1d_scalar_force_finalise
 
-  subroutine cheb1d_scalar_finalise(this)
+  elemental subroutine cheb1d_scalar_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !
@@ -1081,7 +1100,7 @@ contains
     class(cheb1d_vector_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
       !! If present and false, do not allocate the array of `this`.
-    call this%guard_temp(); call rhs%guard_temp()
+    call rhs%guard_temp()
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
@@ -1091,7 +1110,12 @@ contains
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          if (this%differentiable) then
+            nullify(this%colloc_points)
+          else
+            deallocate(this%colloc_points)
+          end if
+          allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
@@ -1101,6 +1125,7 @@ contains
           deallocate(this%colloc_points)
         end if
       end if
+      this%differentiable = rhs%differentiable
     class is(cheb1d_vector_field)
       this%extent = rhs%extent
       if (associated(rhs%colloc_points)) then
@@ -1109,7 +1134,12 @@ contains
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          if (this%differentiable) then
+            nullify(this%colloc_points)
+          else
+            deallocate(this%colloc_points)
+          end if
+          allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
         end if
       else if (associated(this%colloc_points)) then
@@ -1119,8 +1149,9 @@ contains
           deallocate(this%colloc_points)
         end if
       end if
+      this%differentiable = rhs%differentiable
     end select
-    call this%clean_temp(); call rhs%clean_temp()
+    call rhs%clean_temp()
   end subroutine cheb1d_vector_assign_meta
 
   subroutine cheb1d_vector_allocate_scalar(this, new_field)
@@ -1455,12 +1486,15 @@ contains
       !! A field where the values indicate the grid spacing that
       !! point. Each vector dimension representes the spacing of the
       !! grid in that direction.
+    class(vector_field), pointer :: tmp
     call this%guard_temp()
     call this%allocate_vector_field(grid)
+    call grid%assign_meta_data(this)
     select type(grid)
     class is(array_vector_field)
-      grid = array_vector_field(grid, grid_to_spacing(this%colloc_points))
+      tmp => array_vector_field(grid, grid_to_spacing(this%colloc_points))
     end select
+    grid => tmp
     call this%clean_temp()
   end function cheb1d_vector_grid_spacing
 
@@ -1474,7 +1508,7 @@ contains
     if (this%get_pool_id() /= non_pool_id) call vectors%release(this%get_pool_id())
   end subroutine cheb1d_vector_force_finalise
 
-  subroutine cheb1d_vector_finalise(this)
+  elemental subroutine cheb1d_vector_finalise(this)
     !* Author: Chris MacMackin
     !  Date: January 2017
     !

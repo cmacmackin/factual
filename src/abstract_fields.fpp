@@ -1181,9 +1181,11 @@ contains
     ! Computes and returns \(${TEX}$({\rm field})\) for a scalar field.
     !
     class(scalar_field), intent(in) :: field
-    class(scalar_field), pointer    :: res 
+    class(scalar_field), pointer    :: res
+    call field%guard_temp()
     call field%allocate_scalar_field(res)
     res = field%${FUNC}$()
+    call field%clean_temp()
   end function scalar_field_${FUNC}$
   
 #:endfor
@@ -1196,7 +1198,9 @@ contains
     !
     class(scalar_field), intent(in) :: field
     real(r8) :: res
+    call field%guard_temp()
     res = field%minval()
+    call field%clean_temp()
   end function scalar_field_minval
 
   function scalar_field_maxval(field) result(res)
@@ -1207,7 +1211,9 @@ contains
     !
     class(scalar_field), intent(in) :: field
     real(r8) :: res
+    call field%guard_temp()
     res = field%maxval()
+    call field%clean_temp()
   end function scalar_field_maxval
 
   function scalar_field_negation(field) result(res)
@@ -1218,8 +1224,10 @@ contains
     !
     class(scalar_field), intent(in)  :: field
     class(scalar_field), pointer     :: res
+    call field%guard_temp()
     call field%allocate_scalar_field(res)
     res = 0.0_r8 - field
+    call field%clean_temp()
   end function scalar_field_negation
 
   function vector_field_negation(field) result(res)
