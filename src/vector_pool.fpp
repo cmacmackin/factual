@@ -91,16 +91,24 @@ contains
     class(vector_pool), intent(inout) :: this
     class(vector_field), pointer      :: field
     integer :: i
+    logical :: found_obj
+    found_obj = .false.
+    !$omp critical
     do i = 1, this%num_fields
       if (.not. this%in_use(i)) then
         this%in_use(i) = .true.
-        field => this%pool(i)
-        call field%set_temp()
-        return
+	found_obj = .true.
+	exit
       end if
     end do
-    error stop ('Attempting to use more vector fields than '// &
-                'allocated in this pool.')
+    !$omp end critical
+    if (found_obj) then
+      field => this%pool(i)
+      call field%set_temp()
+    else
+      error stop ('Attempting to use more vector fields than '// &
+                  'allocated in this pool.')
+    end if
   end function acquire
 
   pure subroutine release(this, id)

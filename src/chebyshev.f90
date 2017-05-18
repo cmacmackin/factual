@@ -129,7 +129,7 @@ contains
     else
       c_i = 1._r8
     end if
-    do j = 1, nodes+1
+    do concurrent (j=1:nodes+1)
       if (j == row) then
         if (j == 1) then
           diff(j) = (2*nodes**2 + 1.0_r8)/6._r8
@@ -182,9 +182,9 @@ contains
     integer(c_int), parameter :: field_size_init = -565
     integer(c_int), save :: field_size = field_size_init
     integer(c_int) :: field_size_new
-    real(c_double), dimension(:), pointer, save :: array1, array2
-    real(r8) :: inverse_width, field_centre
-    type(c_ptr), save :: plan_dct, plan_dst, array_c1, array_c2
+    real(c_double), dimension(:), pointer, save :: array1, array2, array3
+    real(r8) :: inverse_width, field_centre, array1_lower
+    type(c_ptr), save :: plan_dct, plan_dst, array_c1, array_c2, array_c3
     if (present(order)) then
       order_ = order
     else
@@ -197,6 +197,7 @@ contains
       if (field_size /= field_size_init) then
         call fftw_free(array_c1)
         call fftw_free(array_c2)
+        call fftw_free(array_c3)
         call fftw_destroy_plan(plan_dct)
         call fftw_destroy_plan(plan_dst)
       end if
@@ -205,31 +206,33 @@ contains
       call c_f_pointer(array_c1, array1, [int(field_size,c_size_t)])
       array_c2 = fftw_alloc_real(int(field_size,c_size_t))
       call c_f_pointer(array_c2, array2, [int(field_size,c_size_t)])
+      array_c3 = fftw_alloc_real(int(field_size,c_size_t))
+      call c_f_pointer(array_c3, array3, [int(field_size,c_size_t)])
       plan_dct = fftw_plan_r2r_1d(field_size, array1, array2, FFTW_REDFT00, &
-                                  FFTW_MEASURE)
-      plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array1, FFTW_RODFT00, &
-                                  FFTW_MEASURE)
+                                  FFTW_PATIENT)
+      plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array3, FFTW_RODFT00, &
+                                  FFTW_PATIENT)
     end if
     inverse_width = 2.0_c_double/(xvals(1) - xvals(field_size))
     field_centre = xvals(1) - 1.0_r8/(inverse_width)
     array1 = field_data
     do while(ord > 0)
       call fftw_execute_r2r(plan_dct,array1,array2)
-      array2 = pi/real(field_size-1,c_double) * array2
-      forall (i=1:field_size-1) array1(i) = -real(i,c_double)*array2(i+1)
+      do concurrent (i=1:field_size-1) 
+        array2(i+1) = array2(i+1) / (field_size-1)
+        array1(i) = -i*pi*array2(i+1)
+        array2(i+1) = i**2 * array2(i+1)
+      end do
       array1(field_size - 1) = array1(field_size - 1)*0.5_r8
       array1(field_size) = 0.0_c_double
-      call fftw_execute_r2r(plan_dst,array1,array1)
-      array1 = 0.5_c_double/pi * array1
-      forall (i=2:field_size-1) array1(i) = -array1(i-1)/ &
-          sqrt(1.0_c_double - ((xvals(i)-field_centre)*inverse_width)**2)
-      array2 = 1.0_c_double/pi * array2
-      forall (i=2:field_size) array2(i) = real(i-1,c_double)**2 * array2(i)
-      array1(1) = sum(array2(2:field_size-1))
-      array1(1) = array1(1) + 0.5_c_double*array2(field_size)
-      forall (i=2:field_size) array2(i) = (-1._c_double)**(i) * array2(i)
-      array1(field_size) = sum(array2(2:field_size-1))
-      array1(field_size) = array1(field_size) + 0.5_c_double*array2(field_size)
+      call fftw_execute_r2r(plan_dst,array1,array3)
+      array1(1) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
+      do concurrent (i=2:field_size) 
+        array1(i) = -0.5_c_double/pi * array3(i-1)/ &
+             sqrt(1.0_c_double - ((xvals(i)-field_centre)*inverse_width)**2)
+        array2(i) = (-1)**(i) * array2(i)
+      end do
+      array1(field_size) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
       ord = ord - 1
     end do
     field_data = array1 * inverse_width**order_
