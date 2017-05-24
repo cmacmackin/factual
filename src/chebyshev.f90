@@ -227,11 +227,12 @@ contains
       array1(field_size) = 0.0_c_double
       call fftw_execute_r2r(plan_dst,array1,array3)
       array1(1) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
-      do concurrent (i=2:field_size) 
+      do concurrent (i=2:field_size-1)
         array1(i) = -0.5_c_double/pi * array3(i-1)/ &
              sqrt(1.0_c_double - ((xvals(i)-field_centre)*inverse_width)**2)
         array2(i) = (-1)**(i) * array2(i)
       end do
+      array2(field_size) = (-1)**(field_size) * array2(field_size)
       array1(field_size) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
       ord = ord - 1
     end do

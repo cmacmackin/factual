@@ -1510,6 +1510,7 @@ contains
           allocate(this%field_data(size(rhs%field_data,1)))
         end if
       else if (allocated(rhs%field_data) .and. al) then
+        if (allocated(this%field_data)) deallocate(this%field_data)
         allocate(this%field_data(size(rhs%field_data,1)))
       end if
     end select
