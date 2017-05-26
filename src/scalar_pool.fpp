@@ -106,7 +106,7 @@ contains
       field => this%pool(i)
       call field%set_temp()
     else
-      error stop ('Attempting to use more vector fields than '// &
+      error stop ('Attempting to use more scalar fields than '// &
                   'allocated in this pool.')
     end if
   end function acquire
