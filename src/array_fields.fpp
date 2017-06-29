@@ -890,7 +890,15 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      allocate(res%field_data(rhs%numpoints,size(lhs)))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(rhs%numpoints,size(lhs)))
+      else
+        if (size(res%field_data,1) /= rhs%numpoints .or. &
+            size(res%field_data,2) /= size(lhs)) then
+          deallocate(res%field_data)
+          allocate(res%field_data(rhs%numpoints,size(lhs)))
+        end if
+      end if
       res%vector_dims = size(lhs)
       do concurrent (i=1:rhs%numpoints)
         res%field_data(i,:) = rhs%field_data(i) * lhs

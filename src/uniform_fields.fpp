@@ -1718,7 +1718,14 @@ contains
     max_dims = max(rhs%vector_dims, size(lhs))
     select type(res)
     class is(uniform_vector_field)
-      allocate(res%field_data(max_dims))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(max_dims))
+      else
+        if (size(res%field_data) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(max_dims))
+        end if
+      end if
       res%vector_dims = max_dims
       res%field_data(:min_dims) = lhs(:min_dims) - rhs%field_data(:min_dims)
       if (rhs%vector_dims > size(lhs)) then
@@ -1749,7 +1756,14 @@ contains
     class is(uniform_vector_field)
       min_dims = min(this%vector_dims, size(rhs))
       max_dims = max(this%vector_dims, size(rhs))
-      allocate(res%field_data(max_dims))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(max_dims))
+      else
+        if (size(res%field_data) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(max_dims))
+        end if
+      end if
       res%vector_dims = max_dims
       res%field_data(:min_dims) = this%field_data(:min_dims) - rhs(:min_dims)
       if (this%vector_dims > size(rhs)) then
@@ -1795,7 +1809,14 @@ contains
     call rhs%allocate_vector_field(res)
     select type(res)
     class is(uniform_vector_field)
-      allocate(res%field_data(max_dims))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(max_dims))
+      else
+        if (size(res%field_data) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(max_dims))
+        end if
+      end if
       res%vector_dims = max_dims
       res%field_data(:min_dims) = lhs(:min_dims) + rhs%field_data(:min_dims)
       if (rhs%vector_dims > size(lhs)) then
@@ -1826,7 +1847,14 @@ contains
     class is(uniform_vector_field)
       min_dims = min(this%vector_dims, size(rhs))
       max_dims = max(this%vector_dims, size(rhs))
-      allocate(res%field_data(max_dims))
+      if (.not. allocated(res%field_data)) then
+        allocate(res%field_data(max_dims))
+      else
+        if (size(res%field_data) /= max_dims) then
+          deallocate(res%field_data)
+          allocate(res%field_data(max_dims))
+        end if
+      end if
       res%vector_dims = max_dims
       res%field_data(:min_dims) = this%field_data(:min_dims) + rhs(:min_dims)
       if (this%vector_dims > size(rhs)) then
