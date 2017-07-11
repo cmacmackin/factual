@@ -158,6 +158,9 @@ module array_fields_mod
     procedure(sf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of the scalar field using a 1-D array of
       !! data passed to it.
+    procedure(sf_array_interp), deferred :: array_interpolate
+      !! Interpolates a value in the field, using a 1-D array of data
+      !! passed to it.
     procedure, public :: get_element => array_scalar_get_element
       !! Returns one of the constituent values of the field, i.e. the 
       !! field's value at a particular location.
@@ -180,7 +183,10 @@ module array_fields_mod
       !! method, but that is unable to deallocate the pointer to the
       !! data array--only the array itself. In compilers which support
       !! finalisation, this method eliminates the small memory leak
-      !! from the pointer..
+      !! from the pointer.
+    procedure, public :: interpolate => array_scalar_interp
+      !! Interpolates the value of the field at the specified
+      !! location.
   end type array_scalar_field
 
   interface array_scalar_field
@@ -279,6 +285,19 @@ module array_fields_mod
       real(r8), dimension(:), allocatable   :: res
         !! The spatial derivative of order `order` taken in direction `dir`
     end function sf_scalar_dx
+
+    function sf_array_interp(this, data_array, location) result(val)
+      import :: array_scalar_field
+      import :: r8
+      class(array_scalar_field), intent(in) :: this
+      real(r8), dimension(:), intent(in)    :: data_array
+        !! An array holding the datapoints for this field, identical
+        !! in layout to that stored the field itself.
+      real(r8), dimension(:), intent(in)    :: location
+        !! The location at which to calculate the interpolated value.
+      real(r8)                              :: val
+        !! The spatial derivative of order `order` taken in direction `dir`
+    end function sf_array_interp
 
     function scalar_init(x) result(scalar)
       !! Function used to specify value held by a scalar field at
@@ -412,6 +431,9 @@ module array_fields_mod
     procedure(vf_scalar_dx), deferred :: array_dx
       !! Takes the derivative of particular vector component of the
       !! field, using a 1-D array of data passed to it.
+    procedure(vf_array_interp), deferred :: array_interpolate
+      !! Interpolates a value in the field, using a 2-D array of data
+      !! passed to it.
     procedure :: get_element_vector => array_vector_get_element_vec
       !! Returns ones of the constituent vectors of the field, i.e. the 
       !! field's value at a particular location.
@@ -443,6 +465,9 @@ module array_fields_mod
       !! data array--only the array itself. In compilers which support
       !! finalisation, this method eliminates the small memory leak
       !! from the pointer.
+    procedure, public :: interpolate => array_vector_interp
+      !! Interpolates the value of the field at the specified
+      !! location.
   end type array_vector_field
 
   interface array_vector_field
@@ -543,6 +568,19 @@ module array_fields_mod
         !! The spatial derivative of order `order` taken in direction `dir`
     end function vf_scalar_dx
     
+    function vf_array_interp(this, data_array, location) result(val)
+      import :: array_vector_field
+      import :: r8
+      class(array_vector_field), intent(in) :: this
+      real(r8), dimension(:,:), intent(in)  :: data_array
+        !! An array holding the datapoints for this field, identical
+        !! in layout to that stored the field itself.
+      real(r8), dimension(:), intent(in)    :: location
+        !! The location at which to calculate the interpolated value.
+      real(r8), dimension(:), allocatable   :: val
+        !! The spatial derivative of order `order` taken in direction `dir`
+    end function vf_array_interp
+
     function vector_init(x) result(vector)
       !! Function used to specify value held by a vector field at
       !! location `x`.
@@ -1741,6 +1779,21 @@ contains
     res = allocated(this%field_data)
     call this%clean_temp()
   end function array_scalar_is_allocated
+
+  function array_scalar_interp(this, location) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Interpolates the value of the field at the specified location.
+    !
+    class(array_scalar_field), intent(in) :: this
+    real(r8), dimension(:), intent(in)    :: location
+      !! The location at which to calculate the interpolated value.
+    real(r8)                              :: val
+    call this%guard_temp()
+    val = this%array_interpolate(this%field_data, location)
+    call this%clean_temp()
+  end function array_scalar_interp
 
 
   !=====================================================================
@@ -3367,5 +3420,19 @@ contains
     call this%unset_temp()
   end subroutine array_vector_finalise
 
+  function array_vector_interp(this, location) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Interpolates the value of the field at the specified location.
+    !
+    class(array_vector_field), intent(in) :: this
+    real(r8), dimension(:), intent(in)    :: location
+      !! The location at which to calculate the interpolated value.
+    real(r8), dimension(:), allocatable   :: val
+    call this%guard_temp()
+    val = this%array_interpolate(this%field_data, location)
+    call this%clean_temp()
+  end function array_vector_interp
 
 end module array_fields_mod

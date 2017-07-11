@@ -35,7 +35,7 @@ module cheb1d_fields_mod
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use utils_mod, only: grid_to_spacing, open_or_create_hdf_group, &
-                       create_hdf_dset
+                       create_hdf_dset, lagrange_interp
   use abstract_fields_mod
   use scalar_pool_mod, only: scalar_pool
   use vector_pool_mod, only: vector_pool
@@ -136,6 +136,9 @@ $:public_unary()
       !! data array--only the array itself. In compilers which support
       !! finalisation, this method eliminates the small memory leak
       !! from the pointer.
+    procedure :: array_interpolate => cheb1d_scalar_interp
+      !! Interpolates a value in the field, using a 1-D array of data
+      !! passed to it.
   end type cheb1d_scalar_field
   
   interface cheb1d_scalar_field
@@ -215,6 +218,9 @@ $:public_unary()
       !! data array--only the array itself. In compilers which support
       !! finalisation, this method eliminates the small memory leak
       !! from the pointer..
+    procedure :: array_interpolate => cheb1d_vector_interp
+      !! Interpolates a value in the field, using a 2-D array of data
+      !! passed to it.
   end type cheb1d_vector_field
   
   interface cheb1d_vector_field
@@ -867,6 +873,24 @@ contains
       end if
     end if
   end subroutine cheb1d_scalar_finalise
+
+  function cheb1d_scalar_interp(this, data_array, location) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Interpolates the value of the field at the specified location.
+    !
+    class(cheb1d_scalar_field), intent(in) :: this
+    real(r8), dimension(:), intent(in)     :: data_array
+      !! An array holding the datapoints for this field, identical
+      !! in layout to that stored the field itself.
+    real(r8), dimension(:), intent(in)     :: location
+      !! The location at which to calculate the interpolated value.
+    real(r8)                               :: val
+    call this%guard_temp()
+    val = lagrange_interp(location(1), data_array, this%colloc_points)
+    call this%clean_temp()
+  end function cheb1d_scalar_interp
 
 
   !=====================================================================
@@ -1528,5 +1552,26 @@ contains
       end if
     end if
   end subroutine cheb1d_vector_finalise
+
+  function cheb1d_vector_interp(this, data_array, location) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Interpolates the value of the field at the specified location.
+    !
+    class(cheb1d_vector_field), intent(in) :: this
+    real(r8), dimension(:,:), intent(in)   :: data_array
+      !! An array holding the datapoints for this field, identical
+      !! in layout to that stored the field itself.
+    real(r8), dimension(:), intent(in)     :: location
+      !! The location at which to calculate the interpolated value.
+    real(r8), dimension(:), allocatable    :: val
+    integer :: i
+    call this%guard_temp()
+    do i = 1, size(data_array, 2)
+      val(i) = lagrange_interp(location(1), data_array(:,i), this%colloc_points)
+    end do
+    call this%clean_temp()
+  end function cheb1d_vector_interp
 
 end module cheb1d_fields_mod

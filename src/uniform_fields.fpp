@@ -183,6 +183,9 @@ module uniform_fields_mod
       !! Frees the data array for this field, in order to reduce the
       !! volume of any memory leaks. In this case, there are no large
       !! arrays so nothing happens.
+    procedure, public :: interpolate => uniform_scalar_interp
+      !! Interpolates the value of the field at the specified
+      !! location.
   end type uniform_scalar_field
 
   interface uniform_scalar_field
@@ -338,6 +341,9 @@ module uniform_fields_mod
       !! workaround for the fact that `gfortran` fails to deallocate
       !! polymorphic allocatable function results. While some memory
       !! will still be leaked, this will minimize the ammount.
+    procedure, public :: interpolate => uniform_vector_interp
+      !! Interpolates the value of the field at the specified
+      !! location.
   end type uniform_vector_field
 
   interface uniform_vector_field
@@ -1376,6 +1382,21 @@ contains
       call scalars%release(this%get_pool_id())
     end if
   end subroutine uniform_scalar_finalize
+
+  function uniform_scalar_interp(this, location) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Interpolates the value of the field at the specified location.
+    !
+    class(uniform_scalar_field), intent(in) :: this
+    real(r8), dimension(:), intent(in)      :: location
+      !! The location at which to calculate the interpolated value.
+    real(r8)                                :: val
+    call this%guard_temp()
+    val = this%field_data
+    call this%clean_temp()
+  end function uniform_scalar_interp
 
 
   !=====================================================================
@@ -2624,5 +2645,20 @@ contains
       if (allocated(this%field_data)) deallocate(this%field_data)
     end if
   end subroutine uniform_vector_finalize
+
+  function uniform_vector_interp(this, location) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Interpolates the value of the field at the specified location.
+    !
+    class(uniform_vector_field), intent(in) :: this
+    real(r8), dimension(:), intent(in)      :: location
+      !! The location at which to calculate the interpolated value.
+    real(r8), dimension(:), allocatable     :: val
+    call this%guard_temp()
+    val = this%field_data
+    call this%clean_temp()
+  end function uniform_vector_interp
 
 end module uniform_fields_mod

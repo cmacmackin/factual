@@ -227,6 +227,9 @@ module abstract_fields_mod
     procedure(sf_set_bound), public, deferred :: set_boundary
       !! Set the field values at the specified boundary to be the same
       !! as in the passed array.
+    procedure(sf_interp), public, deferred :: interpolate
+      !! Interpolates the value of the field at the specified
+      !! location.
     generic, public :: operator(*) => field_multiply_field, &
         field_multiply_vecfield, real_multiply_field, &
         field_multiply_real, real_array_multiply_field, &
@@ -350,6 +353,9 @@ module abstract_fields_mod
     procedure(vf_set_bound), public, deferred :: set_boundary
       !! Set the field values at the specified boundary to be the same
       !! as in the passed array.
+    procedure(vf_interp), public, deferred :: interpolate
+      !! Interpolates the value of the field at the specified
+      !! location.
     generic, public :: operator(*) => field_multiply_field, &
         real_multiply_field, field_multiply_real
     generic, public :: operator(/) => field_divide_field, field_divide_real
@@ -1031,6 +1037,24 @@ module abstract_fields_mod
       logical :: iseq
         !! True if two fields are equal, false otherwise
     end function vf_is_equal
+
+    function sf_interp(this, location) result(val)
+      import :: r8
+      import :: scalar_field
+      class(scalar_field), intent(in)    :: this
+      real(r8), dimension(:), intent(in) :: location
+        !! The location at which to calculate the interpolated value.
+      real(r8)                           :: val
+    end function sf_interp
+
+    function vf_interp(this, location) result(val)
+      import :: r8
+      import :: vector_field
+      class(vector_field), intent(in)     :: this
+      real(r8), dimension(:), intent(in)  :: location
+        !! The location at which to calculate the interpolated value.
+      real(r8), dimension(:), allocatable :: val
+    end function vf_interp
   end interface
 
 #:for FUNC, TEX in UNARY_FUNCTIONS

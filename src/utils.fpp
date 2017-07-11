@@ -42,7 +42,7 @@ module utils_mod
   private
 
   public :: is_nan, check_set_from_raw, elements_in_slice, grid_to_spacing, &
-            open_or_create_hdf_group, create_hdf_dset
+            open_or_create_hdf_group, create_hdf_dset, lagrange_interp
 
 contains
 
@@ -227,6 +227,84 @@ contains
     end if
     call h5rcreate_f(loc_id, dset_name, ref, hdferr)
   end subroutine get_hdf_dset_ref
+
+  function lagrange_interp(x, f, xf) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Performs Lagrange interpolation. This is only suitable for
+    ! nonuniformly space data-points, such as Chebyshev colocation
+    ! nodes.
+    !
+    real(r8), intent(in)                     :: x
+    real(r8), dimension(:), intent(in)       :: f
+      !! The data values to interpolate between.
+    real(r8), dimension(size(f)), intent(in) :: xf
+      !! The coordinates of the data values. These must be either
+      !! monotonically increasing or decreasing.
+    real(r8)                                 :: val
+
+    integer :: i, j, n
+    real(r8) :: wx, denom
+    logical :: increasing, recalc
+    real(r8), dimension(:), allocatable, save :: w
+    real(r8), save :: x1, xn
+
+    val = 0._r8
+    denom = 0._r8
+
+    n = size(f)
+    
+    ! If asked to interpolate outside of domain, return nearest value
+    if (xf(1) < xf(n)) then
+      if (x < xf(1)) then
+        val = f(1)
+        return
+      else if (x > xf(n)) then
+        val = f(n)
+        return
+      end if
+    else
+      if (x > xf(1)) then
+        val = f(1)
+        return
+      else if (x < xf(n)) then
+        val = f(n)
+        return
+      end if
+    end if
+
+    if (allocated(w)) then
+      if (size(w) /= n) then
+        recalc = .true.
+        deallocate(w)
+        allocate(w(n))
+      else
+        recalc = (xf(1) == x1 .and. xf(n) == xn)        
+      end if
+    else
+      recalc = .true.
+      allocate(w(n))
+    end if
+    if (recalc) then
+      x1 = xf(1)
+      xn = xf(n)
+      denom = 0._r8
+      do i = 1, n
+        w(i) = 1._r8
+        do j = 1, n
+          if (i /= j) w(i) = w(i) * (xf(i) - xf(j))
+        end do
+      end do
+    end if
+
+    do i = 1, n
+      wx = 1._r8/(w(i)*(x - xf(i)))
+      val = val + wx*f(i)
+      denom = denom + wx
+    end do
+    val = val/denom
+  end function lagrange_interp
 
 !  subroutine set_attribute_ref(loc_id, dset_name, attr_name, ref, &
 !                               errcode)
