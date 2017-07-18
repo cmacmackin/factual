@@ -35,7 +35,7 @@ module cheb1d_fields_mod
   !
   use iso_fortran_env, only: r8 => real64, stderr => error_unit
   use utils_mod, only: grid_to_spacing, open_or_create_hdf_group, &
-                       create_hdf_dset, lagrange_interp
+                       create_hdf_dset, linear_interp
   use abstract_fields_mod
   use scalar_pool_mod, only: scalar_pool
   use vector_pool_mod, only: vector_pool
@@ -888,7 +888,7 @@ contains
       !! The location at which to calculate the interpolated value.
     real(r8)                               :: val
     call this%guard_temp()
-    val = lagrange_interp(location(1), data_array, this%colloc_points)
+    val = linear_interp(location(1), data_array, this%colloc_points)
     call this%clean_temp()
   end function cheb1d_scalar_interp
 
@@ -1569,7 +1569,7 @@ contains
     integer :: i
     call this%guard_temp()
     do i = 1, size(data_array, 2)
-      val(i) = lagrange_interp(location(1), data_array(:,i), this%colloc_points)
+      val(i) = linear_interp(location(1), data_array(:,i), this%colloc_points)
     end do
     call this%clean_temp()
   end function cheb1d_vector_interp

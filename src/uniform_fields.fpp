@@ -552,8 +552,8 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_scalar_field(res)
-    res = this%field_data * rhs
+    !call rhs%allocate_scalar_field(res)
+    res => this%field_data * rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_m_sf
 
@@ -567,8 +567,8 @@ contains
     class(vector_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The result of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_vector_field(res)
-    res = this%field_data * rhs
+    !call rhs%allocate_vector_field(res)
+    res => this%field_data * rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_m_vf
 
@@ -670,8 +670,8 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_scalar_field(res)
-    res = this%field_data / rhs
+    !call rhs%allocate_scalar_field(res)
+    res => this%field_data / rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_d_sf
 
@@ -693,7 +693,7 @@ contains
       error stop ('Non-uniform_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
     end select
-    call rhs%guard_temp()
+    call rhs%clean_temp()
   end function uniform_scalar_r_d_sf
 
   function uniform_scalar_vr_d_sf(lhs,rhs) result(res)
@@ -750,8 +750,8 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_scalar_field(res)
-    res = this%field_data - rhs
+    !call rhs%allocate_scalar_field(res)
+    res => this%field_data - rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_s_sf
 
@@ -807,8 +807,8 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(scalar_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call this%allocate_scalar_field(res)
-    res = this%field_data + rhs
+    !call this%allocate_scalar_field(res)
+    res => this%field_data + rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_scalar_sf_a_sf
 
@@ -1320,6 +1320,9 @@ contains
     call this%guard_temp()
     call this%allocate_scalar_field(res)
     res = this
+    call res%set_temp() ! Shouldn't need to call this, but for some
+                        ! reason being set as non-temporary when
+                        ! assignment subroutine returns.
     call this%clean_temp()
   end function uniform_scalar_get_bound
 
@@ -1622,8 +1625,8 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_vector_field(res)
-    res = this%field_data * rhs
+    !call rhs%allocate_vector_field(res)
+    res => this%field_data * rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_m_sf
 
@@ -1681,8 +1684,8 @@ contains
     class(scalar_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_vector_field(res)
-    res = this%field_data / rhs
+    !call rhs%allocate_vector_field(res)
+    res => this%field_data / rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_d_sf
 
@@ -1718,8 +1721,8 @@ contains
     class(vector_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The restult of this operation
     call this%guard_temp(); call rhs%guard_temp()
-    call rhs%allocate_vector_field(res)
-    res = this%field_data - rhs
+    !call rhs%allocate_vector_field(res)
+    res => this%field_data - rhs
     call this%clean_temp(); call rhs%clean_temp()
   end function uniform_vector_vf_s_vf
 
@@ -2581,6 +2584,9 @@ contains
     call this%guard_temp()
     call this%allocate_vector_field(res)
     res = this
+    call res%set_temp() ! Shouldn't need to call this, but for some
+                        ! reason being set as non-temporary when
+                        ! assignment subroutine returns.
     call this%clean_temp()
   end function uniform_vector_get_bound
 

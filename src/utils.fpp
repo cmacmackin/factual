@@ -42,7 +42,8 @@ module utils_mod
   private
 
   public :: is_nan, check_set_from_raw, elements_in_slice, grid_to_spacing, &
-            open_or_create_hdf_group, create_hdf_dset, lagrange_interp
+            open_or_create_hdf_group, create_hdf_dset, lagrange_interp,     &
+            linear_interp
 
 contains
 
@@ -237,6 +238,7 @@ contains
     ! nodes.
     !
     real(r8), intent(in)                     :: x
+      !! Location to interpolate at.
     real(r8), dimension(:), intent(in)       :: f
       !! The data values to interpolate between.
     real(r8), dimension(size(f)), intent(in) :: xf
@@ -305,6 +307,59 @@ contains
     end do
     val = val/denom
   end function lagrange_interp
+
+
+  function linear_interp(x, f, xf) result(val)
+    !* Author: Chris MacMackin
+    !  Date: July 2017
+    !
+    ! Performs linear interpolation.
+    !
+    real(r8), intent(in)                     :: x
+      !! Location to interpolate at.
+    real(r8), dimension(:), intent(in)       :: f
+      !! The data values to interpolate between.
+    real(r8), dimension(size(f)), intent(in) :: xf
+      !! The coordinates of the data values. These must be either
+      !! monotonically increasing or decreasing.
+    real(r8)                                 :: val
+
+    integer :: i, n
+    real(r8) :: a, b
+    logical :: increasing
+
+    n = size(f)
+    increasing = (xf(1) < xf(n))
+
+    if (increasing) then
+      if (x < xf(1)) then
+        val = f(1)
+        return
+      else if (x > xf(n)) then
+        val = f(n)
+        return
+      end if
+    else
+      if (x > xf(1)) then
+        val = f(1)
+        return
+      else if (x < xf(n)) then
+        val = f(n)
+        return
+      end if
+    end if
+
+    do i = 1, n - 1
+      if ((increasing .and. xf(i) <= x .and. x <= xf(i+1)) .or. &
+          (.not. increasing .and. xf(i) >= x .and. x >= xf(i+1))) then
+        a = (f(i+1) - f(i))/(xf(i+1) - xf(i))
+        b = f(i)
+        exit
+      end if
+    end do
+
+    val = a*(x - xf(i)) + b
+  end function linear_interp
 
 !  subroutine set_attribute_ref(loc_id, dset_name, attr_name, ref, &
 !                               errcode)

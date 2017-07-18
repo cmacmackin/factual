@@ -916,7 +916,7 @@ module abstract_fields_mod
       class(scalar_field), intent(in) :: this
       integer, intent(in) :: dir !! Direction in which to differentiation
       integer, optional, intent(in) :: order !! Order of the derivative, default = 1
-      class(scalar_field), allocatable :: sf_dx
+      class(scalar_field), pointer :: sf_dx
     end function sf_dx
     
     function vf_dx(this, dir, order)
@@ -936,7 +936,7 @@ module abstract_fields_mod
       integer, intent(in) :: dir !! Direction in which to differentiation
       integer, intent(in) :: component !! Which component of the vector is being differentiated
       integer, optional, intent(in) :: order !! Order of the derivative, default = 1
-      class(scalar_field), allocatable :: vf_comp_dx !! The derivative
+      class(scalar_field), pointer :: vf_comp_dx !! The derivative
     end function vf_comp_dx
 
     impure elemental subroutine vf_eq_vf(this,rhs)
@@ -1141,6 +1141,9 @@ contains
     class(abstract_field), intent(in) :: this
     if (associated(this%temporary)) then
       if (this%temporary > 1) this%temporary = this%temporary - 1
+#:if defined('DEBUG')
+      if (this%temporary < 1) error stop ('Field has non-positive guard level.')
+#:endif
       if (this%temporary == 1) call this%force_finalise()
     end if
   end subroutine clean_temp
