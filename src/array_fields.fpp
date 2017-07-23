@@ -2820,7 +2820,14 @@ contains
     select type(res)
     class is(array_vector_field)
       res%vector_dims = 3
-      allocate(res%field_data(this%numpoints,3))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data, 1) /= this%numpoints .or. &
+            size(res%field_data, 2) /= 3) then
+          allocate(res%field_data(this%numpoints,3))
+        end if
+      else
+        allocate(res%field_data(this%numpoints,3))
+      end if
       vec1 = 0
       vec2 = 0
       dims1 = min(3,this%vector_dims)

@@ -1265,9 +1265,10 @@ contains
     !
     class(vector_field), intent(in) :: field
     class(vector_field), pointer    :: res
-    allocate(res,mold=field)
+    call field%guard_temp()
+    call field%allocate_vector_field(res)
     res = [0.0_r8] - field
-    call res%set_temp()
+    call field%clean_temp()
   end function vector_field_negation
   
   subroutine set_tol(tol)

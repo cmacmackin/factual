@@ -453,52 +453,22 @@ contains
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
       if (associated(rhs%colloc_points)) then
-      !  if (.not. allocated(this%colloc_points)) &
-       !   allocate(this%colloc_points(this%elements() + 1))
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (associated(this%colloc_points)) then
-            if (this%differentiable) then
-              nullify(this%colloc_points)
-            else
-              deallocate(this%colloc_points)
-            end if
-          end if
           allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
-        end if
-      else if (associated(this%colloc_points)) then
-        if (this%differentiable) then
-          nullify(this%colloc_points)
-        else
-          deallocate(this%colloc_points)
         end if
       end if
       this%differentiable = rhs%differentiable
     class is(cheb1d_vector_field)
       this%extent = rhs%extent
       if (associated(rhs%colloc_points)) then
-        !if (.not. allocated(this%colloc_points)) &
-         ! allocate(this%colloc_points(this%elements() + 1))
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (associated(this%colloc_points)) then
-            if (this%differentiable) then
-              nullify(this%colloc_points)
-            else
-              deallocate(this%colloc_points)
-            end if
-          end if
           allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
-        end if
-      else if (associated(this%colloc_points)) then
-        if (this%differentiable) then
-          nullify(this%colloc_points)
-        else
-          deallocate(this%colloc_points)
         end if
       end if
       this%differentiable = rhs%differentiable
@@ -528,6 +498,16 @@ contains
       initialised = .true.
     end if
     new_field => scalars%acquire()
+    select type(new_field)
+    class is(cheb1d_scalar_field)
+      if (associated(new_field%colloc_points)) then
+        if (new_field%differentiable) then
+          nullify(new_field%colloc_points)
+        else
+          deallocate(new_field%colloc_points)
+        end if
+      end if
+    end select
     call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_scalar
 
@@ -553,6 +533,16 @@ contains
       initialised = .true.
     end if
     new_field => vectors%acquire()
+    select type(new_field)
+    class is(cheb1d_vector_field)
+      if (associated(new_field%colloc_points)) then
+        if (new_field%differentiable) then
+          nullify(new_field%colloc_points)
+        else
+          deallocate(new_field%colloc_points)
+        end if
+      end if
+    end select
     call this%clean_temp()
   end subroutine cheb1d_scalar_allocate_vector
 
@@ -610,7 +600,13 @@ contains
         if (src%differentiable) then
           this%colloc_points => src%colloc_points
         else
-          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          if (associated(this%colloc_points)) then
+            if (this%differentiable) then
+              nullify(this%colloc_points)
+            else
+              deallocate(this%colloc_points)
+            end if
+          end if
           this%colloc_points = src%colloc_points
         end if
         this%extent = src%extent
@@ -1129,48 +1125,22 @@ contains
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
       if (associated(rhs%colloc_points)) then
-        !if (.not. allocated(this%colloc_points)) &
-        !  allocate(this%colloc_points(this%elements()))
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (this%differentiable) then
-            nullify(this%colloc_points)
-          else
-            deallocate(this%colloc_points)
-          end if
           allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
-        end if
-      else if (associated(this%colloc_points)) then
-        if (this%differentiable) then
-          nullify(this%colloc_points)
-        else
-          deallocate(this%colloc_points)
         end if
       end if
       this%differentiable = rhs%differentiable
     class is(cheb1d_vector_field)
       this%extent = rhs%extent
       if (associated(rhs%colloc_points)) then
-        !if (.not. allocated(this%colloc_points)) &
-        !  allocate(this%colloc_points(this%elements()))
         if (rhs%differentiable) then
           this%colloc_points => rhs%colloc_points
         else
-          if (this%differentiable) then
-            nullify(this%colloc_points)
-          else
-            deallocate(this%colloc_points)
-          end if
           allocate(this%colloc_points(size(rhs%colloc_points)))
           this%colloc_points = rhs%colloc_points
-        end if
-      else if (associated(this%colloc_points)) then
-        if (this%differentiable) then
-          nullify(this%colloc_points)
-        else
-          deallocate(this%colloc_points)
         end if
       end if
       this%differentiable = rhs%differentiable
@@ -1200,6 +1170,16 @@ contains
       initialised = .true.
     end if
     new_field => scalars%acquire()
+    select type(new_field)
+    class is(cheb1d_scalar_field)
+      if (associated(new_field%colloc_points)) then
+        if (new_field%differentiable) then
+          nullify(new_field%colloc_points)
+        else
+          deallocate(new_field%colloc_points)
+        end if
+      end if
+    end select
     call this%clean_temp()
   end subroutine cheb1d_vector_allocate_scalar
 
@@ -1225,6 +1205,16 @@ contains
       initialised = .true.
     end if
     new_field => vectors%acquire()
+    select type(new_field)
+    class is(cheb1d_vector_field)
+      if (associated(new_field%colloc_points)) then
+        if (new_field%differentiable) then
+          nullify(new_field%colloc_points)
+        else
+          deallocate(new_field%colloc_points)
+        end if
+      end if
+    end select
     call this%clean_temp()
   end subroutine cheb1d_vector_allocate_vector
 
@@ -1283,7 +1273,13 @@ contains
         if (this%differentiable) then
           this%colloc_points => src%colloc_points
         else
-          if (associated(this%colloc_points)) nullify(this%colloc_points)
+          if (associated(this%colloc_points)) then
+            if (this%differentiable) then
+              nullify(this%colloc_points)
+            else
+              deallocate(this%colloc_points)
+            end if
+          end if
           this%colloc_points = src%colloc_points
         end if
         this%extent = src%extent
