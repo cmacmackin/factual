@@ -1073,7 +1073,7 @@ contains
       res = data_array
       call differentiate_1d(res,this%colloc_points,order)
     else
-      allocate(res, mold=data_array)
+      allocate(res(size(data_array)), mold=data_array)
       res = 0.0
     end if
     call this%clean_temp()
