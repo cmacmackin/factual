@@ -2193,7 +2193,13 @@ contains
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         if (rhs%vector_dimensions() > this%vector_dims) then
           call res%assign_meta_data(this, .false.)
-          allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
+          if (.not. allocated(res%field_data)) then
+            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+          else if (size(res%field_data,1) /= this%numpoints .or. &
+                   size(res%field_data,2) /= rhs%vector_dimensions()) then
+            deallocate(res%field_data)
+            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+          end if
           res%vector_dims = rhs%vector_dimensions()
         else
           call res%assign_meta_data(this)
@@ -2210,7 +2216,13 @@ contains
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         if (rhs%vector_dimensions() > this%vector_dims) then
           call res%assign_meta_data(this, .false.)
-          allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
+          if (.not. allocated(res%field_data)) then
+            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+          else if (size(res%field_data,1) /= this%numpoints .or. &
+                   size(res%field_data,2) /= rhs%vector_dimensions()) then
+            deallocate(res%field_data)
+            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
+          end if
           res%vector_dims = rhs%vector_dimensions()
         else
           call res%assign_meta_data(this)
@@ -2871,6 +2883,7 @@ contains
     class(array_vector_field), intent(in) :: this
     real(r8), dimension(:), intent(in) :: rhs
     class(vector_field), pointer :: res !! The result of this operation
+    logical :: res2d
     real(r8), dimension(3) :: vec1, vec2
     integer :: i, dims1, dims2
     call this%guard_temp()
@@ -2878,19 +2891,48 @@ contains
     call res%assign_meta_data(this,.false.)
     select type(res)
     class is(array_vector_field)
-      res%vector_dims = 3
-      allocate(res%field_data(this%numpoints,3))
-      dims1 = min(3,this%vector_dims)
-      dims2 = min(3,size(rhs))
-      vec1 = 0.0_r8
-      vec2 = 0.0_r8
-      do concurrent(i=1:this%numpoints)
-        vec1(:dims1) = this%field_data(i,:dims1)
-        vec2(:dims2) = rhs(:dims2)
-        res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
-                                 vec1(3)*vec2(1) - vec2(3)*vec1(1), &
-                                 vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-      end do
+      res2d = size(rhs) >= 3
+      if (res2d) res2d = rhs(1) == 0._r8 .and. rhs(2) == 0._r8
+      if (res2d) then
+        res%vector_dims = 2
+        if (.not. allocated(res%field_data)) then
+          allocate(res%field_data(this%numpoints,2))
+        else if (size(res%field_data,1) /= this%numpoints .or. &
+                 size(res%field_data,2) /= 2) then
+          deallocate(res%field_data)
+          allocate(res%field_data(this%numpoints,2))
+        end if
+        if (this%vector_dims >= 2) then
+          res%field_data(:,1) = this%field_data(:,2)*rhs(3)
+        else
+          res%field_data(:,1) = 0._r8
+        end if
+        if (this%vector_dims >= 1) then
+          res%field_data(:,2) = -this%field_data(:,1)*rhs(3)
+        else
+          res%field_data(:,1) = 0._r8
+        end if
+      else
+        res%vector_dims = 3
+        if (.not. allocated(res%field_data)) then
+          allocate(res%field_data(this%numpoints,3))
+        else if (size(res%field_data,1) /= this%numpoints .or. &
+                 size(res%field_data,2) /= 3) then
+          deallocate(res%field_data)
+          allocate(res%field_data(this%numpoints,3))
+        end if
+        dims1 = min(3,this%vector_dims)
+        dims2 = min(3,size(rhs))
+        vec1 = 0.0_r8
+        vec2 = 0.0_r8
+        do concurrent(i=1:this%numpoints)
+          vec1(:dims1) = this%field_data(i,:dims1)
+          vec2(:dims2) = rhs(:dims2)
+          res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                   vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                   vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+        end do
+      end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                  'allocate_vector_field routine.')
@@ -2910,6 +2952,7 @@ contains
     real(r8), dimension(:), intent(in) :: lhs
     class(array_vector_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The result of this operation
+    logical :: res2d
     real(r8), dimension(3) :: vec1, vec2
     integer :: i, dims1, dims2
     call rhs%guard_temp()
@@ -2917,19 +2960,48 @@ contains
     call res%assign_meta_data(rhs,.false.)
     select type(res)
     class is(array_vector_field)
-      res%vector_dims = 3
-      allocate(res%field_data(rhs%numpoints,3))
-      dims1 = min(3,size(lhs))
-      dims2 = min(3,rhs%vector_dims)
-      vec1 = 0.0_r8
-      vec2 = 0.0_r8
-      do concurrent(i=1:rhs%numpoints)
-        vec1(:dims1) = lhs(:dims1)
-        vec2(:dims2) = rhs%field_data(i,:dims2)
-        res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+      res2d = size(lhs) >= 3
+      if (res2d) res2d = lhs(1) == 0._r8 .and. lhs(2) == 0._r8
+      if (res2d) then
+        res%vector_dims = 2
+        if (.not. allocated(res%field_data)) then
+          allocate(res%field_data(rhs%numpoints,2))
+        else if (size(res%field_data,1) /= rhs%numpoints .or. &
+                 size(res%field_data,2) /= 2) then
+          deallocate(res%field_data)
+          allocate(res%field_data(rhs%numpoints,2))
+        end if
+        if (rhs%vector_dims >= 2) then
+          res%field_data(:,1) = -lhs(3)*rhs%field_data(:,2)
+        else
+          res%field_data(:,1) = 0._r8
+        end if
+        if (rhs%vector_dims >= 1) then
+          res%field_data(:,2) = lhs(3)*rhs%field_data(:,1)
+        else
+          res%field_data(:,1) = 0._r8
+        end if
+      else
+        res%vector_dims = 3
+        if (.not. allocated(res%field_data)) then
+          allocate(res%field_data(rhs%numpoints,3))
+        else if (size(res%field_data,1) /= rhs%numpoints .or. &
+                 size(res%field_data,2) /= 3) then
+          deallocate(res%field_data)
+          allocate(res%field_data(rhs%numpoints,3))
+        end if
+        dims1 = min(3,size(lhs))
+        dims2 = min(3,rhs%vector_dims)
+        vec1 = 0.0_r8
+        vec2 = 0.0_r8
+        do concurrent(i=1:rhs%numpoints)
+          vec1(:dims1) = lhs(:dims1)
+          vec2(:dims2) = rhs%field_data(i,:dims2)
+          res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                  vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                  vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-      end do
+        end do
+      end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                  'allocate_vector_field routine.')

@@ -763,6 +763,7 @@ contains
   subroutine test_cross(this)
     class(test_field), intent(inout) :: this
     type(cheb1d_vector_field) :: field
+    real(r8), dimension(3) :: vec
     field = this%field2 .cross. this%field3
     this%field1 = cheb1d_vector_field(this%nodes,func,extra_dims=2)
     @assertTrue(this%field1==field,message='Error calculating field .cross. field')
@@ -774,6 +775,12 @@ contains
     field = this%field3 .cross. this%field3 
     this%field1 = cheb1d_vector_field(this%nodes,zeros,extra_dims=0)
     @assertTrue(this%field1==field,message='Error calculating field .cross. field')
+    vec = [0._r8, 0._r8, 1._r8]
+    field = vec .cross. this%field2
+    this%field1 = cheb1d_vector_field(this%nodes,func2d,extra_dims=1)
+    @assertTrue(this%field1==field,message='Error calculating field .cross. field')
+    field = this%field2 .cross. vec
+    @assertTrue(-this%field1==field,message='Error calculating field .cross. field')    
   contains
     pure function func(x)
       real(r8), dimension(:), intent(in) :: x
@@ -785,6 +792,13 @@ contains
               0.e0_r8*tmp2(1) - tmp2(3)*tmp1(1), &
               tmp1(1)*tmp2(2) - tmp2(1)*tmp1(2)]
     end function func
+    pure function func2d(x)
+      real(r8), dimension(:), intent(in) :: x
+      real(r8), dimension(:), allocatable :: tmp1
+      real(r8), dimension(:), allocatable :: func2d
+      tmp1 = f2(x)
+      func2d = [tmp1(2), -tmp1(1)]
+    end function func2d
     pure function zeros(x)
       real(r8), dimension(:), intent(in) :: x
       real(r8), dimension(:), allocatable :: zeros
