@@ -1091,7 +1091,7 @@ contains
     call this%clean_temp()
   end function elements
 
-  impure elemental subroutine set_temp(this)
+  elemental subroutine set_temp(this)
     !* Author: Chris MacMackin
     !  Date: February 2017
     !
@@ -1210,8 +1210,7 @@ contains
     class(scalar_field), intent(in) :: field
     class(scalar_field), pointer    :: res
     call field%guard_temp()
-    call field%allocate_scalar_field(res)
-    res = field%${FUNC}$()
+    res => field%${FUNC}$()
     call field%clean_temp()
   end function scalar_field_${FUNC}$
   
@@ -1252,8 +1251,7 @@ contains
     class(scalar_field), intent(in)  :: field
     class(scalar_field), pointer     :: res
     call field%guard_temp()
-    call field%allocate_scalar_field(res)
-    res = 0.0_r8 - field
+    res => 0.0_r8 - field
     call field%clean_temp()
   end function scalar_field_negation
 

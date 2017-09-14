@@ -105,7 +105,6 @@ contains
     if (found_obj) then
       field => this%pool(i)
       call field%set_temp()
-    if (i == 96) call backtrace()
     else
       error stop ('Attempting to use more scalar fields than '// &
                   'allocated in this pool.')
