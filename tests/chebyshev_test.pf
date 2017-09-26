@@ -26,6 +26,8 @@ module chebyshev_test
   use chebyshev_mod
   implicit none
   
+  real(r8), parameter :: pi = 4.0_r8*atan(1.0_r8)
+
 @TestParameter
   type, extends(abstracttestparameter) :: cheb_case
     integer :: nodes
@@ -82,7 +84,7 @@ contains
     class(cheb_case), intent(in) :: this
     character(:), allocatable :: string
     character(len=54), parameter :: format_str = &
-        "(g0,' chebyshev collocation nodes from ',g0,' to ',g0)"
+        "(g0,' nodes from ',g0,' to ',g0)"
     allocate(character(len=120) :: string)
     write(string,format_str) this%nodes, this%lower, this%upper
   end function tostring
@@ -183,5 +185,54 @@ contains
 !~       df2 = exp(x)*(sin(5.0_r8*x) + 5.0_r8*cos(5.0_r8*x))
     end function df2
   end subroutine test_differntiate_1d
+
+@Test
+  subroutine test_integrate_1d(this)
+    class(test_cheb), intent(inout) :: this
+    integer, parameter :: nodes = 32
+    real(r8), dimension(:), pointer :: xvals
+    real(r8), dimension(nodes+1) :: func
+    xvals => collocation_points(nodes,this%lower,this%upper)
+    func = df1(xvals)
+    call integrate_1d(func,xvals,1,f1(xvals(1)))
+    @assertEqual(f1(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+    func = df1(xvals)
+    call integrate_1d(func,xvals,nodes+1,f1(xvals(nodes+1)))
+    @assertEqual(f1(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+    func = df2(xvals)
+    call integrate_1d(func,xvals)
+    @assertEqual(f2(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+    func = df2(xvals)
+    call integrate_1d(func,xvals,1)
+    @assertEqual(f2(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+    func = df2(xvals)
+    call integrate_1d(func,xvals,-1)
+    @assertEqual(f2(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+    func = df2(xvals)
+    call integrate_1d(func,xvals,nodes*2,44._r8)
+    @assertEqual(f2(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+    func = df2(xvals)
+    call integrate_1d(func,xvals,boundary_val=44._r8)
+    @assertEqual(f2(xvals),func,message="Integral calculation incorrect.", tolerance=1.e-9_r8)
+  contains
+    elemental real(r8) function f1(x)
+      real(r8), intent(in) :: x
+      f1 = x**3 - 2.0_r8*x**2 + 8.0_r8*x
+    end function f1
+    elemental real(r8) function df1(x)
+      real(r8), intent(in) :: x
+      df1 = 3.0_r8*x**2 - 4.0_r8*x + 8.0_r8
+    end function df1
+    elemental real(r8) function f2(x)
+      real(r8), intent(in) :: x
+      f2 = sin(2*pi*x)
+!~       f2 = exp(x)*sin(5.0_r8*x)
+    end function f2
+    elemental real(r8) function df2(x)
+      real(r8), intent(in) :: x
+      df2 = 2*pi*cos(2*pi*x)
+!~       df2 = exp(x)*(sin(5.0_r8*x) + 5.0_r8*cos(5.0_r8*x))
+    end function df2
+  end subroutine test_integrate_1d
   
 end module chebyshev_test

@@ -35,7 +35,13 @@ module chebyshev_mod
   private
   
   real(r8), parameter :: pi = 4.0_r8*atan(1.0_r8)
-  
+  integer(c_int), parameter :: field_size_init = -565
+
+  ! Cached values for reuse
+  integer(c_int) :: field_size = field_size_init
+  real(c_double), dimension(:), pointer :: array1, array2, array3
+  type(c_ptr) :: plan_dct, plan_dst, array_c1, array_c2, array_c3
+
   type :: cached_points
     !* Author: Chris MacMackin
     !  Date: February 2017
@@ -55,7 +61,8 @@ module chebyshev_mod
     !! Contains pointers to sets of collocation points which have been
     !! created by the [[collocation_points]] function.
 
-  public :: collocation_points, differentiation_row, differentiate_1d
+  public :: collocation_points, differentiation_row, differentiate_1d, &
+            integrate_1d
 
 contains
   
@@ -150,6 +157,38 @@ contains
     end do
   end function differentiation_row
 
+  subroutine setup_fftw3(field_size_new)
+    !* Author: Chris MacMackin
+    !  Date: September 2017
+    !
+    ! Allocates memory and computes plans for running DCT and DST with
+    ! FFTW3. This is only recalculated if the size of arrays has
+    ! changed, providing considerable savings.
+    !
+    integer(c_int), intent(in) :: field_size_new
+      !! The size of the field to be integrated/differentiated.
+    if (field_size_new /= field_size) then
+      if (field_size /= field_size_init) then
+        call fftw_free(array_c1)
+        call fftw_free(array_c2)
+        call fftw_free(array_c3)
+        call fftw_destroy_plan(plan_dct)
+        call fftw_destroy_plan(plan_dst)
+      end if
+      field_size = field_size_new
+      array_c1 = fftw_alloc_real(int(field_size,c_size_t))
+      call c_f_pointer(array_c1, array1, [int(field_size,c_size_t)])
+      array_c2 = fftw_alloc_real(int(field_size,c_size_t))
+      call c_f_pointer(array_c2, array2, [int(field_size,c_size_t)])
+      array_c3 = fftw_alloc_real(int(field_size,c_size_t))
+      call c_f_pointer(array_c3, array3, [int(field_size,c_size_t)])
+      plan_dct = fftw_plan_r2r_1d(field_size, array1, array2, FFTW_REDFT00, &
+                                  FFTW_PATIENT)
+      plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array3, FFTW_RODFT00, &
+                                  FFTW_PATIENT)
+    end if
+  end subroutine setup_fftw3
+
   subroutine differentiate_1d(field_data,xvals,order)
     !* Author: Chris MacMackin
     !  Date: April 2016
@@ -179,12 +218,7 @@ contains
       !! Zero corresponds to no derivative and negative values are
       !! treated as zero.
     integer :: ord, order_, i
-    integer(c_int), parameter :: field_size_init = -565
-    integer(c_int), save :: field_size = field_size_init
-    integer(c_int) :: field_size_new
-    real(c_double), dimension(:), pointer, save :: array1, array2, array3
     real(r8) :: inverse_width, field_centre, array1_lower
-    type(c_ptr), save :: plan_dct, plan_dst, array_c1, array_c2, array_c3
     if (present(order)) then
       order_ = order
     else
@@ -192,27 +226,7 @@ contains
     end if
     ord = order_
     if (ord <= 0) return
-    field_size_new = size(field_data,kind=c_int)
-    if (field_size_new /= field_size) then
-      if (field_size /= field_size_init) then
-        call fftw_free(array_c1)
-        call fftw_free(array_c2)
-        call fftw_free(array_c3)
-        call fftw_destroy_plan(plan_dct)
-        call fftw_destroy_plan(plan_dst)
-      end if
-      field_size = field_size_new
-      array_c1 = fftw_alloc_real(int(field_size,c_size_t))
-      call c_f_pointer(array_c1, array1, [int(field_size,c_size_t)])
-      array_c2 = fftw_alloc_real(int(field_size,c_size_t))
-      call c_f_pointer(array_c2, array2, [int(field_size,c_size_t)])
-      array_c3 = fftw_alloc_real(int(field_size,c_size_t))
-      call c_f_pointer(array_c3, array3, [int(field_size,c_size_t)])
-      plan_dct = fftw_plan_r2r_1d(field_size, array1, array2, FFTW_REDFT00, &
-                                  FFTW_PATIENT)
-      plan_dst = fftw_plan_r2r_1d(field_size-2, array1, array3, FFTW_RODFT00, &
-                                  FFTW_PATIENT)
-    end if
+    call setup_fftw3(size(field_data,kind=c_int))
     inverse_width = 2.0_c_double/(xvals(1) - xvals(field_size))
     field_centre = xvals(1) - 1.0_r8/(inverse_width)
     array1 = field_data
@@ -238,5 +252,69 @@ contains
     end do
     field_data = array1 * inverse_width**order_
   end subroutine differentiate_1d
+
+
+  subroutine integrate_1d(field_data,xvals,boundary_point,boundary_val)
+    !* Author: Chris MacMackin
+    !  Date: September 2017
+    !
+    ! Computes the integral (in place) of 1D data using a Chebyshev
+    ! pseudo-spectral methods and a type-I discrete cosine transform,
+    ! provided by the FFTW3 library. This is fastest for arrays of odd
+    ! size.
+    !
+    real(c_double), dimension(:), intent(inout) :: field_data
+      !! The data which is to be integrated, along the direction of
+      !! the array.
+    real(c_double), dimension(size(field_data)), intent(in) :: xvals
+      !! The location of each data point in `field_data`.
+    integer, intent(in), optional :: boundary_point
+      !! The array coordinate at which the value of the result is
+      !! known. This is used in order to calculate the constant to be
+      !! added to the integral. If not provided then the result will
+      !! calculated such that the first Chebyshev mode (which is a
+      !! constant) will have value 0. If the input is outside of the
+      !! array bounds then it is ignored.
+    real(c_double), intent(in), optional :: boundary_val
+      !! The value which the boundary point should hold in the
+      !! output. If `boundary_point` is not provided or outside of
+      !! array bounds then this argument is ignored. If
+      !! `boundary_point` is provided but this argument is note then
+      !! it defaults to 0.
+    integer :: i
+    real(r8) :: width, field_centre, bval
+    call setup_fftw3(size(field_data,kind=c_int))
+    width = 0.5_c_double*(xvals(1) - xvals(field_size))
+    field_centre = xvals(1) - width
+    array1 = field_data
+    do concurrent (i=2:field_size-1)
+      array1(i-1) = -pi*width/real(field_size-1, c_double)*field_data(i)* &
+           sqrt(1.0_c_double - ((xvals(i)-field_centre)/width)**2)
+    end do
+    call fftw_execute_r2r(plan_dst,array1,array3)
+    do concurrent (i=2:field_size-1)
+      array3(i-1) = array3(i-1)/(i-1)
+      array1(i) = -0.5_r8/pi * array3(i-1)
+      array3(i-1) = (-1)**(i+1)*(i-1)**2*array3(i-1)
+    end do
+    array1(1) = 0._r8
+    array1(field_size) = 2*(-1)**(field_size)/real((field_size-1)**2,c_double) * &
+         (pi*field_data(field_size)*width - sum(array3(1:field_size-2)))
+    call fftw_execute_r2r(plan_dct,array1,array2)
+    if (present(boundary_point)) then
+      if (boundary_point < 1 .or. boundary_point > field_size) then
+        field_data = array2
+        return
+      end if
+      if (present(boundary_val)) then
+        bval = boundary_val
+      else
+        bval = 0._c_double
+      end if
+      field_data = array2 + (bval - array2(boundary_point))
+    else
+      field_data = array2
+    end if
+  end subroutine integrate_1d
 
 end module chebyshev_mod
