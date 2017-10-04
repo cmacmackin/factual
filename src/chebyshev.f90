@@ -232,7 +232,7 @@ contains
     array1 = field_data
     do while(ord > 0)
       call fftw_execute_r2r(plan_dct,array1,array2)
-      do concurrent (i=1:field_size-1) 
+      do concurrent (i=1:field_size-1)
         array2(i+1) = array2(i+1) / (field_size-1)
         array1(i) = -i*pi*array2(i+1)
         array2(i+1) = i**2 * array2(i+1)
@@ -293,13 +293,12 @@ contains
     end do
     call fftw_execute_r2r(plan_dst,array1,array3)
     do concurrent (i=2:field_size-1)
-      array3(i-1) = array3(i-1)/(i-1)
-      array1(i) = -0.5_r8/pi * array3(i-1)
-      array3(i-1) = (-1)**(i+1)*(i-1)**2*array3(i-1)
+      array1(i) = -0.5_r8/(pi*(i-1)) * array3(i-1)
+      array3(i-1) = (i-1)**2*array1(i)
     end do
     array1(1) = 0._r8
-    array1(field_size) = 2*(-1)**(field_size)/real((field_size-1)**2,c_double) * &
-         (pi*field_data(field_size)*width - sum(array3(1:field_size-2)))
+    array1(field_size) = 1._r8/(field_size-1)**2 * &
+         (width*field_data(1) - 2*sum(array3(1:field_size-2)))
     call fftw_execute_r2r(plan_dct,array1,array2)
     if (present(boundary_point)) then
       if (boundary_point < 1 .or. boundary_point > field_size) then
