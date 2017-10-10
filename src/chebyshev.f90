@@ -42,6 +42,8 @@ module chebyshev_mod
   real(c_double), dimension(:), pointer :: array1, array2, array3
   type(c_ptr) :: plan_dct, plan_dst, array_c1, array_c2, array_c3
 
+!logical, public :: verbose = .false.
+
   type :: cached_points
     !* Author: Chris MacMackin
     !  Date: February 2017
@@ -241,6 +243,7 @@ contains
       array1(field_size) = 0.0_c_double
       call fftw_execute_r2r(plan_dst,array1,array3)
       array1(1) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
+ !     if (verbose) print*,sum(array2(2:field_size-1)),0.5_r8*array2(field_size),array1(1)
       do concurrent (i=2:field_size-1)
         array1(i) = -0.5_c_double/pi * array3(i-1)/ &
              sqrt(1.0_c_double - ((xvals(i)-field_centre)*inverse_width)**2)
@@ -248,6 +251,7 @@ contains
       end do
       array2(field_size) = (-1)**(field_size) * array2(field_size)
       array1(field_size) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
+!      if (verbose) print*,sum(array2(2:field_size-1)),0.5_r8*array2(field_size),array1(field_size)
       ord = ord - 1
     end do
     field_data = array1 * inverse_width**order_
@@ -283,6 +287,7 @@ contains
       !! it defaults to 0.
     integer :: i
     real(r8) :: width, field_centre, bval
+    logical :: use_first_eq
     call setup_fftw3(size(field_data,kind=c_int))
     width = 0.5_c_double*(xvals(1) - xvals(field_size))
     field_centre = xvals(1) - width
@@ -297,8 +302,35 @@ contains
       array3(i-1) = (i-1)**2*array1(i)
     end do
     array1(1) = 0._r8
-    array1(field_size) = 1._r8/(field_size-1)**2 * &
-         (width*field_data(1) - 2*sum(array3(1:field_size-2)))
+    ! For noisy input I find that the two equations I can use to find
+    ! the highest order Chebyshev mode return different results. One
+    ! of these comes from the equation for the derivative at the first
+    ! collocation node and the other for the derivative at the
+    ! last. This causes an errors when differentiating the result of
+    ! this routine; the result of the differentiation at the end point
+    ! whose equation is not used here is wrong. As a workaround for my
+    ! purposes, I use whichever equation does not correspond to
+    ! `boundary_point`, as in ISOFT the boundary point gets
+    ! overwritten anyway.
+    if (present(boundary_point)) then
+      use_first_eq = boundary_point == field_size
+    else
+      use_first_eq = .true.
+    end if
+    if (use_first_eq) then
+      array1(field_size) = 1._r8/(field_size-1)**2 * &
+           (width*field_data(1) - 2*sum(array3(1:field_size-2)))
+!    if (verbose) then
+!      print*,field_data(1), field_data(field_size)
+!      print*, width*(field_data(1)-field_data(field_size)), &
+!              width*(field_data(1)+field_data(field_size)), &
+!              4*sum(array3(1:field_size-2:2))
+!    end if
+    else
+      array3(2:field_size:2) = -array3(2:field_size:2)
+      array1(field_size) = real((-1)**field_size, r8)/(field_size-1)**2 * &
+           (width*field_data(field_size) - 2_r8*sum(array3(1:field_size-2)))
+    end if
     call fftw_execute_r2r(plan_dct,array1,array2)
     if (present(boundary_point)) then
       if (boundary_point < 1 .or. boundary_point > field_size) then
