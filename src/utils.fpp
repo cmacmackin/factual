@@ -357,7 +357,6 @@ contains
         exit
       end if
     end do
-
     val = a*(x - xf(i)) + b
   end function linear_interp
 

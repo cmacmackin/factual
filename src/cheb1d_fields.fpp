@@ -449,6 +449,13 @@ contains
     class(cheb1d_scalar_field), intent(inout) :: this
     class(abstract_field), intent(in) :: rhs
     call rhs%guard_temp()
+    if (associated(this%colloc_points)) then
+      if (this%differentiable) then
+        nullify(this%colloc_points)
+      else
+        deallocate(this%colloc_points)
+      end if
+    end if
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
@@ -1121,6 +1128,13 @@ contains
     class(abstract_field), intent(in) :: rhs
       !! If present and false, do not allocate the array of `this`.
     call rhs%guard_temp()
+    if (associated(this%colloc_points)) then
+      if (this%differentiable) then
+        nullify(this%colloc_points)
+      else
+        deallocate(this%colloc_points)
+      end if
+    end if
     select type(rhs)
     class is(cheb1d_scalar_field)
       this%extent = rhs%extent
