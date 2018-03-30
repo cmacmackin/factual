@@ -230,6 +230,19 @@ module abstract_fields_mod
     procedure(sf_interp), public, deferred :: interpolate
       !! Interpolates the value of the field at the specified
       !! location.
+    procedure, public :: set_derivative => scalar_set_deriv
+      !! Sets a derivative value for this field, which gets propagated
+      !! through operations using automatic differentiation (tangent
+      !! mode). Field types are not obliged to implement this feature
+      !! and, unless overridden, this method causes the program to
+      !! stop with an error.
+    procedure, public :: get_derivative => scalar_get_deriv
+      !! Provides the derivative value for this field. This was either
+      !! set by the user or calculated using automatic
+      !! differentiation. If the concrete field type does not
+      !! implement automatic differentiation or if no derivative
+      !! information is available for this object then a field of
+      !! zeros is returned.
     generic, public :: operator(*) => field_multiply_field, &
         field_multiply_vecfield, real_multiply_field, &
         field_multiply_real, real_array_multiply_field, &
@@ -356,6 +369,19 @@ module abstract_fields_mod
     procedure(vf_interp), public, deferred :: interpolate
       !! Interpolates the value of the field at the specified
       !! location.
+    procedure, public :: set_derivative => vector_set_deriv
+      !! Sets a derivative value for this field, which gets propagated
+      !! through operations using automatic differentiation (tangent
+      !! mode). Field types are not obliged to implement this feature
+      !! and, unless overridden, this method causes the program to
+      !! stop with an error.
+    procedure, public :: get_derivative => vector_get_deriv
+      !! Provides the derivative value for this field. This was either
+      !! set by the user or calculated using automatic
+      !! differentiation. If the concrete field type does not
+      !! implement automatic differentiation or if no derivative
+      !! information is available for this object then a field of
+      !! zeros is returned.
     generic, public :: operator(*) => field_multiply_field, &
         real_multiply_field, field_multiply_real
     generic, public :: operator(/) => field_divide_field, field_divide_real
@@ -1268,7 +1294,69 @@ contains
     res = [0.0_r8] - field
     call field%clean_temp()
   end function vector_field_negation
+
+  subroutine scalar_set_deriv(this, deriv)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Dummy procedure which causes the program to stop. Must be
+    ! overridden for any field types which implement automatic
+    ! differentiation.
+    !
+    class(scalar_field), intent(inout) :: this
+    class(scalar_field), intent(in)    :: deriv
+      !! The derivative (i.e. differential) value of this field
+    call this%guard_temp(); call deriv%guard_temp()
+    error stop ('Automatic differentiation not implemented for this field type.')
+    call this%clean_temp(); call deriv%clean_temp()
+  end subroutine scalar_set_deriv
   
+  function scalar_get_deriv(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Dummy procedure which returns a derivative (i.e. differential)
+    ! value of 0. Must be overridden by an field types which implement
+    ! automatic differentiation.
+    !
+    class(scalar_field), intent(in) :: this
+    class(scalar_field), pointer    :: res
+    call this%guard_temp()
+    res => 0._r8 * this
+    call this%clean_temp()
+  end function scalar_get_deriv
+
+  subroutine vector_set_deriv(this, deriv)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Dummy procedure which causes the program to stop. Must be
+    ! overridden for any field types which implement automatic
+    ! differentiation.
+    !
+    class(vector_field), intent(inout) :: this
+    class(vector_field), intent(in)    :: deriv
+      !! The derivative (i.e. differential) value of this field
+    call this%guard_temp(); call deriv%guard_temp()
+    error stop ('Automatic differentiation not implemented for this field type.')
+    call this%clean_temp(); call deriv%clean_temp()
+  end subroutine vector_set_deriv
+  
+  function vector_get_deriv(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Dummy procedure which returns a derivative (i.e. differential)
+    ! value of 0. Must be overridden by an field types which implement
+    ! automatic differentiation.
+    !
+    class(vector_field), intent(in) :: this
+    class(vector_field), pointer    :: res
+    call this%guard_temp()
+    res => 0._r8 * this
+    call this%clean_temp()
+  end function vector_get_deriv
+
   subroutine set_tol(tol)
     !* Author: Chris MacMackin
     !  Date: April 2016

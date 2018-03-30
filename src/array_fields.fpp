@@ -68,6 +68,13 @@ module array_fields_mod
     real(r8), dimension(:), allocatable :: field_data
       !! The value of the scalar field at the data-points. Each
       !! element represents the value at a different location.
+    logical                             :: has_deriv
+      !! Whether this field has a derivative being used for automatic
+      !! differentiation.
+    real(r8), dimension(:), allocatable :: deriv_data
+      !! The value of the differential of the scalar field at the
+      !! data-points. Each element represents the value at a different
+      !! location.
   contains
     private
     procedure, non_overridable, public :: elements => array_scalar_elements
@@ -170,6 +177,15 @@ module array_fields_mod
     procedure, public :: get_boundary => array_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure, public :: set_derivative => array_scalar_set_deriv
+      !! Sets a derivative value for this field, which gets propagated
+      !! through operations using automatic differentiation (tangent
+      !! mode).
+    procedure, public :: get_derivative => array_scalar_get_deriv
+      !! Provides the derivative value for this field. This was either
+      !! set by the user or calculated using automatic
+      !! differentiation. If no derivative information is available
+      !! for this object then a field of zeros is returned.
     procedure(sf_bound), deferred :: subtype_boundary
       !! Performs whatever operations are needed on the subtype to get
       !! a boundary field, including returning the slices needed to
@@ -338,6 +354,14 @@ module array_fields_mod
       !! represents a different component of the vector.
     integer                               :: vector_dims = 0
       !! The number of vector components
+    logical                               :: has_deriv
+      !! Whether this field has a derivative being used for automatic
+      !! differentiation.
+    real(r8), dimension(:,:), allocatable :: deriv_data
+      !! The value of the differential of the scalar field at the
+      !! data-points. Each row represents a different spatial
+      !! location, while each column represents a different component
+      !! of the vector.
   contains
     private
     procedure, non_overridable, public :: &
@@ -451,6 +475,15 @@ module array_fields_mod
     procedure, public :: get_boundary => array_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
+    procedure, public :: set_derivative => array_vector_set_deriv
+      !! Sets a derivative value for this field, which gets propagated
+      !! through operations using automatic differentiation (tangent
+      !! mode).
+    procedure, public :: get_derivative => array_vector_get_deriv
+      !! Provides the derivative value for this field. This was either
+      !! set by the user or calculated using automatic
+      !! differentiation. If no derivative information is available
+      !! for this object then a field of zeros is returned.
     procedure(vf_bound), deferred :: subtype_boundary
       !! Performs whatever operations are needed by the subtype to get
       !! a boundary field, including returning the slices needed to
@@ -594,8 +627,207 @@ module array_fields_mod
 
   public :: scalar_init, vector_init
 
+  interface allocate_like
+    !! Helper routines to allocate one array to have a 
+    !! similar shape to another.
+    module procedure ::  allocate_like_1d_1d
+    module procedure ::  allocate_like_1d_2d
+    module procedure ::  allocate_like_2d_1d
+    module procedure ::  allocate_like_2d_2d
+    module procedure ::  allocate_like_2d_2d_1d
+  end interface
+
 contains
 
+  subroutine allocate_like_1d_1d(array, mold, alloc)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Allocates an array to have the same shape as an existing one.
+    !
+    real(r8), allocatable, dimension(:), intent(inout) :: array
+      !! The array to be allocated
+    real(r8), allocatable, dimension(:), intent(in) :: mold
+      !! The array whose shape is used to allocate the first argument
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array
+    logical :: al
+    integer :: n
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
+    if (al .and. allocated(mold)) then
+      n = size(mold)
+      if (allocated(array)) then
+        if (size(array) /= n) then
+          deallocate(array)
+          allocate(array(n))
+        end if
+      else
+        allocate(array(n))
+      end if
+    else if (allocated(array)) then
+       deallocate(array)
+    end if
+  end subroutine allocate_like_1d_1d
+
+  subroutine allocate_like_1d_2d(array, mold, alloc)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Allocates an array to have the same shape as an existing one.
+    !
+    real(r8), allocatable, dimension(:), intent(inout) :: array
+      !! The array to be allocated
+    real(r8), allocatable, dimension(:,:), intent(in) :: mold
+      !! The array whose shape is used to allocate the first argument
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array
+    logical :: al
+    integer :: n
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
+    if (al .and. allocated(mold)) then
+      n = size(mold, 1)
+      if (allocated(array)) then
+        if (size(array) /= n) then
+          deallocate(array)
+          allocate(array(n))
+        end if
+      else
+        allocate(array(n))
+      end if
+    else if (allocated(array)) then
+       deallocate(array)
+    end if
+  end subroutine allocate_like_1d_2d
+
+  subroutine allocate_like_2d_1d(array, mold, n2, alloc)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Allocates an array to have the same shape as an existing one.
+    !
+    real(r8), allocatable, dimension(:,:), intent(inout) :: array
+      !! The array to be allocated
+    real(r8), allocatable, dimension(:), intent(in) :: mold
+      !! The array whose shape is used to allocate the first argument
+    integer, optional, intent(in) :: n2
+      !! Desired size of array in the second dimension. Deafualt is 1.
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array
+    logical :: al
+    integer :: n0, n1
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
+    if (al .and. allocated(mold)) then
+      n0 = size(mold, 1)
+      if (present(n2)) then
+        n1 = n2
+      else
+        n1 = 1
+      end if
+      if (allocated(array)) then
+        if (size(array, 1) /= n0 .or. size(array, 2) /= n1) then
+          deallocate(array)
+          allocate(array(n0, n1))
+        end if
+      else
+        allocate(array(n0, n1))
+      end if
+    else if (allocated(array)) then
+       deallocate(array)
+    end if
+  end subroutine allocate_like_2d_1d
+
+  subroutine allocate_like_2d_2d(array, mold, mold2, alloc)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Allocates an array to have the same shape as an existing one.
+    !
+    real(r8), allocatable, dimension(:,:), intent(inout) :: array
+      !! The array to be allocated
+    real(r8), allocatable, dimension(:,:), intent(in) :: mold
+      !! The array whose shape is used to allocate the first argument
+    real(r8), optional, allocatable, dimension(:,:), intent(in) :: mold2
+      !! A second array which, if present, will be compared with that
+      !! of `mold` to decide the size to allocate the second
+      !! dimenions. This will be the larger of the second dimensions
+      !! in `mold1` and `mold2`
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array
+    logical :: al
+    integer :: n0, n1
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
+    if (al .and. allocated(mold)) then
+      n0 = size(mold, 1)
+      n1 = size(mold, 2)
+      if (present(mold2)) n1 = max(n1, size(mold2, 2))
+      if (allocated(array)) then
+        if (size(array, 1) /= n0 .or. size(array, 2) /= n1) then
+          deallocate(array)
+          allocate(array(n0, n1))
+        end if
+      else
+        allocate(array(n0, n1))
+      end if
+    else if (allocated(array)) then
+       deallocate(array)
+    end if
+  end subroutine allocate_like_2d_2d
+
+  subroutine allocate_like_2d_2d_1d(array, mold, mold2, alloc)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Allocates an array to have the same shape as an existing one.
+    !
+    real(r8), allocatable, dimension(:,:), intent(inout) :: array
+      !! The array to be allocated
+    real(r8), allocatable, dimension(:,:), intent(in) :: mold
+      !! The array whose shape is used to allocate the first argument
+    real(r8), dimension(:), intent(in) :: mold2
+      !! A second array which will be compared with that
+      !! of `mold` to decide the size to allocate the second
+      !! dimenions. This will be the larger of the second dimension
+      !! of `mold1` and the first of `mold2`
+    logical, optional, intent(in) :: alloc
+      !! If present and false, do not allocate the array
+    logical :: al
+    integer :: n0, n1
+    if (present(alloc)) then
+      al = alloc
+    else
+      al = .true.
+    end if
+    if (al .and. allocated(mold)) then
+      n0 = size(mold, 1)
+      n1 = max(size(mold, 2), size(mold2))
+      if (allocated(array)) then
+        if (size(array, 1) /= n0 .or. size(array, 2) /= n1) then
+          deallocate(array)
+          allocate(array(n0, n1))
+        end if
+      else
+        allocate(array(n0, n1))
+      end if
+    else if (allocated(array)) then
+       deallocate(array)
+    end if
+  end subroutine allocate_like_2d_2d_1d
 
   !=====================================================================
   ! Scalar Field Methods
@@ -928,15 +1160,7 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      if (.not. allocated(res%field_data)) then
-        allocate(res%field_data(rhs%numpoints,size(lhs)))
-      else
-        if (size(res%field_data,1) /= rhs%numpoints .or. &
-            size(res%field_data,2) /= size(lhs)) then
-          deallocate(res%field_data)
-          allocate(res%field_data(rhs%numpoints,size(lhs)))
-        end if
-      end if
+      call allocate_like(res%field_data, rhs%field_data, size(lhs))
       res%vector_dims = size(lhs)
       do concurrent (i=1:rhs%numpoints)
         res%field_data(i,:) = rhs%field_data(i) * lhs
@@ -1413,15 +1637,7 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      if (allocated(res%field_data)) then
-        if (size(res%field_data,1) /= this%numpoints .or. &
-            size(res%field_data,2) /= this%dimensions()) then
-          deallocate(res%field_data)
-          allocate(res%field_data(this%numpoints,this%dimensions()))
-        end if
-      else
-        allocate(res%field_data(this%numpoints,this%dimensions()))
-      end if
+      call allocate_like(res%field_data, this%field_data, this%dimensions())
       do i = 1, this%dimensions()
         res%field_data(:,i) = this%array_dx(this%field_data,i,1)
       end do
@@ -1524,41 +1740,17 @@ contains
     class(abstract_field), intent(in) :: rhs
     logical, optional, intent(in) :: alloc
       !! If present and false, do not allocate the array of `this`.
-    logical :: al
     call rhs%guard_temp()
-    if (present(alloc)) then
-      al = alloc
-    else
-      al = .true.
-    end if
     call this%assign_subtype_meta_data(rhs)
     select type(rhs)
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
-      if (allocated(this%field_data)) then
-        if (.not. rhs%is_allocated()) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data)/=size(rhs%field_data)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data)))
-        end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data)))
-      else
-      end if
+      call allocate_like(this%field_data, rhs%field_data, alloc)
+      this%has_deriv = rhs%has_deriv
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
-      if (allocated(this%field_data)) then
-        if (.not. rhs%is_allocated()) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data)/=size(rhs%field_data,1)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data,1)))
-        end if
-      else if (allocated(rhs%field_data) .and. al) then
-        if (allocated(this%field_data)) deallocate(this%field_data)
-        allocate(this%field_data(size(rhs%field_data,1)))
-      end if
+      call allocate_like(this%field_data, rhs%field_data, alloc)
+      this%has_deriv = rhs%has_deriv
     end select
     call rhs%clean_temp()
   end subroutine array_scalar_assign_meta_data
@@ -1753,6 +1945,65 @@ contains
     end select
     call this%clean_temp()
   end function array_scalar_get_bound
+
+  subroutine array_scalar_set_deriv(this, deriv)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Sets a differential/derivative value for the field, which will
+    ! be propagated through operations using automatic differentiation
+    ! (tangent mode).
+    !
+    class(array_scalar_field), intent(inout) :: this
+    class(scalar_field), intent(in)          :: deriv
+      !! The derivative (i.e. differential) value of this field
+    call this%guard_temp(); call deriv%guard_temp()
+#:if defined('DEBUG')
+    call this%check_compatible(deriv)
+#:endif
+    select type(deriv)
+    class is(array_scalar_field)
+      call allocate_like(this%deriv_data, deriv%field_data)
+      this%deriv_data = deriv%field_data
+    class is(uniform_scalar_field)
+      if (allocated(this%field_data)) then
+        call allocate_like(this%deriv_data, this%field_data)
+        this%deriv_data = deriv%get_value()
+      end if
+    class default
+      error stop ('Non-array_scalar_field and non-uniform_scalar_field '//&
+                  'type passed as derivative value.')
+    end select
+    this%has_deriv = .true.
+    call this%clean_temp(); call deriv%clean_temp()
+  end subroutine array_scalar_set_deriv
+  
+  function array_scalar_get_deriv(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Gets the differential/derivative value for this field. If no
+    ! such information is available, returns a field with zero values.
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer    :: res
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type (res)
+    class is(array_scalar_field)
+      if (allocated(this%deriv_data)) then
+        res%field_data = this%deriv_data
+      else
+        res%field_data = 0._r8 * this%field_data
+      end if   
+      res%has_deriv = .false.
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
+  end function array_scalar_get_deriv
 
   elemental subroutine array_scalar_finalise(this)
     !* Author: Chris MacMackin
@@ -2191,19 +2442,9 @@ contains
       class is(array_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
-        if (rhs%vector_dimensions() > this%vector_dims) then
-          call res%assign_meta_data(this, .false.)
-          if (.not. allocated(res%field_data)) then
-            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-          else if (size(res%field_data,1) /= this%numpoints .or. &
-                   size(res%field_data,2) /= rhs%vector_dimensions()) then
-            deallocate(res%field_data)
-            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-          end if
-          res%vector_dims = rhs%vector_dimensions()
-        else
-          call res%assign_meta_data(this)
-        end if
+        call res%assign_meta_data(this, .false.)
+        call allocate_like(res%field_data, this%field_data, rhs%field_data)
+        res%vector_dims = max_dims
         res%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
                                        - rhs%field_data(:,1:min_dims)
         if (rhs%vector_dims > this%vector_dims) then
@@ -2214,20 +2455,10 @@ contains
       class is(uniform_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
-        if (rhs%vector_dimensions() > this%vector_dims) then
-          call res%assign_meta_data(this, .false.)
-          if (.not. allocated(res%field_data)) then
-            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-          else if (size(res%field_data,1) /= this%numpoints .or. &
-                   size(res%field_data,2) /= rhs%vector_dimensions()) then
-            deallocate(res%field_data)
-            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-          end if
-          res%vector_dims = rhs%vector_dimensions()
-        else
-          call res%assign_meta_data(this)
-        end if
         vec = rhs%get_value()
+        call res%assign_meta_data(this, .false.)
+        call allocate_like(res%field_data, this%field_data, vec)
+        res%vector_dims = max_dims
         do concurrent(i=1:min_dims)
           res%field_data(:,i) = this%field_data(:,i) - vec(i)
         end do
@@ -2265,15 +2496,7 @@ contains
     class is(array_vector_field)
       min_dims = min(rhs%vector_dims, size(lhs))
       max_dims = max(rhs%vector_dims, size(lhs))
-      if (allocated(res%field_data)) then
-        if (size(res%field_data,1) /= res%numpoints .and. &
-            size(res%field_data,2) /= max_dims) then
-          deallocate(res%field_data)
-          allocate(res%field_data(res%numpoints, max_dims))
-        end if
-      else
-        allocate(res%field_data(res%numpoints, max_dims))
-      end if
+      call allocate_like(res%field_data, rhs%field_data, lhs)
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
       end do
@@ -2309,15 +2532,7 @@ contains
     max_dims = max(this%vector_dims, size(rhs))
     select type(res)
     class is(array_vector_field)
-      if (allocated(res%field_data)) then
-        if (size(res%field_data,1) /= res%numpoints .and. &
-            size(res%field_data,2) /= max_dims) then
-          deallocate(res%field_data)
-          allocate(res%field_data(res%numpoints, max_dims))
-        end if
-      else
-        allocate(res%field_data(res%numpoints, max_dims))
-      end if
+      call allocate_like(res%field_data, this%field_data, rhs)
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
       end do
@@ -2356,23 +2571,11 @@ contains
     class is(array_vector_field)
       select type(rhs)
       class is(array_vector_field)
-        if (rhs%vector_dimensions() > this%vector_dims) then
-          call res%assign_meta_data(rhs, .false.)
-          if (allocated(res%field_data)) then
-            if (size(res%field_data,1) /= this%numpoints .and. &
-                size(res%field_data,2) /= rhs%vector_dimensions()) then
-              deallocate(res%field_data)
-              allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-            end if
-          else
-            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-          end if
-          res%vector_dims = rhs%vector_dimensions()
-        else
-          call res%assign_meta_data(this)
-        end if
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
+        call res%assign_meta_data(rhs, .false.)
+        call allocate_like(res%field_data, this%field_data, rhs%field_data)
+        res%vector_dims = max_dims
         res%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
                                        + rhs%field_data(:,1:min_dims)
         if (rhs%vector_dims > this%vector_dims) then
@@ -2381,25 +2584,12 @@ contains
           res%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
         end if
       class is(uniform_vector_field)
-        if (rhs%vector_dimensions() > this%vector_dims) then
-          call res%assign_meta_data(rhs, .false.)
-          if (allocated(res%field_data)) then
-            if (size(res%field_data,1) /= this%numpoints .and. &
-                size(res%field_data,2) /= rhs%vector_dimensions()) then
-              deallocate(res%field_data)
-              allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-            end if
-          else
-            allocate(res%field_data(this%numpoints, rhs%vector_dimensions()))
-          end if
-          allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
-          res%vector_dims = rhs%vector_dimensions()
-        else
-          call res%assign_meta_data(this)
-        end if
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         vec = rhs%get_value()
+        call res%assign_meta_data(rhs, .false.)
+        call allocate_like(res%field_data, this%field_data, vec)
+        res%vector_dims = max_dims
         do concurrent(i=1:min_dims)
           res%field_data(:,i) = this%field_data(:,i) + vec(i)
         end do
@@ -2437,15 +2627,7 @@ contains
     max_dims = max(rhs%vector_dims, size(lhs))
     select type(res)
     class is(array_vector_field)
-      if (allocated(res%field_data)) then
-        if (size(res%field_data,1) /= res%numpoints .and. &
-            size(res%field_data,2) /= max_dims) then
-          deallocate(res%field_data)
-          allocate(res%field_data(res%numpoints, max_dims))
-        end if
-      else
-        allocate(res%field_data(res%numpoints, max_dims))
-      end if
+      call allocate_like(res%field_data, rhs%field_data, lhs)
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
       end do
@@ -2481,15 +2663,7 @@ contains
     max_dims = max(this%vector_dims, size(rhs))
     select type(res)
     class is(array_vector_field)
-      if (allocated(res%field_data)) then
-        if (size(res%field_data,1) /= res%numpoints .and. &
-            size(res%field_data,2) /= max_dims) then
-          deallocate(res%field_data)
-          allocate(res%field_data(res%numpoints, max_dims))
-        end if
-      else
-        allocate(res%field_data(res%numpoints, max_dims))
-      end if
+      call allocate_like(res%field_data, this%field_data, rhs)
       do concurrent (i=1:res%numpoints)
         res%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
       end do
@@ -2700,7 +2874,7 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
-      allocate(res%field_data(size(this%field_data,1),this%vector_dims))
+      call allocate_like(res%field_data, this%field_data)
       do i = 1, this%vector_dims
         res%field_data(:,i) = this%array_dx(this%field_data(:,i),1,2)
         do j = 2, this%dimensions()
@@ -2758,7 +2932,15 @@ contains
     class is(array_vector_field)
       call res%assign_meta_data(this,.false.)
       res%vector_dims = 3
-      allocate(res%field_data(res%numpoints,3))
+      if (allocated(res%field_data)) then
+        if (size(res%field_data, 1) /= this%numpoints .or. &
+            size(res%field_data, 2) /= 3) then
+          deallocate(res%field_data)
+          allocate(res%field_data(res%numpoints,3))
+        end if
+      else
+        allocate(res%field_data(res%numpoints,3))
+      end if
       if (this%dimensions() >= 3) then
         res%field_data(:,2) = this%array_dx(this%field_data(:,1),3)
         been_set(2) = .true.
@@ -2835,6 +3017,7 @@ contains
       if (allocated(res%field_data)) then
         if (size(res%field_data, 1) /= this%numpoints .or. &
             size(res%field_data, 2) /= 3) then
+          deallocate(res%field_data)
           allocate(res%field_data(this%numpoints,3))
         end if
       else
@@ -3206,32 +3389,13 @@ contains
     class is(array_scalar_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = rhs%dimensions()
-      if (allocated(this%field_data)) then
-        if (.not. allocated(rhs%field_data)) then
-          deallocate(this%field_data)
-        else if (al .and. size(this%field_data,1)/=size(rhs%field_data)) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data),1))
-        end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data),1))
-      end if
+      call allocate_like(this%field_data, rhs%field_data)
+      this%has_deriv = rhs%has_deriv
     class is(array_vector_field)
       this%numpoints = rhs%numpoints
       this%vector_dims = rhs%vector_dims
-      if (allocated(this%field_data)) then
-        if (.not. allocated(rhs%field_data)) then
-          deallocate(this%field_data)
-        else if (al .and. &
-                 any(shape(this%field_data) /= shape(rhs%field_data))) then
-          deallocate(this%field_data)
-          allocate(this%field_data(size(rhs%field_data,1), &
-                                         size(rhs%field_data,2)))
-        end if
-      else if (allocated(rhs%field_data) .and. al) then
-        allocate(this%field_data(size(rhs%field_data,1), &
-                                       size(rhs%field_data,2)))
-      end if
+      call allocate_like(this%field_data, rhs%field_data)
+      this%has_deriv = rhs%has_deriv
     end select
     call rhs%clean_temp()
   end subroutine array_vector_assign_meta_data
@@ -3416,6 +3580,67 @@ contains
     this%field_data(element,component) = val
     call this%clean_temp()
   end subroutine array_vector_set_element_comp
+
+  subroutine array_vector_set_deriv(this, deriv)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Sets a differential/derivative value for the field, which will
+    ! be propagated through operations using automatic differentiation
+    ! (tangent mode).
+    !
+    class(array_vector_field), intent(inout) :: this
+    class(vector_field), intent(in)          :: deriv
+      !! The derivative (i.e. differential) value of this field
+    integer :: i
+    call this%guard_temp(); call deriv%guard_temp()
+#:if defined('DEBUG')
+    call this%check_compatible(deriv)
+#:endif
+    select type(deriv)
+    class is(array_vector_field)
+      this%deriv_data = deriv%field_data
+    class is(uniform_vector_field)
+      if (allocated(this%field_data)) then
+        call allocate_like(this%deriv_data, this%field_data)
+        do i=1, this%numpoints
+          this%deriv_data(i,:) = deriv%get_value()
+        end do
+      end if
+    class default
+      error stop ('Non-array_scalar_field and non-uniform_scalar_field '//&
+                  'type passed as derivative value.')
+    end select
+    this%has_deriv = .true.
+    call this%clean_temp(); call deriv%clean_temp()
+  end subroutine array_vector_set_deriv
+  
+  function array_vector_get_deriv(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Gets the differential/derivative value for this field. If no
+    ! such information is available, returns a field with zero values.
+    !
+    class(array_vector_field), intent(in) :: this
+    class(vector_field), pointer    :: res
+    call this%guard_temp()
+    call this%allocate_vector_field(res)
+    call res%assign_meta_data(this)
+    select type (res)
+    class is(array_vector_field)
+      if (allocated(this%deriv_data)) then
+        res%field_data = this%deriv_data
+      else
+        res%field_data = 0._r8 * this%field_data
+      end if   
+      res%has_deriv = .false.
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select
+    call this%clean_temp()
+  end function array_vector_get_deriv
 
   function array_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
