@@ -1138,7 +1138,9 @@ contains
     ! temporary.
     !
     class(abstract_field), intent(inout) :: this
-    if (associated(this%temporary)) deallocate(this%temporary)
+    if (associated(this%temporary)) then
+       deallocate(this%temporary)
+    end if
   end subroutine unset_temp
 
   impure elemental subroutine guard_temp(this)

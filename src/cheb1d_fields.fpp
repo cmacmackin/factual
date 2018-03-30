@@ -129,13 +129,13 @@ $:public_unary()
     procedure :: force_finalise => cheb1d_scalar_force_finalise
       !! Frees the data array for this field, in order to reduce the
       !! volume of any memory leaks.
-    final :: cheb1d_scalar_finalise
-      !! Deallocates the contents of the field. The bulk of the
-      !! field's memory should be deallocated with the `clean_temp`
-      !! method, but that is unable to deallocate the pointer to the
-      !! data array--only the array itself. In compilers which support
-      !! finalisation, this method eliminates the small memory leak
-      !! from the pointer.
+!    final :: cheb1d_scalar_finalise
+!      !! Deallocates the contents of the field. The bulk of the
+!      !! field's memory should be deallocated with the `clean_temp`
+!      !! method, but that is unable to deallocate the pointer to the
+!      !! data array--only the array itself. In compilers which support
+!      !! finalisation, this method eliminates the small memory leak
+!      !! from the pointer.
     procedure :: array_interpolate => cheb1d_scalar_interp
       !! Interpolates a value in the field, using a 1-D array of data
       !! passed to it.
@@ -211,13 +211,13 @@ $:public_unary()
     procedure :: force_finalise => cheb1d_vector_force_finalise
       !! Frees the data array for this field, in order to reduce the
       !! volume of any memory leaks.
-    final :: cheb1d_vector_finalise
-      !! Deallocates the contents of the field. The bulk of the
-      !! field's memory should be deallocated with the `clean_temp`
-      !! method, but that is unable to deallocate the pointer to the
-      !! data array--only the array itself. In compilers which support
-      !! finalisation, this method eliminates the small memory leak
-      !! from the pointer..
+    !final :: cheb1d_vector_finalise
+    !  !! Deallocates the contents of the field. The bulk of the
+    !  !! field's memory should be deallocated with the `clean_temp`
+    !  !! method, but that is unable to deallocate the pointer to the
+    !  !! data array--only the array itself. In compilers which support
+    !  !! finalisation, this method eliminates the small memory leak
+    !  !! from the pointer..
     procedure :: array_interpolate => cheb1d_vector_interp
       !! Interpolates a value in the field, using a 2-D array of data
       !! passed to it.

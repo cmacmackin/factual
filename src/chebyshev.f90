@@ -239,11 +239,8 @@ contains
         array1(i) = -i*pi*array2(i+1)
         array2(i+1) = i**2 * array2(i+1)
       end do
-      array1(field_size - 1) = array1(field_size - 1)*0.5_r8
-      array1(field_size) = 0.0_c_double
       call fftw_execute_r2r(plan_dst,array1,array3)
       array1(1) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
- !     if (verbose) print*,sum(array2(2:field_size-1)),0.5_r8*array2(field_size),array1(1)
       do concurrent (i=2:field_size-1)
         array1(i) = -0.5_c_double/pi * array3(i-1)/ &
              sqrt(1.0_c_double - ((xvals(i)-field_centre)*inverse_width)**2)
@@ -251,14 +248,13 @@ contains
       end do
       array2(field_size) = (-1)**(field_size) * array2(field_size)
       array1(field_size) = sum(array2(2:field_size-1)) + 0.5_c_double*array2(field_size)
-!      if (verbose) print*,sum(array2(2:field_size-1)),0.5_r8*array2(field_size),array1(field_size)
       ord = ord - 1
     end do
     field_data = array1 * inverse_width**order_
   end subroutine differentiate_1d
 
 
-  subroutine integrate_1d(field_data,xvals,boundary_point,boundary_val)
+  subroutine integrate_1d(field_data,xvals,boundary_point,boundary_val,estimate_high)
     !* Author: Chris MacMackin
     !  Date: September 2017
     !
@@ -285,6 +281,10 @@ contains
       !! array bounds then this argument is ignored. If
       !! `boundary_point` is provided but this argument is note then
       !! it defaults to 0.
+    logical, intent(in), optional :: estimate_high
+      !! Estimate the power of the highest mode rather than calculate
+      !! it from boundary values. Useful if the boundary values are
+      !! not trusted. Defaults to `.false.`.
     integer :: i
     real(r8) :: width, field_centre, bval
     logical :: use_first_eq
@@ -320,16 +320,15 @@ contains
     if (use_first_eq) then
       array1(field_size) = 1._r8/(field_size-1)**2 * &
            (width*field_data(1) - 2*sum(array3(1:field_size-2)))
-!    if (verbose) then
-!      print*,field_data(1), field_data(field_size)
-!      print*, width*(field_data(1)-field_data(field_size)), &
-!              width*(field_data(1)+field_data(field_size)), &
-!              4*sum(array3(1:field_size-2:2))
-!    end if
     else
       array3(2:field_size:2) = -array3(2:field_size:2)
       array1(field_size) = real((-1)**field_size, r8)/(field_size-1)**2 * &
            (width*field_data(field_size) - 2_r8*sum(array3(1:field_size-2)))
+    end if
+    if (present(estimate_high)) then
+      if (estimate_high) then
+        array1(field_size) = 0._r8
+      end if
     end if
     call fftw_execute_r2r(plan_dct,array1,array2)
     if (present(boundary_point)) then
