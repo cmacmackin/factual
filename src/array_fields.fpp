@@ -68,7 +68,7 @@ module array_fields_mod
     real(r8), dimension(:), allocatable :: field_data
       !! The value of the scalar field at the data-points. Each
       !! element represents the value at a different location.
-    logical                             :: has_deriv
+    logical                             :: has_deriv = .false.
       !! Whether this field has a derivative being used for automatic
       !! differentiation.
     real(r8), dimension(:), allocatable :: deriv_data
@@ -186,6 +186,9 @@ module array_fields_mod
       !! set by the user or calculated using automatic
       !! differentiation. If no derivative information is available
       !! for this object then a field of zeros is returned.
+    procedure, non_overridable :: allocate_deriv => array_scalar_alloc_deriv
+      !! Decides whether to allocate the array containing the
+      !! derivative.
     procedure(sf_bound), deferred :: subtype_boundary
       !! Performs whatever operations are needed on the subtype to get
       !! a boundary field, including returning the slices needed to
@@ -354,7 +357,7 @@ module array_fields_mod
       !! represents a different component of the vector.
     integer                               :: vector_dims = 0
       !! The number of vector components
-    logical                               :: has_deriv
+    logical                               :: has_deriv = .false.
       !! Whether this field has a derivative being used for automatic
       !! differentiation.
     real(r8), dimension(:,:), allocatable :: deriv_data
@@ -484,6 +487,9 @@ module array_fields_mod
       !! set by the user or calculated using automatic
       !! differentiation. If no derivative information is available
       !! for this object then a field of zeros is returned.
+    procedure, non_overridable :: allocate_deriv => array_vector_alloc_deriv
+      !! Decides whether to allocate the array containing the
+      !! derivative.
     procedure(vf_bound), deferred :: subtype_boundary
       !! Performs whatever operations are needed by the subtype to get
       !! a boundary field, including returning the slices needed to
@@ -860,6 +866,7 @@ contains
     call this%unset_temp()
     select type(this)
     class is(array_scalar_field)
+      this%has_deriv = .false.
       call this%assign_subtype_meta_data(template)
       if (allocated(this%field_data)) then
         if (size(this%field_data) /= numpoints) then
@@ -904,6 +911,7 @@ contains
     call template%allocate_scalar_field(this)
     select type(this)
     class is(array_scalar_field)
+      this%has_deriv = .false.
       call this%assign_subtype_meta_data(template)
       if (.not. allocated(this%field_data)) then
         allocate(this%field_data(size(array)))
@@ -1072,11 +1080,22 @@ contains
     call res%assign_meta_data(this)
     select type (res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this, rhs)
       select type(rhs)
       class is(array_scalar_field)
         res%field_data = this%field_data * rhs%field_data
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%deriv_data = this%field_data*rhs%deriv_data + this%deriv_data*rhs%field_data
+        else if (this%has_deriv) then
+          res%deriv_data = this%deriv_data*rhs%field_data
+        else if (rhs%has_deriv) then
+          res%deriv_data = this%field_data*rhs%deriv_data
+        end if
       class is(uniform_scalar_field)
         res%field_data = this%field_data * rhs%get_value()
+        if (this%has_deriv) then
+          res%deriv_data = rhs%get_value()*this%deriv_data
+        end if
       end select
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1105,16 +1124,44 @@ contains
       select type(rhs)
       class is(array_vector_field)
         call res%assign_meta_data(rhs)
-        do concurrent (i=1:this%numpoints)
-          res%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
-        end do
+        call res%allocate_deriv(this, rhs)
+        if (this%has_deriv .and. rhs%has_deriv) then
+          do concurrent (i=1:this%numpoints)
+            res%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
+            res%deriv_data(i,:) = this%field_data(i) * rhs%deriv_data(i,:) + &
+                                  this%deriv_data(i) * rhs%field_data(i,:)
+          end do
+        else if (this%has_deriv) then
+          do concurrent (i=1:this%numpoints)
+            res%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
+            res%deriv_data(i,:) = this%deriv_data(i) * rhs%field_data(i,:)
+         end do
+        else if (rhs%has_deriv) then
+          do concurrent (i=1:this%numpoints)
+            res%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
+            res%deriv_data(i,:) = this%field_data(i) * rhs%deriv_data(i,:)
+          end do
+        else
+          do concurrent (i=1:this%numpoints)
+            res%field_data(i,:) = this%field_data(i) * rhs%field_data(i,:)
+          end do
+        end if
       class is(uniform_vector_field)
         call res%assign_meta_data(rhs, .false.)
         allocate(res%field_data(this%numpoints,rhs%vector_dimensions()))
+        call res%allocate_deriv(this, rhs)
         res%vector_dims = size(rhs%get_value())
-        do i = 1, this%numpoints
-          res%field_data(i,:) = this%field_data(i) * rhs%get_value()
-        end do
+        call res%allocate_deriv(this, rhs)
+        if (this%has_deriv) then
+          do i = 1, this%numpoints
+            res%field_data(i,:) = this%field_data(i) * rhs%get_value()
+            res%deriv_data(i,:) = this%deriv_data(i) * rhs%get_value()
+          end do
+        else
+          do i = 1, this%numpoints
+            res%field_data(i,:) = this%field_data(i) * rhs%get_value()
+          end do
+        end if
       end select
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -1138,6 +1185,7 @@ contains
     class is(array_scalar_field)
       call res%assign_meta_data(rhs)
       res%field_data = lhs * rhs%field_data
+      if (res%has_deriv) res%deriv_data = lhs*rhs%deriv_data
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1161,10 +1209,18 @@ contains
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
       call allocate_like(res%field_data, rhs%field_data, size(lhs))
+      call res%allocate_deriv(rhs)
       res%vector_dims = size(lhs)
-      do concurrent (i=1:rhs%numpoints)
-        res%field_data(i,:) = rhs%field_data(i) * lhs
-      end do
+      if (res%has_deriv) then
+        do concurrent (i=1:rhs%numpoints)
+          res%field_data(i,:) = rhs%field_data(i) * lhs
+          res%deriv_data(i,:) = rhs%deriv_data(i) * lhs
+        end do
+      else
+        do concurrent (i=1:rhs%numpoints)
+          res%field_data(i,:) = rhs%field_data(i) * lhs
+        end do
+      end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                   '`allocate_vector_field` routine.')
@@ -1186,7 +1242,9 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data * rhs
+      if (res%has_deriv) res%deriv_data = this%deriv_data * rhs
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1210,10 +1268,18 @@ contains
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
       allocate(res%field_data(this%numpoints,size(rhs)))
+      call res%allocate_deriv(this)
       res%vector_dims = size(rhs)
-      do concurrent (i=1:this%numpoints)
-        res%field_data(i,:) = this%field_data(i) * rhs
-      end do
+      if (res%has_deriv) then
+        do concurrent (i=1:this%numpoints)
+          res%field_data(i,:) = this%field_data(i) * rhs
+          res%deriv_data(i,:) = this%deriv_data(i) * rhs
+        end do
+      else
+        do concurrent (i=1:this%numpoints)
+          res%field_data(i,:) = this%field_data(i) * rhs
+        end do
+      end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                   '`allocate_vector_field` routine.')
@@ -1238,11 +1304,23 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this, rhs)
       select type(rhs)
       class is(array_scalar_field)
         res%field_data = this%field_data / rhs%field_data
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%field_data = (this%deriv_data*rhs%field_data - &
+                            this%field_data*rhs%deriv_data)/rhs%field_data**2
+        else if (this%has_deriv) then
+          res%field_data = this%deriv_data/rhs%field_data
+        else if (rhs%has_deriv) then
+          res%field_data = -this%field_data*rhs%deriv_data/rhs%field_data**2
+        end if
       class is(uniform_scalar_field)
         res%field_data = this%field_data / rhs%get_value()
+        if (res%has_deriv) then
+          res%deriv_data = this%deriv_data / rhs%get_value()
+        end if
       end select
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1265,7 +1343,11 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(rhs)
+      call res%allocate_deriv(rhs)
       res%field_data = lhs / rhs%field_data
+      if (res%has_deriv) then
+        res%field_data = -lhs*rhs%deriv_data/rhs%field_data**2
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1288,11 +1370,19 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(rhs, .false.)
-      allocate(res%field_data(size(lhs),rhs%numpoints))
       res%vector_dims = size(lhs)
-      do concurrent (i=1:rhs%numpoints)
-        res%field_data(i,:) = lhs / rhs%field_data(i)
-      end do
+      call allocate_like(res%field_data, rhs%field_data, res%vector_dims)
+      call res%allocate_deriv(rhs)
+      if (res%has_deriv) then
+        do concurrent (i=1:rhs%numpoints)
+          res%field_data(i,:) = lhs / rhs%field_data(i)
+          res%field_data(i,:) = -lhs*rhs%deriv_data(i)/rhs%field_data(i)**2
+        end do
+      else
+        do concurrent (i=1:rhs%numpoints)
+          res%field_data(i,:) = lhs / rhs%field_data(i)
+        end do
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1314,7 +1404,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data / rhs
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data / rhs
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1339,18 +1433,29 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this, rhs)
       select type(rhs)
       class is(array_scalar_field)
         res%field_data = this%field_data - rhs%field_data
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%deriv_data = this%deriv_data - rhs%deriv_data
+        else if (this%has_deriv) then
+          res%deriv_data = this%deriv_data
+        else if (rhs%has_deriv) then
+          res%deriv_data = -rhs%deriv_data
+        end if
       class is(uniform_scalar_field)
         res%field_data = this%field_data - rhs%get_value()
+        if (res%has_deriv) then
+          res%deriv_data = this%deriv_data
+        end if
       end select
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
     end select
     call this%clean_temp(); call rhs%clean_temp()
- end function array_scalar_sf_s_sf
+  end function array_scalar_sf_s_sf
 
   function array_scalar_r_s_sf(lhs,rhs) result(res)
     !* Author: Chris MacMackin
@@ -1366,7 +1471,11 @@ contains
     call res%assign_meta_data(rhs)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(rhs)
       res%field_data = lhs - rhs%field_data
+      if (res%has_deriv) then
+        res%deriv_data = -rhs%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1388,7 +1497,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data - rhs
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1413,11 +1526,22 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this, rhs)
       select type(rhs)
       class is(array_scalar_field)
         res%field_data = this%field_data + rhs%field_data
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%deriv_data = this%deriv_data + rhs%deriv_data
+        else if (this%has_deriv) then
+          res%deriv_data = this%deriv_data
+        else if (rhs%has_deriv) then
+          res%deriv_data = rhs%deriv_data
+        end if
       class is(uniform_scalar_field)
         res%field_data = this%field_data + rhs%get_value()
+        if (res%has_deriv) then
+          res%deriv_data = this%deriv_data
+        end if
       end select
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1440,7 +1564,11 @@ contains
     call res%assign_meta_data(rhs)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(rhs)
       res%field_data = lhs + rhs%field_data
+      if (res%has_deriv) then
+        res%deriv_data = rhs%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1462,7 +1590,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data + rhs
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1484,7 +1616,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data ** rhs
+      if (res%has_deriv) then
+        res%deriv_data = rhs*this%field_data ** (rhs-1._r8) * this%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1506,7 +1642,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data ** rhs
+      if (res%has_deriv) then
+        res%deriv_data = rhs*this%field_data ** (rhs-1.) * this%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1528,7 +1668,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data ** rhs
+      if (res%has_deriv) then
+        res%deriv_data = rhs*this%field_data ** (rhs-1) * this%deriv_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1536,10 +1680,465 @@ contains
     call this%clean_temp()
   end function array_scalar_sf_p_i
 
-#:for FUNC, TEX in UNARY_FUNCTIONS
-  $:unary_func(FUNC, TEX, 'array_scalar')
 
-#:endfor
+  function array_scalar_sin(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\sin({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = sin(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data*cos(this%field_data)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_sin
+
+  function array_scalar_cos(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\cos({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = cos(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = -this%deriv_data*sin(this%field_data)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_cos
+
+  function array_scalar_tan(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\tan({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = tan(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/cos(this%field_data)**2
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_tan
+
+  function array_scalar_asin(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\sin^{-1}({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = asin(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/sqrt(1._r8 - this%field_data**2)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_asin
+
+  function array_scalar_acos(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\cos^{-1}({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = acos(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = -this%deriv_data/sqrt(1._r8 - this%field_data**2)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_acos
+
+  function array_scalar_atan(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\tan^{-1}({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = atan(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/(1._r8 + this%field_data**2)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_atan
+
+  function array_scalar_sinh(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\sinh({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = sinh(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data*cosh(this%field_data)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_sinh
+
+  function array_scalar_cosh(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\cosh({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = cosh(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data*sinh(this%field_data)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_cosh
+
+  function array_scalar_tanh(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\tanh({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = tanh(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/cosh(this%field_data)**2
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_tanh
+
+  function array_scalar_asinh(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\sinh^{-1}({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = asinh(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/sqrt(this%deriv_data**2 + 1._r8)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_asinh
+
+  function array_scalar_acosh(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\cosh^{-1}({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = acosh(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/sqrt(this%deriv_data**2 - 1._r8)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_acosh
+
+  function array_scalar_atanh(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\tanh^{-1}({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = atanh(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/(1-this%field_data**2)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_atanh
+
+  function array_scalar_log(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\ln({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = log(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/this%field_data
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_log
+
+  function array_scalar_log10(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\log({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = log10(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data/(this%field_data*log(10._r8))
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_log10
+
+  function array_scalar_exp(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(e^({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = exp(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data*res%field_data
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_exp
+
+  function array_scalar_abs(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\abs({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = abs(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data*sign(1._r8,this%field_data)
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_abs
+
+  function array_scalar_sqrt(this) result(res)
+    !* Author: Chris MacMackin
+    !  Date: March 2016
+    !
+    ! \(\sqrt({\rm field})\)
+    !
+    class(array_scalar_field), intent(in) :: this
+    class(scalar_field), pointer :: res !! The result of this operation
+    call this%guard_temp()
+    call this%allocate_scalar_field(res)
+    call res%assign_meta_data(this)
+    select type(res)
+    class is(array_scalar_field)
+      call res%allocate_deriv(this)
+      if (allocated(this%field_data)) then
+        res%field_data = sqrt(this%field_data)
+      end if
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data*0.5_r8/res%field_data
+      end if
+    class default
+      error stop ('Non-array_scalar_field type allocated by '//&
+                  '`allocate_scalar_field` routine.')
+    end select    
+    call this%clean_temp()
+  end function array_scalar_sqrt
 
   function array_scalar_minval(this) result(res)
     !* Author: Chris MacMackin
@@ -1590,7 +2189,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_scalar_field)
+      call res%allocate_deriv(this)
       res%field_data = this%array_dx(this%field_data, dir, order)
+      if (res%has_deriv) then
+        res%deriv_data = this%array_dx(this%deriv_data, dir, order)
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   '`allocate_scalar_field` routine.')
@@ -1612,9 +2215,16 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this)
       res%field_data = this%array_dx(this%field_data,1,2)
+      if (res%has_deriv) then
+        res%deriv_data = this%array_dx(this%deriv_data,1,2)
+      end if
       do i = 2, this%dimensions()
         res%field_data = res%field_data + this%array_dx(this%field_data,i,2)
+        if (res%has_deriv) then
+          res%deriv_data = res%deriv_data + this%array_dx(this%deriv_data,i,2)
+        end if
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1638,8 +2248,13 @@ contains
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
       call allocate_like(res%field_data, this%field_data, this%dimensions())
+      call res%allocate_deriv(this)
       do i = 1, this%dimensions()
+      call res%allocate_deriv(this)
         res%field_data(:,i) = this%array_dx(this%field_data,i,1)
+        if (res%has_deriv) then
+          res%deriv_data(:,i) = this%array_dx(this%deriv_data,i,1)
+        end if
       end do
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -1664,8 +2279,16 @@ contains
         if (rhs%memory_reusable()) then
           if (allocated(this%field_data)) deallocate(this%field_data)
           call move_alloc(rhs%field_data, this%field_data)
+          if (rhs%has_deriv) then
+            if (allocated(this%deriv_data)) deallocate(this%deriv_data)
+            call move_alloc(rhs%deriv_data, this%deriv_data)
+          end if
         else
           this%field_data = rhs%field_data
+          if (this%has_deriv) then 
+            call this%allocate_deriv(rhs)
+            this%deriv_data = rhs%deriv_data
+          end if
         end if
       end if
     class is(uniform_scalar_field)
@@ -1751,6 +2374,8 @@ contains
       this%numpoints = rhs%numpoints
       call allocate_like(this%field_data, rhs%field_data, alloc)
       this%has_deriv = rhs%has_deriv
+    class default
+      this%has_deriv = .false.
     end select
     call rhs%clean_temp()
   end subroutine array_scalar_assign_meta_data
@@ -1938,6 +2563,18 @@ contains
       res%field_data = &
            [(this%field_data(slices(1,i):slices(2,i):slices(3,i)), &
             i=1,size(slices,2))]
+      res%has_deriv = this%has_deriv
+      if (res%has_deriv) then
+        if (.not. allocated(res%deriv_data)) then
+          allocate(res%deriv_data(res%numpoints))
+        else if (size(res%deriv_data) /= res%numpoints) then
+          deallocate(res%deriv_data)
+          allocate(res%deriv_data(res%numpoints))
+        end if
+        res%deriv_data = &
+             [(this%deriv_data(slices(1,i):slices(2,i):slices(3,i)), &
+              i=1,size(slices,2))]
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -1977,7 +2614,7 @@ contains
     this%has_deriv = .true.
     call this%clean_temp(); call deriv%clean_temp()
   end subroutine array_scalar_set_deriv
-  
+
   function array_scalar_get_deriv(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2018
@@ -2004,6 +2641,53 @@ contains
     end select
     call this%clean_temp()
   end function array_scalar_get_deriv
+ 
+  subroutine array_scalar_alloc_deriv(this, field1, field2)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Helper function which decides whether a derivative is going to
+    ! be calculated and allocates the array if necessary.
+    !
+    class(array_scalar_field), intent(inout)    :: this
+    class(abstract_field), intent(in)           :: field1
+      !! The first field which is checked to see if it has a
+      !! derivative.
+    class(abstract_field), optional, intent(in) :: field2
+      !! The optional second field which is checked to see if it has a
+      !! derivative.
+    logical :: alloc
+    select type(field1)
+    class is(array_scalar_field)
+      alloc = field1%has_deriv
+      if (present(field2) .and. .not. alloc) then
+        select type(field2)
+        class is(array_scalar_field)
+          alloc = field2%has_deriv
+        class is(array_vector_field)
+          alloc = field2%has_deriv
+        end select
+      end if
+    class is(array_vector_field)
+      alloc = field1%has_deriv
+      if (present(field2) .and. .not. alloc) then
+        select type(field2)
+        class is(array_scalar_field)
+          alloc = field2%has_deriv
+        class is(array_vector_field)
+          alloc = field2%has_deriv
+        end select
+      end if
+    class default
+      alloc = .false.
+    end select
+    if (alloc) then
+      call allocate_like(this%deriv_data, this%field_data)
+      this%has_deriv = allocated(this%deriv_data)
+    else
+      this%has_deriv = .false.
+    end if
+  end subroutine array_scalar_alloc_deriv
 
   elemental subroutine array_scalar_finalise(this)
     !* Author: Chris MacMackin
@@ -2080,6 +2764,7 @@ contains
     call this%unset_temp()
     select type(this)
     class is(array_vector_field)
+      this%has_deriv = .false.
       call this%assign_subtype_meta_data(template)
       if (allocated(this%field_data)) deallocate(this%field_data)
       allocate(this%field_data(numpoints,vector_dims))
@@ -2120,6 +2805,7 @@ contains
     call template%allocate_vector_field(this)
     select type(this)
     class is(array_vector_field)
+      this%has_deriv = .false.
       call this%assign_subtype_meta_data(template)
       if (.not. allocated(this%field_data)) then
         allocate(this%field_data(size(array,1),size(array,2)))
@@ -2700,8 +3386,16 @@ contains
         if (rhs%memory_reusable()) then
           if (allocated(this%field_data)) deallocate(this%field_data)
           call move_alloc(rhs%field_data, this%field_data)
+          if (rhs%has_deriv) then
+            if (allocated(this%deriv_data)) deallocate(this%deriv_data)
+            call move_alloc(rhs%deriv_data, this%deriv_data)
+          end if
         else
           this%field_data = rhs%field_data
+          if (this%has_deriv) then 
+            call this%allocate_deriv(rhs)
+            this%deriv_data = rhs%deriv_data
+          end if
         end if
       end if
     class is(uniform_vector_field)
@@ -2733,6 +3427,7 @@ contains
     call this%assign_meta_data(rhs(1), .false.)
     select type(rhs)
     class is(array_scalar_field)
+      this%has_deriv = any(rhs%has_deriv)
       this%vector_dims = size(rhs)
       this%numpoints = rhs(1)%numpoints
       if (allocated(this%field_data)) then
@@ -2744,8 +3439,14 @@ contains
       if (.not. allocated(this%field_data)) then
         allocate(this%field_data(this%numpoints,this%vector_dims))
       end if
+      if (this%has_deriv) call allocate_like(this%deriv_data, this%field_data)
       do concurrent (i=1:this%vector_dims)
         this%field_data(:,i) = rhs(i)%field_data
+        if (rhs(i)%has_deriv) then
+          this%deriv_data(:,i) = rhs(i)%deriv_data
+        else if (this%has_deriv) then
+          this%deriv_data(:,i) = 0._r8
+        end if
       end do
     class is(uniform_scalar_field)
       if (allocated(this%field_data)) then
@@ -3396,6 +4097,8 @@ contains
       this%vector_dims = rhs%vector_dims
       call allocate_like(this%field_data, rhs%field_data)
       this%has_deriv = rhs%has_deriv
+    class default
+      this%has_deriv = .false.
     end select
     call rhs%clean_temp()
   end subroutine array_vector_assign_meta_data
@@ -3642,6 +4345,53 @@ contains
     call this%clean_temp()
   end function array_vector_get_deriv
 
+  subroutine array_vector_alloc_deriv(this, field1, field2)
+    !* Author: Chris MacMackin
+    !  Date: March 2018
+    !
+    ! Helper function which decides whether a derivative is going to
+    ! be calculated and allocates the array if necessary.
+    !
+    class(array_vector_field), intent(inout)  :: this
+    class(abstract_field), intent(in)           :: field1
+      !! The first field which is checked to see if it has a
+      !! derivative.
+    class(abstract_field), optional, intent(in) :: field2
+      !! The optional second field which is checked to see if it has a
+      !! derivative.
+    logical :: alloc
+    select type(field1)
+    class is(array_scalar_field)
+      alloc = field1%has_deriv
+      if (present(field2) .and. .not. alloc) then
+        select type(field2)
+        class is(array_scalar_field)
+          alloc = field2%has_deriv
+        class is(array_vector_field)
+          alloc = field2%has_deriv
+        end select
+      end if
+    class is(array_vector_field)
+      alloc = field1%has_deriv
+      if (present(field2) .and. .not. alloc) then
+        select type(field2)
+        class is(array_scalar_field)
+          alloc = field2%has_deriv
+        class is(array_vector_field)
+          alloc = field2%has_deriv
+        end select
+      end if
+    class default
+      alloc = .false.
+    end select
+    if (alloc) then
+      call allocate_like(this%deriv_data, this%field_data)
+      this%has_deriv = allocated(this%deriv_data)
+    else
+      this%has_deriv = .false.
+    end if
+  end subroutine array_vector_alloc_deriv
+
   function array_vector_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -3687,10 +4437,27 @@ contains
         deallocate(res%field_data)
         allocate(res%field_data(res%numpoints,res%vector_dims))
       end if
+      res%has_deriv = this%has_deriv
+      if (res%has_deriv) then
+        if (.not. allocated(res%deriv_data)) then
+          allocate(res%deriv_data(res%numpoints,res%vector_dims))
+        else if (size(res%deriv_data,1) /= res%numpoints .or. &
+                 size(res%deriv_data,2) /= res%vector_dims) then
+          deallocate(res%deriv_data)
+          allocate(res%deriv_data(res%numpoints,res%vector_dims))
+        end if
+      else
+        if (allocated(res%deriv_data)) deallocate(res%deriv_data)
+      end if
       do concurrent (j=1:res%vector_dims)
         res%field_data(:,j) = &
              [(this%field_data(slices(1,i):slices(2,i):slices(3,i),j), &
              i=1, size(slices,2))]
+        if (res%has_deriv) then
+          res%deriv_data(:,j) = &
+               [(this%deriv_data(slices(1,i):slices(2,i):slices(3,i),j), &
+               i=1, size(slices,2))]
+        end if
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
