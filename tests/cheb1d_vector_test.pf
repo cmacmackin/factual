@@ -797,7 +797,7 @@ contains
       real(r8), dimension(:), allocatable :: tmp1
       real(r8), dimension(:), allocatable :: func2d
       tmp1 = f2(x)
-      func2d = [tmp1(2), -tmp1(1)]
+      func2d = [-tmp1(2), tmp1(1)]
     end function func2d
     pure function zeros(x)
       real(r8), dimension(:), intent(in) :: x

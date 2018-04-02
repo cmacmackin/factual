@@ -1320,12 +1320,12 @@ contains
       class is(array_scalar_field)
         res%field_data = this%field_data / rhs%field_data
         if (this%has_deriv .and. rhs%has_deriv) then
-          res%field_data = (this%deriv_data*rhs%field_data - &
+          res%deriv_data = (this%deriv_data*rhs%field_data - &
                             this%field_data*rhs%deriv_data)/rhs%field_data**2
         else if (this%has_deriv) then
-          res%field_data = this%deriv_data/rhs%field_data
+          res%deriv_data = this%deriv_data/rhs%field_data
         else if (rhs%has_deriv) then
-          res%field_data = -this%field_data*rhs%deriv_data/rhs%field_data**2
+          res%deriv_data = -this%field_data*rhs%deriv_data/rhs%field_data**2
         end if
       class is(uniform_scalar_field)
         res%field_data = this%field_data / rhs%get_value()
@@ -1357,7 +1357,7 @@ contains
       call res%allocate_deriv(rhs)
       res%field_data = lhs / rhs%field_data
       if (res%has_deriv) then
-        res%field_data = -lhs*rhs%deriv_data/rhs%field_data**2
+        res%deriv_data = -lhs*rhs%deriv_data/rhs%field_data**2
       end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -1953,7 +1953,7 @@ contains
         res%field_data = asinh(this%field_data)
       end if
       if (res%has_deriv) then
-        res%deriv_data = this%deriv_data/sqrt(this%deriv_data**2 + 1._r8)
+        res%deriv_data = this%deriv_data/sqrt(this%field_data**2 + 1._r8)
       end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -4141,7 +4141,7 @@ contains
           if (res%has_deriv) res%deriv_data(:,1) = this%deriv_data(:,2)*rhs(3)
         else
           res%field_data(:,1) = 0._r8
-          if (res%has_deriv) res%deriv_data(:,1) = this%deriv_data(:,2)*rhs(3)
+          if (res%has_deriv) res%deriv_data(:,1) = 0._r8
         end if
         if (this%vector_dims >= 1) then
           res%field_data(:,2) = -this%field_data(:,1)*rhs(3)
@@ -4445,9 +4445,10 @@ contains
         normalization = norm2(this%field_data(i,:dims))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
         iseq = (norm2(this%field_data(i,1:dims) - rhs%field_data(i,1:dims))/ &
-                normalization < get_tol()) .or. &
+                normalization < get_tol()) .or. ( &
                all(is_nan(this%field_data(i,1:dims)) .eqv. &
-                   is_nan(rhs%field_data(i,1:dims)))
+                   is_nan(rhs%field_data(i,1:dims))) .and. &
+               any(is_nan(this%field_data(i,1:dims))) )
         ! FIXME: This handling of NaNs will claim that things are
         ! equal when they aren't, just because they have a NAN in the
         ! same location.
