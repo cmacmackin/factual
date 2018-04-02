@@ -2992,13 +2992,36 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_vector_field)
+      call res%allocate_deriv(this, rhs)
       select type(rhs)
       class is(array_scalar_field)
-        do concurrent(i=1:this%vector_dims)
-          res%field_data(:,i) = this%field_data(:,i) * rhs%field_data
-        end do
+        if (this%has_deriv .and. rhs%has_deriv) then
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) * rhs%field_data
+            res%deriv_data(:,i) = this%field_data(:,i) * rhs%deriv_data + &
+                                  this%deriv_data(:,i) * rhs%field_data
+          end do
+        else if (this%has_deriv) then
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) * rhs%field_data
+            res%deriv_data(:,i) = this%deriv_data(:,i) * rhs%field_data
+          end do
+        else if (rhs%has_deriv) then
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) * rhs%field_data
+            res%deriv_data(:,i) = this%field_data(:,i) * rhs%deriv_data
+          end do
+        else
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) * rhs%field_data
+          end do
+        end if
       class is(uniform_scalar_field)
+        call res%allocate_deriv(this)
         res%field_data = this%field_data * rhs%get_value()
+        if (this%has_deriv) then
+          res%deriv_data = this%deriv_data * rhs%get_value()
+        end if
       end select
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3021,7 +3044,9 @@ contains
     call res%assign_meta_data(rhs)
     select type(res)
     class is(array_vector_field)
+      call res%allocate_deriv(rhs)
       res%field_data = lhs * rhs%field_data
+      if (res%has_deriv) res%deriv_data = lhs*rhs%deriv_data 
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                   '`allocate_vector_field` routine.')
@@ -3043,7 +3068,9 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_vector_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data * rhs
+      if (res%has_deriv) res%deriv_data = rhs*this%deriv_data 
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                   '`allocate_vector_field` routine.')
@@ -3071,11 +3098,33 @@ contains
     class is(array_vector_field)
       select type(rhs)
       class is(array_scalar_field)
-        do concurrent(i=1:this%vector_dims)
-          res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
-        end do
+        call res%allocate_deriv(this, rhs)
+        if (this%has_deriv .and. rhs%has_deriv) then
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
+            res%deriv_data(:,i) = (this%deriv_data(:,i)*rhs%field_data - &
+                                   this%field_data(:,i)*rhs%deriv_data)/ &
+                                  rhs%field_data**2
+          end do
+        else if (this%has_deriv) then
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
+            res%field_data(:,i) = this%deriv_data(:,i)/rhs%field_data
+          end do
+        else if (rhs%has_deriv) then
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
+            res%field_data(:,i) = -this%field_data(:,i)*rhs%deriv_data/rhs%field_data**2
+          end do
+        else
+          do concurrent(i=1:this%vector_dims)
+            res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
+          end do
+        end if
       class is(uniform_scalar_field)
+        call res%allocate_deriv(this)
         res%field_data = this%field_data / rhs%get_value()
+        if (res%has_deriv) res%deriv_data = this%deriv_data / rhs%get_value()
       end select
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3098,7 +3147,11 @@ contains
     call res%assign_meta_data(this)
     select type(res)
     class is(array_vector_field)
+      call res%allocate_deriv(this)
       res%field_data = this%field_data / rhs
+      if (res%has_deriv) then
+        res%deriv_data = this%deriv_data / rhs
+      end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
                   '`allocate_vector_field` routine.')
@@ -3130,6 +3183,7 @@ contains
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         call res%assign_meta_data(this, .false.)
         call allocate_like(res%field_data, this%field_data, rhs%field_data)
+        call res%allocate_deriv(this, rhs)
         res%vector_dims = max_dims
         res%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
                                        - rhs%field_data(:,1:min_dims)
@@ -3138,24 +3192,69 @@ contains
         else
           res%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
         end if
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%deriv_data(:,1:min_dims) = this%deriv_data(:,1:min_dims) &
+                                         - rhs%deriv_data(:,1:min_dims)
+          if (rhs%vector_dims > this%vector_dims) then
+            res%deriv_data(:,min_dims+1:max_dims) = -rhs%deriv_data(:,min_dims+1:max_dims)
+          else
+            res%deriv_data(:,min_dims+1:max_dims) = this%deriv_data(:,min_dims+1:max_dims)
+          end if
+        else if (this%has_deriv) then
+          res%deriv_data(:,1:min_dims) = this%deriv_data(:,1:min_dims)
+          if (rhs%vector_dims > this%vector_dims) then
+            res%deriv_data(:,min_dims+1:max_dims) = 0._r8
+          else
+            res%deriv_data(:,min_dims+1:max_dims) = this%deriv_data(:,min_dims+1:max_dims)
+          end if
+        else if (rhs%has_deriv) then
+          res%deriv_data(:,1:min_dims) = -rhs%deriv_data(:,1:min_dims)
+          if (rhs%vector_dims > this%vector_dims) then
+            res%deriv_data(:,min_dims+1:max_dims) = -rhs%deriv_data(:,min_dims+1:max_dims)
+          else
+            res%deriv_data(:,min_dims+1:max_dims) = 0._r8
+          end if
+        end if
       class is(uniform_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         vec = rhs%get_value()
         call res%assign_meta_data(this, .false.)
         call allocate_like(res%field_data, this%field_data, vec)
+        call res%allocate_deriv(this)
         res%vector_dims = max_dims
-        do concurrent(i=1:min_dims)
-          res%field_data(:,i) = this%field_data(:,i) - vec(i)
-        end do
-        if (rhs%vector_dimensions() > this%vector_dims) then
-          do concurrent(i=min_dims+1:max_dims)
-            res%field_data(:,i) = -vec(i)
+        if (res%has_deriv) then
+          do concurrent(i=1:min_dims)
+            res%field_data(:,i) = this%field_data(:,i) - vec(i)
+            res%deriv_data(:,i) = this%deriv_data(:,i) 
           end do
         else
-          do concurrent(i=min_dims+1:max_dims)
-            res%field_data(:,i) = this%field_data(:,i)
+          do concurrent(i=1:min_dims)
+            res%field_data(:,i) = this%field_data(:,i) - vec(i)
           end do
+        end if
+        if (rhs%vector_dimensions() > this%vector_dims) then
+          if (res%has_deriv) then
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = -vec(i)
+              res%deriv_data(:,i) = 0._r8
+            end do
+          else
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = -vec(i)
+            end do
+          end if
+        else
+          if (res%has_deriv) then
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = this%field_data(:,i)
+              res%deriv_data(:,i) = this%deriv_data(:,i) 
+            end do
+          else
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = this%field_data(:,i)
+            end do
+          end if
         end if
       end select
     class default
@@ -3180,19 +3279,35 @@ contains
     call res%assign_meta_data(rhs,.false.)
     select type(res)
     class is(array_vector_field)
+      call res%allocate_deriv(rhs)
       min_dims = min(rhs%vector_dims, size(lhs))
       max_dims = max(rhs%vector_dims, size(lhs))
       call allocate_like(res%field_data, rhs%field_data, lhs)
-      do concurrent (i=1:res%numpoints)
-        res%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
-      end do
+      if (res%has_deriv) then
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
+          res%deriv_data(i,:min_dims) = -rhs%deriv_data(i,:min_dims) 
+        end do
+      else
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
+        end do
+      end if
       if (rhs%vector_dims > size(lhs)) then
         res%field_data(:,min_dims+1:) = -rhs%field_data(:,min_dims+1:)
+        if (res%has_deriv) res%deriv_data(:,min_dims+1:) = -rhs%deriv_data(:,min_dims+1:)
       else
         res%vector_dims = size(lhs)
-        do concurrent (i=1:res%numpoints)
-          res%field_data(i,min_dims+1:) = lhs(min_dims+1:)
-        end do
+        if (res%has_deriv) then
+          do concurrent (i=1:res%numpoints)
+            res%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+            res%deriv_data(i,min_dims+1:) = 0._r8 
+          end do
+        else
+          do concurrent (i=1:res%numpoints)
+            res%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+          end do
+        end if
       end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3219,16 +3334,32 @@ contains
     select type(res)
     class is(array_vector_field)
       call allocate_like(res%field_data, this%field_data, rhs)
-      do concurrent (i=1:res%numpoints)
-        res%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
-      end do
+      call res%allocate_deriv(this)
+      if (res%has_deriv) then
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
+          res%deriv_data(i,:min_dims) = this%deriv_data(i,:min_dims)
+        end do
+      else
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = this%field_data(i,:min_dims) - rhs(:min_dims)
+        end do
+      end if
       if (this%vector_dims > size(rhs)) then
         res%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
+        if (res%has_deriv) res%deriv_data(:,min_dims+1:) = this%deriv_data(:,min_dims+1:)
       else
         res%vector_dims = size(rhs)
-        do concurrent (i=1:res%numpoints)
-          res%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
-        end do
+        if (res%has_deriv) then
+          do concurrent (i=1:res%numpoints)
+            res%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
+            res%deriv_data(i,min_dims+1:) = 0._r8
+          end do
+        else
+          do concurrent (i=1:res%numpoints)
+            res%field_data(i,min_dims+1:) = -rhs(min_dims+1:)
+          end do
+        end if
       end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3261,6 +3392,7 @@ contains
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         call res%assign_meta_data(rhs, .false.)
         call allocate_like(res%field_data, this%field_data, rhs%field_data)
+        call res%allocate_deriv(this, rhs)
         res%vector_dims = max_dims
         res%field_data(:,1:min_dims) = this%field_data(:,1:min_dims) &
                                        + rhs%field_data(:,1:min_dims)
@@ -3269,24 +3401,69 @@ contains
         else
           res%field_data(:,min_dims+1:max_dims) = this%field_data(:,min_dims+1:max_dims)
         end if
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%deriv_data(:,1:min_dims) = this%deriv_data(:,1:min_dims) &
+                                         + rhs%deriv_data(:,1:min_dims)
+          if (rhs%vector_dims > this%vector_dims) then
+            res%deriv_data(:,min_dims+1:max_dims) = rhs%deriv_data(:,min_dims+1:max_dims)
+          else
+            res%deriv_data(:,min_dims+1:max_dims) = this%deriv_data(:,min_dims+1:max_dims)
+          end if
+        else if (this%has_deriv) then
+          res%deriv_data(:,1:min_dims) = this%deriv_data(:,1:min_dims)
+          if (rhs%vector_dims > this%vector_dims) then
+            res%deriv_data(:,min_dims+1:max_dims) = 0._r8
+          else
+            res%deriv_data(:,min_dims+1:max_dims) = this%deriv_data(:,min_dims+1:max_dims)
+          end if
+        else if (rhs%has_deriv) then
+          res%deriv_data(:,1:min_dims) = rhs%deriv_data(:,1:min_dims)
+          if (rhs%vector_dims > this%vector_dims) then
+            res%deriv_data(:,min_dims+1:max_dims) = rhs%deriv_data(:,min_dims+1:max_dims)
+          else
+            res%deriv_data(:,min_dims+1:max_dims) = 0._r8
+          end if
+        end if
       class is(uniform_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         max_dims = max(this%vector_dims,rhs%vector_dimensions())
         vec = rhs%get_value()
         call res%assign_meta_data(rhs, .false.)
         call allocate_like(res%field_data, this%field_data, vec)
+        call res%allocate_deriv(this)
         res%vector_dims = max_dims
-        do concurrent(i=1:min_dims)
-          res%field_data(:,i) = this%field_data(:,i) + vec(i)
-        end do
-        if (rhs%vector_dimensions() > this%vector_dims) then
-          do concurrent(i=min_dims+1:max_dims)
-            res%field_data(:,i) = vec(i)
+        if (res%has_deriv) then
+          do concurrent(i=1:min_dims)
+            res%field_data(:,i) = this%field_data(:,i) + vec(i)
+            res%field_data(:,i) = this%deriv_data(:,i)
           end do
         else
-          do concurrent(i=min_dims+1:max_dims)
-            res%field_data(:,i) = this%field_data(:,i)
+          do concurrent(i=1:min_dims)
+            res%field_data(:,i) = this%field_data(:,i) + vec(i)
           end do
+        end if
+        if (rhs%vector_dimensions() > this%vector_dims) then
+          if (res%has_deriv) then
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = vec(i)
+              res%field_data(:,i) = 0._r8
+            end do
+          else
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = vec(i)
+            end do
+          end if
+        else
+          if (res%has_deriv) then
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = this%field_data(:,i)
+              res%deriv_data(:,i) = this%deriv_data(:,i)
+            end do
+          else
+            do concurrent(i=min_dims+1:max_dims)
+              res%field_data(:,i) = this%field_data(:,i)
+            end do
+          end if
         end if
       end select
     class default
@@ -3314,16 +3491,32 @@ contains
     select type(res)
     class is(array_vector_field)
       call allocate_like(res%field_data, rhs%field_data, lhs)
-      do concurrent (i=1:res%numpoints)
-        res%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
-      end do
+      call res%allocate_deriv(rhs)
+      if (res%has_deriv) then
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
+          res%deriv_data(i,:min_dims) = rhs%field_data(i,:min_dims)
+        end do
+      else
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
+        end do
+      end if
       if (rhs%vector_dims > size(lhs)) then
         res%field_data(:,min_dims+1:) = rhs%field_data(:,min_dims+1:)
+        if (res%has_deriv) res%deriv_data(:,min_dims+1:) = rhs%deriv_data(:,min_dims+1:)
       else
         res%vector_dims = size(lhs)
-        do concurrent (i=1:res%numpoints)
-          res%field_data(i,min_dims+1:) = lhs(min_dims+1:)
-        end do
+        if (res%has_deriv) then
+          do concurrent (i=1:res%numpoints)
+            res%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+            res%deriv_data(i,min_dims+1:) = 0._r8
+          end do
+        else
+          do concurrent (i=1:res%numpoints)
+            res%field_data(i,min_dims+1:) = lhs(min_dims+1:)
+          end do
+        end if
       end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3350,16 +3543,32 @@ contains
     select type(res)
     class is(array_vector_field)
       call allocate_like(res%field_data, this%field_data, rhs)
-      do concurrent (i=1:res%numpoints)
-        res%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
-      end do
+      call res%allocate_deriv(this)
+      if (res%has_deriv) then
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
+          res%deriv_data(i,:min_dims) = this%deriv_data(i,:min_dims)
+        end do
+      else
+        do concurrent (i=1:res%numpoints)
+          res%field_data(i,:min_dims) = this%field_data(i,:min_dims) + rhs(:min_dims)
+        end do
+      end if
       if (this%vector_dims > size(rhs)) then
         res%field_data(:,min_dims+1:) = this%field_data(:,min_dims+1:)
+        if (res%has_deriv) res%deriv_data(:,min_dims+1:) = this%deriv_data(:,min_dims+1:)
       else
         res%vector_dims = size(rhs)
-        do concurrent (i=1:res%numpoints) 
-          res%field_data(i,min_dims+1:) = rhs(min_dims+1:)
-        end do
+        if (res%has_deriv) then
+          do concurrent (i=1:res%numpoints) 
+            res%field_data(i,min_dims+1:) = rhs(min_dims+1:)
+            res%deriv_data(i,min_dims+1:) = 0._r8
+          end do
+        else
+          do concurrent (i=1:res%numpoints) 
+            res%field_data(i,min_dims+1:) = rhs(min_dims+1:)
+          end do
+        end if
       end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3474,7 +3683,11 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this)
       res%field_data = sqrt(sum(this%field_data**2,2))
+      if (res%has_deriv) then
+        res%deriv_data =sum(this%field_data*this%deriv_data,2)/res%field_data
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -3497,10 +3710,13 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this)
       if (comp <= this%vector_dims) then
         res%field_data = this%field_data(:,comp)
+        if (res%has_deriv) res%deriv_data = this%deriv_data(:,comp)
       else
         res%field_data = 0.0_r8
+        if (res%has_deriv) res%deriv_data = 0._r8
       end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -3525,10 +3741,20 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this)
-      do i = 1, this%vector_dims
-        res%field_data(:,i) = this%array_dx(this%field_data(:,i), &
-                                                       dir, order)
-      end do
+      call res%allocate_deriv(this)
+      if (res%has_deriv) then
+        do i = 1, this%vector_dims
+          res%field_data(:,i) = this%array_dx(this%field_data(:,i), &
+                                                         dir, order)
+          res%deriv_data(:,i) = this%array_dx(this%deriv_data(:,i), &
+                                                         dir, order)
+        end do
+      else
+        do i = 1, this%vector_dims
+          res%field_data(:,i) = this%array_dx(this%field_data(:,i), &
+                                                         dir, order)
+        end do
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -3552,8 +3778,16 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
-      res%field_data(:) = this%array_dx(this%field_data(:,component), &
-                                        dir, order)
+      call res%allocate_deriv(this)
+      if (component <= this%vector_dims) then
+        res%field_data = this%array_dx(this%field_data(:,component), &
+                                       dir, order)
+        if (res%has_deriv) res%deriv_data = this%array_dx(this%deriv_data(:,component), &
+                                                         dir, order)
+      else
+        res%field_data = 0._r8
+        if (res%has_deriv) res%deriv_data = 0._r8
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -3576,12 +3810,23 @@ contains
     class is(array_vector_field)
       call res%assign_meta_data(this, .false.)
       call allocate_like(res%field_data, this%field_data)
+      call res%allocate_deriv(this)
       do i = 1, this%vector_dims
         res%field_data(:,i) = this%array_dx(this%field_data(:,i),1,2)
-        do j = 2, this%dimensions()
-          res%field_data(:,i) = res%field_data(:,i) + &
-                              this%array_dx(this%field_data(:,i),j,2)
-        end do
+        if (res%has_deriv) then
+          res%deriv_data(:,i) = this%array_dx(this%deriv_data(:,i),1,2) 
+          do j = 2, this%dimensions()
+            res%field_data(:,i) = res%field_data(:,i) + &
+                                  this%array_dx(this%field_data(:,i),j,2)
+            res%deriv_data(:,i) = res%deriv_data(:,i) + &
+                                  this%array_dx(this%deriv_data(:,i),j,2)
+          end do
+        else
+          do j = 2, this%dimensions()
+            res%field_data(:,i) = res%field_data(:,i) + &
+                                  this%array_dx(this%field_data(:,i),j,2)
+          end do
+        end if
       end do
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3604,11 +3849,22 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this)
       res%field_data = this%array_dx(this%field_data(:,1),1,1)
-      do i = 2, this%dimensions()
-        res%field_data = res%field_data + &
-                         this%array_dx(this%field_data(:,i),i,1)
-      end do
+      if (res%has_deriv) then
+        res%deriv_data = this%array_dx(this%deriv_data(:,1),1,1)
+        do i = 2, this%dimensions()
+          res%field_data = res%field_data + &
+                           this%array_dx(this%field_data(:,i),i,1)
+          res%deriv_data = res%deriv_data + &
+                           this%array_dx(this%deriv_data(:,i),i,1)
+        end do
+      else
+        do i = 2, this%dimensions()
+          res%field_data = res%field_data + &
+                           this%array_dx(this%field_data(:,i),i,1)
+        end do
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  '`allocate_scalar_field` routine.')
@@ -3632,6 +3888,7 @@ contains
     select type(res)
     class is(array_vector_field)
       call res%assign_meta_data(this,.false.)
+      call res%allocate_deriv(this)
       res%vector_dims = 3
       if (allocated(res%field_data)) then
         if (size(res%field_data, 1) /= this%numpoints .or. &
@@ -3644,22 +3901,28 @@ contains
       end if
       if (this%dimensions() >= 3) then
         res%field_data(:,2) = this%array_dx(this%field_data(:,1),3)
+        if (res%has_deriv) res%deriv_data(:,2) = this%array_dx(this%deriv_data(:,1),3)
         been_set(2) = .true.
       end if
       if (this%dimensions() >= 2) then
         res%field_data(:,3) = -this%array_dx(this%field_data(:,1),2)
+        if (res%has_deriv) res%deriv_data(:,3) = this%array_dx(this%deriv_data(:,1),1)
         been_set(3) = .true.
       end if
       if (this%vector_dims >= 2) then
         if (this%dimensions() >= 3) then
           res%field_data(:,1) = -this%array_dx(this%field_data(:,2),3)
+          if (res%has_deriv) res%deriv_data(:,1) = -this%array_dx(this%deriv_data(:,2),3)
           been_set(1) = .true.
         end if
         if (been_set(3)) then
           res%field_data(:,3) = res%field_data(:,3) &
                              + this%array_dx(this%field_data(:,2),1)
+          if (res%has_deriv) res%deriv_data(:,3) = res%deriv_data(:,3) &
+                             + this%array_dx(this%deriv_data(:,2),1)
         else
           res%field_data(:,3) = this%array_dx(this%field_data(:,2),1)
+          if (res%has_deriv) res%deriv_data(:,3) = this%array_dx(this%deriv_data(:,2),1)
           been_set(3) = .true.
         end if
       end if
@@ -3668,21 +3931,30 @@ contains
           if (been_set(1)) then
             res%field_data(:,1) = res%field_data(:,1) &
                                + this%array_dx(this%field_data(:,3),2)
+            if (res%has_deriv) res%deriv_data(:,1) = res%deriv_data(:,1) &
+                               + this%array_dx(this%deriv_data(:,3),2)
           else
             res%field_data(:,1) = this%array_dx(this%field_data(:,3),2)
+            if (res%has_deriv) res%deriv_data(:,1) = this%array_dx(this%deriv_data(:,3),2)
             been_set(1) = .true.
           end if
         end if
         if (been_set(2)) then
           res%field_data(:,2) = res%field_data(:,2) &
                              - this%array_dx(this%field_data(:,3),1)
+          if (res%has_deriv) res%deriv_data(:,2) = res%deriv_data(:,2) &
+                             + this%array_dx(this%deriv_data(:,3),1)
         else
           res%field_data(:,2) = -this%array_dx(this%field_data(:,3),1)
+          if (res%has_deriv) res%deriv_data(:,2) = this%array_dx(this%deriv_data(:,3),1)
           been_set(2) = .true.
         end if
       end if
       do i = 1, 3
-        if (.not. been_set(i)) res%field_data(:,i) = 0.0_r8
+        if (.not. been_set(i)) then
+          res%field_data(:,i) = 0.0_r8
+          if (res%has_deriv) res%deriv_data(:,i) = 0.0_r8
+        end if
       end do
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -3703,7 +3975,7 @@ contains
     class(array_vector_field), intent(in) :: this
     class(vector_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The restult of this operation
-    real(r8), dimension(3) :: vec1, vec2
+    real(r8), dimension(3) :: vec1, vec2, dvec1, dvec2
     real(r8), dimension(:), allocatable :: tmp
     integer :: i, dims1, dims2
     call this%guard_temp(); call rhs%guard_temp()
@@ -3724,29 +3996,63 @@ contains
       else
         allocate(res%field_data(this%numpoints,3))
       end if
+      call res%allocate_deriv(this, rhs)
       vec1 = 0
       vec2 = 0
+      dvec1 = 0
+      dvec2 = 0
       dims1 = min(3,this%vector_dims)
       select type(rhs)
       class is(array_vector_field)
         dims2 = min(3,rhs%vector_dimensions())
-        do concurrent(i=1:this%numpoints)
-          vec1(:dims1) = this%field_data(i,:dims1)
-          vec2(:dims2) = rhs%field_data(i,:dims2)
-          res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        if (res%has_deriv) then
+          do concurrent(i=1:this%numpoints)
+            vec1(:dims1) = this%field_data(i,:dims1)
+            vec2(:dims2) = rhs%field_data(i,:dims2)
+            dvec1(:dims1) = this%deriv_data(i,:dims1)
+            dvec2(:dims2) = rhs%deriv_data(i,:dims2)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                    vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                    vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-        end do
+            res%deriv_data(i,:) = [vec1(2)*dvec2(3) + dvec1(2)*vec2(3) - &
+                                   vec2(2)*dvec1(3) - dvec2(2)*vec1(3), &
+                                   vec1(3)*dvec2(1) + dvec1(3)*vec2(1) - &
+                                   vec2(3)*dvec1(1) - dvec2(3)*vec1(1), &
+                                   vec1(1)*dvec2(2) + dvec1(1)*vec2(2) - &
+                                   vec2(1)*dvec1(2) - dvec2(2)*vec1(2)]
+          end do
+        else
+          do concurrent(i=1:this%numpoints)
+            vec1(:dims1) = this%field_data(i,:dims1)
+            vec2(:dims2) = rhs%field_data(i,:dims2)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                     vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                     vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+          end do
+        end if
       class is(uniform_vector_field)
         dims2 = min(3,rhs%vector_dimensions())
         tmp = rhs%get_value()
         vec2(:dims2) = tmp(:dims2)
-        do concurrent(i=1:this%numpoints)
-          vec1(:dims1) = this%field_data(i,:dims1)
-          res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        if (res%has_deriv) then
+          do concurrent(i=1:this%numpoints)
+            vec1(:dims1) = this%field_data(i,:dims1)
+            dvec1(:dims1) = this%deriv_data(i,:dims1)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                    vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                    vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-        end do
+            res%deriv_data(i,:) = [dvec1(2)*vec2(3) - vec2(2)*dvec1(3), &
+                                   dvec1(3)*vec2(1) - vec2(3)*dvec1(1), &
+                                   dvec1(1)*vec2(2) - vec2(1)*dvec1(2)]
+          end do
+        else
+          do concurrent(i=1:this%numpoints)
+            vec1(:dims1) = this%field_data(i,:dims1)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                   vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                   vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+          end do
+        end if
       end select
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3768,7 +4074,7 @@ contains
     real(r8), dimension(:), intent(in) :: rhs
     class(vector_field), pointer :: res !! The result of this operation
     logical :: res2d
-    real(r8), dimension(3) :: vec1, vec2
+    real(r8), dimension(3) :: vec1, vec2, dvec1
     integer :: i, dims1, dims2
     call this%guard_temp()
     call this%allocate_vector_field(res)
@@ -3786,15 +4092,20 @@ contains
           deallocate(res%field_data)
           allocate(res%field_data(this%numpoints,2))
         end if
+        call res%allocate_deriv(this)
         if (this%vector_dims >= 2) then
           res%field_data(:,1) = this%field_data(:,2)*rhs(3)
+          if (res%has_deriv) res%deriv_data(:,1) = this%deriv_data(:,2)*rhs(3)
         else
           res%field_data(:,1) = 0._r8
+          if (res%has_deriv) res%deriv_data(:,1) = this%deriv_data(:,2)*rhs(3)
         end if
         if (this%vector_dims >= 1) then
           res%field_data(:,2) = -this%field_data(:,1)*rhs(3)
+          if (res%has_deriv) res%deriv_data(:,2) = -this%deriv_data(:,1)*rhs(3)
         else
-          res%field_data(:,1) = 0._r8
+          res%field_data(:,2) = 0._r8
+          if (res%has_deriv) res%deriv_data(:,2) = 0._r8
         end if
       else
         res%vector_dims = 3
@@ -3805,17 +4116,32 @@ contains
           deallocate(res%field_data)
           allocate(res%field_data(this%numpoints,3))
         end if
+        call res%allocate_deriv(this)
         dims1 = min(3,this%vector_dims)
         dims2 = min(3,size(rhs))
         vec1 = 0.0_r8
         vec2 = 0.0_r8
-        do concurrent(i=1:this%numpoints)
-          vec1(:dims1) = this%field_data(i,:dims1)
-          vec2(:dims2) = rhs(:dims2)
-          res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+        dvec1 = 0.0_r8
+        vec2(:dims2) = rhs(:dims2)
+        if (res%has_deriv) then
+          do concurrent(i=1:this%numpoints)
+            vec1(:dims1) = this%field_data(i,:dims1)
+            dvec1(:dims1) = this%deriv_data(i,:dims1)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                    vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                    vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-        end do
+            res%deriv_data(i,:) = [dvec1(2)*vec2(3) - vec2(2)*dvec1(3), &
+                                   dvec1(3)*vec2(1) - vec2(3)*dvec1(1), &
+                                   dvec1(1)*vec2(2) - vec2(1)*dvec1(2)]
+          end do
+        else
+          do concurrent(i=1:this%numpoints)
+            vec1(:dims1) = this%field_data(i,:dims1)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                   vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                   vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+          end do
+        end if
       end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3837,7 +4163,7 @@ contains
     class(array_vector_field), intent(in) :: rhs
     class(vector_field), pointer :: res !! The result of this operation
     logical :: res2d
-    real(r8), dimension(3) :: vec1, vec2
+    real(r8), dimension(3) :: vec1, vec2, dvec2
     integer :: i, dims1, dims2
     call rhs%guard_temp()
     call rhs%allocate_vector_field(res)
@@ -3855,15 +4181,20 @@ contains
           deallocate(res%field_data)
           allocate(res%field_data(rhs%numpoints,2))
         end if
+        call res%allocate_deriv(rhs)
         if (rhs%vector_dims >= 2) then
           res%field_data(:,1) = -lhs(3)*rhs%field_data(:,2)
+          if (res%has_deriv) res%deriv_data(:,1) = -lhs(3)*rhs%deriv_data(:,2)
         else
           res%field_data(:,1) = 0._r8
+          if (res%has_deriv) res%deriv_data(:,1) = 0._r8
         end if
         if (rhs%vector_dims >= 1) then
           res%field_data(:,2) = lhs(3)*rhs%field_data(:,1)
+          if (res%has_deriv) res%deriv_data(:,2) = lhs(3)*rhs%deriv_data(:,1)
         else
-          res%field_data(:,1) = 0._r8
+          res%field_data(:,2) = 0._r8
+          if (res%has_deriv) res%deriv_data(:,2) = 0._r8
         end if
       else
         res%vector_dims = 3
@@ -3874,17 +4205,32 @@ contains
           deallocate(res%field_data)
           allocate(res%field_data(rhs%numpoints,3))
         end if
+        call res%allocate_deriv(rhs)
         dims1 = min(3,size(lhs))
         dims2 = min(3,rhs%vector_dims)
         vec1 = 0.0_r8
         vec2 = 0.0_r8
-        do concurrent(i=1:rhs%numpoints)
-          vec1(:dims1) = lhs(:dims1)
-          vec2(:dims2) = rhs%field_data(i,:dims2)
-          res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
-                                 vec1(3)*vec2(1) - vec2(3)*vec1(1), &
-                                 vec1(1)*vec2(2) - vec2(1)*vec1(2)]
-        end do
+        dvec2 = 0.0_r8
+        vec1(:dims1) = lhs(:dims1)
+        if (res%has_deriv) then
+          do concurrent(i=1:rhs%numpoints)
+            vec2(:dims2) = rhs%field_data(i,:dims2)
+            dvec2(:dims2) = rhs%deriv_data(i,:dims2)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                   vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                   vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+            res%deriv_data(i,:) = [vec1(2)*dvec2(3) - dvec2(2)*vec1(3), &
+                                   vec1(3)*dvec2(1) - dvec2(3)*vec1(1), &
+                                   vec1(1)*dvec2(2) - dvec2(1)*vec1(2)]
+          end do
+        else
+          do concurrent(i=1:rhs%numpoints)
+            vec2(:dims2) = rhs%field_data(i,:dims2)
+            res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
+                                   vec1(3)*vec2(1) - vec2(3)*vec1(1), &
+                                   vec1(1)*vec2(2) - vec2(1)*vec1(2)]
+          end do
+        end if
       end if
     class default
       error stop ('Non-array_vector_field type allocated by '//&
@@ -3912,17 +4258,36 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this, rhs)
       select type(rhs)
       class is(array_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         res%field_data = &
           sum(this%field_data(:,1:min_dims)*rhs%field_data(:,1:min_dims),2)
+        if (this%has_deriv .and. rhs%has_deriv) then
+          res%deriv_data = &
+            sum(this%field_data(:,1:min_dims)*rhs%deriv_data(:,1:min_dims) + &
+                this%deriv_data(:,1:min_dims)*rhs%field_data(:,1:min_dims), 2)
+        else if (this%has_deriv) then
+          res%deriv_data = &
+            sum(this%deriv_data(:,1:min_dims)*rhs%field_data(:,1:min_dims), 2)
+        else if (rhs%has_deriv) then
+          res%deriv_data = &
+            sum(this%field_data(:,1:min_dims)*rhs%deriv_data(:,1:min_dims), 2)
+        end if
       class is(uniform_vector_field)
         min_dims = min(this%vector_dims,rhs%vector_dimensions())
         tmp = rhs%get_value()
-        do concurrent(i=1:this%numpoints)
-          res%field_data(i) = dot_product(this%field_data(i,1:min_dims),tmp(1:min_dims))
-        end do
+        if (res%has_deriv) then
+          do concurrent(i=1:this%numpoints)
+            res%field_data(i) = dot_product(this%field_data(i,1:min_dims),tmp(1:min_dims))
+            res%deriv_data(i) = dot_product(this%deriv_data(i,1:min_dims),tmp(1:min_dims))
+          end do
+        else
+          do concurrent(i=1:this%numpoints)
+            res%field_data(i) = dot_product(this%field_data(i,1:min_dims),tmp(1:min_dims))
+          end do
+        end if
       end select
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -3946,10 +4311,18 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(this)
+      call res%allocate_deriv(this)
       min_dims = min(this%vector_dims,size(rhs))
-      do concurrent(i=1:this%numpoints)
-        res%field_data(i) = sum(this%field_data(i,1:min_dims)*rhs(1:min_dims))
-      end do
+      if (res%has_deriv) then
+        do concurrent(i=1:this%numpoints)
+          res%field_data(i) = sum(this%field_data(i,1:min_dims)*rhs(1:min_dims))
+          res%deriv_data(i) = sum(this%deriv_data(i,1:min_dims)*rhs(1:min_dims))
+        end do
+      else
+        do concurrent(i=1:this%numpoints)
+          res%field_data(i) = sum(this%field_data(i,1:min_dims)*rhs(1:min_dims))
+        end do
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                  'allocate_scalar_field routine.')
@@ -3972,10 +4345,18 @@ contains
     select type(res)
     class is(array_scalar_field)
       call res%assign_meta_data(rhs)
+      call res%allocate_deriv(rhs)
       min_dims = min(size(lhs),rhs%vector_dims)
-      do concurrent(i=1:rhs%numpoints)
-        res%field_data(i) = sum(lhs(1:min_dims)*rhs%field_data(i,1:min_dims))
-      end do
+      if (res%has_deriv) then
+        do concurrent(i=1:rhs%numpoints)
+          res%field_data(i) = sum(lhs(1:min_dims)*rhs%field_data(i,1:min_dims))
+          res%deriv_data(i) = sum(lhs(1:min_dims)*rhs%deriv_data(i,1:min_dims))
+        end do
+      else
+        do concurrent(i=1:rhs%numpoints)
+          res%field_data(i) = sum(lhs(1:min_dims)*rhs%field_data(i,1:min_dims))
+        end do
+      end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
                   'allocate_scalar_field routine.')
