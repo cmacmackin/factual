@@ -678,6 +678,9 @@ contains
 #:endif
         do i = 1, depth
           call this%set_element(length-depth+i, boundary_field%get_element(i))
+          if (boundary_field%has_derivative()) then
+            call this%set_deriv_element(length-depth+i, boundary_field%get_element(i))
+          end if
         end do
       case(1)
 #:if defined('DEBUG')
@@ -688,6 +691,9 @@ contains
 #:endif
         do i = 1, depth
           call this%set_element(i, boundary_field%get_element(i))
+          if (boundary_field%has_derivative()) then
+            call this%set_deriv_element(i, boundary_field%get_element(i))
+          end if
         end do
       case default
 #:if defined('DEBUG')
@@ -696,7 +702,7 @@ contains
         if (abs(this%colloc_points(length) - boundary_field%extent(2)) &
             > 1e-12+r8) error stop ('Domain mismatch.')
         if (length /= boundary_field%elements()) error stop ('Resolution mismatch.')
-#:endif        
+#:endif
         this = boundary_field
       end select
     class is(uniform_scalar_field)
@@ -1360,6 +1366,9 @@ contains
         do i = 1, depth
           val = boundary_field%get_element(i)
           call this%set_element(length-depth+i, val(1:n))
+          if (boundary_field%has_derivative()) then
+            call this%set_deriv_element(length-depth+i, val(1:n))
+          end if
         end do
       case(1)
 #:if defined('DEBUG')
@@ -1371,6 +1380,9 @@ contains
         do i = 1, depth
           val = boundary_field%get_element(i)
           call this%set_element(i, val(1:n))
+          if (boundary_field%has_derivative()) then
+            call this%set_deriv_element(i, val(1:n))
+          end if
         end do
       case default
 #:if defined('DEBUG')

@@ -174,6 +174,9 @@ module array_fields_mod
     procedure, public :: set_element => array_scalar_set_element
       !! Sets one of the constituent values of the field, i.e. the 
       !! field's value at a particular location.
+    procedure, public :: set_deriv_element => array_scalar_set_deriv_element
+      !! Sets one of the constituent values of the field's derivative,
+      !! i.e. the field's derivative value at a particular location.
     procedure, public :: get_boundary => array_scalar_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -189,6 +192,8 @@ module array_fields_mod
     procedure, non_overridable :: allocate_deriv => array_scalar_alloc_deriv
       !! Decides whether to allocate the array containing the
       !! derivative.
+    procedure, public :: has_derivative => array_scalar_has_deriv
+      !! Indicates whether the field has a derivative value.
     procedure(sf_bound), deferred :: subtype_boundary
       !! Performs whatever operations are needed on the subtype to get
       !! a boundary field, including returning the slices needed to
@@ -475,6 +480,10 @@ module array_fields_mod
       !! Sets one of the components of a constituent vector of the 
       !! field, i.e. the component of the field's value at a particular 
       !! location.
+    procedure, public :: set_deriv_element => array_vector_set_deriv_element
+      !! Sets ones of the constituent vectors of the field's
+      !! derivative, i.e. the field's deritive at a particular
+      !! location.
     procedure, public :: get_boundary => array_vector_get_bound
       !! Returns a field of the same type, containing only the
       !! specified ammount of data at the specified boundary.
@@ -487,6 +496,8 @@ module array_fields_mod
       !! set by the user or calculated using automatic
       !! differentiation. If no derivative information is available
       !! for this object then a field of zeros is returned.
+    procedure, public :: has_derivative => array_vector_has_deriv
+      !! Indicates whether the field has a derivative value.
     procedure, non_overridable :: allocate_deriv => array_vector_alloc_deriv
       !! Decides whether to allocate the array containing the
       !! derivative.
@@ -2518,6 +2529,27 @@ contains
     call this%clean_temp()
   end subroutine array_scalar_set_element
 
+  subroutine array_scalar_set_deriv_element(this,element,val)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Sets the element of the field derivative corresponding to the
+    ! given ID to the given value.
+    !
+    class(array_scalar_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    real(r8), intent(in) :: val
+      !! The new value the field element is to be set to
+    call this%guard_temp()
+    if (this%has_deriv) then
+      this%deriv_data(element) = val
+    else
+      error stop('Field does not have derivative.')
+    end if
+    call this%clean_temp()
+  end subroutine array_scalar_set_deriv_element
+
   function array_scalar_get_bound(this,boundary,depth) result(res)
     !* Author: Chris MacMackin
     !  Date: November 2016
@@ -2641,7 +2673,18 @@ contains
     end select
     call this%clean_temp()
   end function array_scalar_get_deriv
- 
+
+  logical function array_scalar_has_deriv(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Indicates whether the field has had a derivative/differential
+    ! value set or calculated.
+    !
+    class(array_scalar_field), intent(in) :: this
+    array_scalar_has_deriv = this%has_deriv
+  end function array_scalar_has_deriv
+  
   subroutine array_scalar_alloc_deriv(this, field1, field2)
     !* Author: Chris MacMackin
     !  Date: March 2018
@@ -4665,6 +4708,27 @@ contains
     call this%clean_temp()
   end subroutine array_vector_set_element_comp
 
+  subroutine array_vector_set_deriv_element(this,element,val)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Sets the element of the field's derivative corresponding to the
+    ! given ID to the given vector value.
+    !
+    class(array_vector_field), intent(inout) :: this
+    integer, intent(in) :: element
+      !! The ID number of the field element to be set
+    real(r8), dimension(:), intent(in) :: val
+      !! The new vector value the field element is to be set to
+    call this%guard_temp()
+    if (this%has_deriv) then
+      this%field_data(element,:) = val
+    else
+      error stop('Field does not have derivative.')
+    end if
+    call this%clean_temp()
+  end subroutine array_vector_set_deriv_element
+
   subroutine array_vector_set_deriv(this, deriv)
     !* Author: Chris MacMackin
     !  Date: March 2018
@@ -4725,6 +4789,17 @@ contains
     end select
     call this%clean_temp()
   end function array_vector_get_deriv
+
+  logical function array_vector_has_deriv(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Indicates whether the field has had a derivative/differential
+    ! value set or calculated.
+    !
+    class(array_vector_field), intent(in) :: this
+    array_vector_has_deriv = this%has_deriv
+  end function array_vector_has_deriv
 
   subroutine array_vector_alloc_deriv(this, field1, field2)
     !* Author: Chris MacMackin

@@ -135,6 +135,9 @@ module abstract_fields_mod
       !! Returns `.true.` if this field is temporary and at a depth in
       !! the call-tree where it is safe to reuse its memory.
     procedure :: guard_level
+    procedure, public :: has_derivative
+      !! Returns .true. if the field has a derivative value calculated
+      !! with automatic differentiation.
     procedure(finalise), deferred, private :: force_finalise
       !! Frees dynamic memory in the field.
   end type abstract_field
@@ -1227,6 +1230,18 @@ contains
       guard_level = -1
     end if
   end function guard_level
+
+  logical function has_derivative(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Dummy implementation indicating that the field does not contain
+    ! any information about its derivative. Should be overridden in
+    ! subtypes implementing automatic differntiation.
+    !
+    class(abstract_field), intent(in) :: this
+    has_derivative = .false.
+  end function has_derivative
 
 #:for FUNC, TEX in UNARY_FUNCTIONS
   function scalar_field_${FUNC}$(field) result(res)
