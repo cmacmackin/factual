@@ -3152,12 +3152,12 @@ contains
         else if (this%has_deriv) then
           do concurrent(i=1:this%vector_dims)
             res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
-            res%field_data(:,i) = this%deriv_data(:,i)/rhs%field_data
+            res%deriv_data(:,i) = this%deriv_data(:,i)/rhs%field_data
           end do
         else if (rhs%has_deriv) then
           do concurrent(i=1:this%vector_dims)
             res%field_data(:,i) = this%field_data(:,i) / rhs%field_data
-            res%field_data(:,i) = -this%field_data(:,i)*rhs%deriv_data/rhs%field_data**2
+            res%deriv_data(:,i) = -this%field_data(:,i)*rhs%deriv_data/rhs%field_data**2
           end do
         else
           do concurrent(i=1:this%vector_dims)
@@ -3322,10 +3322,11 @@ contains
     call res%assign_meta_data(rhs,.false.)
     select type(res)
     class is(array_vector_field)
-      call res%allocate_deriv(rhs)
       min_dims = min(rhs%vector_dims, size(lhs))
       max_dims = max(rhs%vector_dims, size(lhs))
       call allocate_like(res%field_data, rhs%field_data, lhs)
+      call res%allocate_deriv(rhs)
+      res%vector_dims = max_dims
       if (res%has_deriv) then
         do concurrent (i=1:res%numpoints)
           res%field_data(i,:min_dims) = lhs(:min_dims) - rhs%field_data(i,:min_dims)
@@ -3538,7 +3539,7 @@ contains
       if (res%has_deriv) then
         do concurrent (i=1:res%numpoints)
           res%field_data(i,:min_dims) = lhs(:min_dims) + rhs%field_data(i,:min_dims)
-          res%deriv_data(i,:min_dims) = rhs%field_data(i,:min_dims)
+          res%deriv_data(i,:min_dims) = rhs%deriv_data(i,:min_dims)
         end do
       else
         do concurrent (i=1:res%numpoints)
@@ -3986,10 +3987,10 @@ contains
           res%field_data(:,2) = res%field_data(:,2) &
                              - this%array_dx(this%field_data(:,3),1)
           if (res%has_deriv) res%deriv_data(:,2) = res%deriv_data(:,2) &
-                             + this%array_dx(this%deriv_data(:,3),1)
+                             - this%array_dx(this%deriv_data(:,3),1)
         else
           res%field_data(:,2) = -this%array_dx(this%field_data(:,3),1)
-          if (res%has_deriv) res%deriv_data(:,2) = this%array_dx(this%deriv_data(:,3),1)
+          if (res%has_deriv) res%deriv_data(:,2) = -this%array_dx(this%deriv_data(:,3),1)
           been_set(2) = .true.
         end if
       end if
@@ -4052,8 +4053,8 @@ contains
           do concurrent(i=1:this%numpoints)
             vec1(:dims1) = this%field_data(i,:dims1)
             vec2(:dims2) = rhs%field_data(i,:dims2)
-            dvec1(:dims1) = this%deriv_data(i,:dims1)
-            dvec2(:dims2) = rhs%deriv_data(i,:dims2)
+            if (this%has_deriv) dvec1(:dims1) = this%deriv_data(i,:dims1)
+            if (rhs%has_deriv) dvec2(:dims2) = rhs%deriv_data(i,:dims2)
             res%field_data(i,:) = [vec1(2)*vec2(3) - vec2(2)*vec1(3), &
                                    vec1(3)*vec2(1) - vec2(3)*vec1(1), &
                                    vec1(1)*vec2(2) - vec2(1)*vec1(2)]
@@ -4062,7 +4063,7 @@ contains
                                    vec1(3)*dvec2(1) + dvec1(3)*vec2(1) - &
                                    vec2(3)*dvec1(1) - dvec2(3)*vec1(1), &
                                    vec1(1)*dvec2(2) + dvec1(1)*vec2(2) - &
-                                   vec2(1)*dvec1(2) - dvec2(2)*vec1(2)]
+                                   vec2(1)*dvec1(2) - dvec2(1)*vec1(2)]
           end do
         else
           do concurrent(i=1:this%numpoints)
@@ -4442,7 +4443,8 @@ contains
          return
        end if
       do i=1,this%numpoints
-        normalization = norm2(this%field_data(i,:dims))
+        normalization = min(norm2(this%field_data(i,:dims)), &
+                            norm2(rhs%field_data(i,:dims)))
         if (normalization < tiny(normalization)) normalization = 1.0_r8
         iseq = (norm2(this%field_data(i,1:dims) - rhs%field_data(i,1:dims))/ &
                 normalization < get_tol()) .or. ( &
