@@ -2545,7 +2545,7 @@ contains
     if (this%has_deriv) then
       this%deriv_data(element) = val
     else
-      error stop('Field does not have derivative.')
+      error stop ('Field does not have derivative.')
     end if
     call this%clean_temp()
   end subroutine array_scalar_set_deriv_element
@@ -4727,7 +4727,7 @@ contains
     if (this%has_deriv) then
       this%field_data(element,:) = val
     else
-      error stop('Field does not have derivative.')
+      error stop ('Field does not have derivative.')
     end if
     call this%clean_temp()
   end subroutine array_vector_set_deriv_element
