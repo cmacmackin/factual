@@ -680,6 +680,8 @@ contains
           call this%set_element(length-depth+i, boundary_field%get_element(i))
           if (boundary_field%has_derivative()) then
             call this%set_deriv_element(length-depth+i, boundary_field%get_element(i))
+          else if (this%has_derivative()) then
+            call this%set_deriv_element(length-depth+i, 0._r8)
           end if
         end do
       case(1)
@@ -693,6 +695,8 @@ contains
           call this%set_element(i, boundary_field%get_element(i))
           if (boundary_field%has_derivative()) then
             call this%set_deriv_element(i, boundary_field%get_element(i))
+          else if (this%has_derivative()) then
+            call this%set_deriv_element(i, 0._r8)
           end if
         end do
       case default
@@ -711,10 +715,16 @@ contains
       case(-1)
         do i = 1, depth
           call this%set_element(length-depth+i, val)
+          if (this%has_derivative()) then
+            call this%set_deriv_element(length-depth+i, 0._r8)
+          end if
         end do
       case(1)
         do i = 1, depth
           call this%set_element(i, val)
+          if (this%has_derivative()) then
+            call this%set_deriv_element(i, 0._r8)
+          end if
         end do
       case default
         this = boundary_field
@@ -1368,6 +1378,8 @@ contains
           call this%set_element(length-depth+i, val(1:n))
           if (boundary_field%has_derivative()) then
             call this%set_deriv_element(length-depth+i, val(1:n))
+          else if (this%has_derivative()) then
+            call this%set_deriv_element(i, 0._r8*val(1:n))
           end if
         end do
       case(1)
@@ -1382,6 +1394,8 @@ contains
           call this%set_element(i, val(1:n))
           if (boundary_field%has_derivative()) then
             call this%set_deriv_element(i, val(1:n))
+          else if (this%has_derivative()) then
+            call this%set_deriv_element(i, 0._r8*val(1:n))
           end if
         end do
       case default
@@ -1400,10 +1414,16 @@ contains
       case(-1)
         do i = 1, depth
           call this%set_element(length-depth+i, val(1:n))
+          if (this%has_derivative()) then
+            call this%set_deriv_element(length-depth+i, 0._r8*val(1:n))
+          end if
         end do
       case(1)
         do i = 1, depth
           call this%set_element(i, val(1:n))
+          if (this%has_derivative()) then
+            call this%set_deriv_element(i, 0._r8*val(1:n))
+          end if
         end do
       case default
         this = boundary_field

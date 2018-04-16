@@ -2311,6 +2311,9 @@ contains
     class is(uniform_scalar_field)
       if (allocated(this%field_data)) then
         this%field_data = rhs%get_value()
+	if (this%has_deriv) then
+	  this%deriv_data(:) = 0._r8
+	end if
       else
         error stop ('Trying to assign `uniform_scalar_field` to '// &
                    '`array_scalar_field` with unallocated contents.')
@@ -2683,11 +2686,11 @@ contains
     call res%assign_meta_data(this)
     select type (res)
     class is(array_scalar_field)
-      if (allocated(this%deriv_data)) then
+      if (this%has_deriv) then
         res%field_data = this%deriv_data
       else
         res%field_data = 0._r8 * this%field_data
-      end if   
+      end if
       res%has_deriv = .false.
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2704,7 +2707,9 @@ contains
     ! value set or calculated.
     !
     class(array_scalar_field), intent(in) :: this
+    call this%guard_temp()
     array_scalar_has_deriv = this%has_deriv
+    call this%clean_temp()
   end function array_scalar_has_deriv
   
   subroutine array_scalar_alloc_deriv(this, field1, field2)
@@ -3679,6 +3684,9 @@ contains
         do concurrent (i=1:this%vector_dims)
           this%field_data(:,i) = tmp(i)
         end do
+	if (this%has_deriv) then
+	  this%deriv_data(:,:) = 0._r8
+	end if
       else
         error stop ('Trying to assign `uniform_vector_field` to '// &
                    '`array_vector_field` with unallocated contents.')
@@ -3728,6 +3736,9 @@ contains
         do i = 1, this%vector_dims
           this%field_data(:,i) = rhs(i)%get_value()
         end do
+	if (this%has_deriv) then
+	  this%deriv_data(:,:) = 0._r8
+	end if
       else
         error stop ('Trying to assign `uniform_scalar_field` to '// &
                    '`array_vector_field` with unallocated contents.')
@@ -4747,7 +4758,7 @@ contains
       !! The new vector value the field element is to be set to
     call this%guard_temp()
     if (this%has_deriv) then
-      this%field_data(element,:) = val
+      this%deriv_data(element,:) = val
     else
       error stop ('Field does not have derivative.')
     end if
@@ -4818,7 +4829,7 @@ contains
     call res%assign_meta_data(this)
     select type (res)
     class is(array_vector_field)
-      if (allocated(this%deriv_data)) then
+      if (this%has_deriv) then
         res%field_data = this%deriv_data
       else
         res%field_data = 0._r8 * this%field_data
@@ -4839,7 +4850,9 @@ contains
     ! value set or calculated.
     !
     class(array_vector_field), intent(in) :: this
+    call this%guard_temp()
     array_vector_has_deriv = this%has_deriv
+    call this%clean_temp()
   end function array_vector_has_deriv
 
   subroutine array_vector_alloc_deriv(this, field1, field2)
