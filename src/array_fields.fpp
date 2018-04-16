@@ -184,6 +184,9 @@ module array_fields_mod
       !! Sets a derivative value for this field, which gets propagated
       !! through operations using automatic differentiation (tangent
       !! mode).
+    procedure, public :: unset_derivative => array_scalar_unset_deriv
+      !! Removes any derivative value for this field, turning off
+      !! automatic differentiation.
     procedure, public :: get_derivative => array_scalar_get_deriv
       !! Provides the derivative value for this field. This was either
       !! set by the user or calculated using automatic
@@ -491,6 +494,9 @@ module array_fields_mod
       !! Sets a derivative value for this field, which gets propagated
       !! through operations using automatic differentiation (tangent
       !! mode).
+    procedure, public :: unset_derivative => array_vector_unset_deriv
+      !! Removes any derivative value for this field, turning off
+      !! automatic differentiation.
     procedure, public :: get_derivative => array_vector_get_deriv
       !! Provides the derivative value for this field. This was either
       !! set by the user or calculated using automatic
@@ -2647,6 +2653,22 @@ contains
     call this%clean_temp(); call deriv%clean_temp()
   end subroutine array_scalar_set_deriv
 
+  subroutine array_scalar_unset_deriv(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Deletes any differential/derivative values for the field,
+    ! turning off automatic differentiation.
+    !
+    class(array_scalar_field), intent(inout) :: this
+    call this%guard_temp()
+    if (this%has_deriv) then
+      this%has_deriv = .false.
+      deallocate(this%deriv_data)
+    end if
+    call this%clean_temp()
+  end subroutine array_scalar_unset_deriv
+
   function array_scalar_get_deriv(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2018
@@ -4765,7 +4787,23 @@ contains
     this%has_deriv = .true.
     call this%clean_temp(); call deriv%clean_temp()
   end subroutine array_vector_set_deriv
-  
+
+  subroutine array_vector_unset_deriv(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Deletes any differential/derivative values for the field,
+    ! turning off automatic differentiation.
+    !
+    class(array_vector_field), intent(inout) :: this
+    call this%guard_temp()
+    if (this%has_deriv) then
+      this%has_deriv = .false.
+      deallocate(this%deriv_data)
+    end if
+    call this%clean_temp()
+  end subroutine array_vector_unset_deriv
+
   function array_vector_get_deriv(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2018

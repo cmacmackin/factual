@@ -239,6 +239,10 @@ module abstract_fields_mod
       !! mode). Field types are not obliged to implement this feature
       !! and, unless overridden, this method causes the program to
       !! stop with an error.
+    procedure, public :: unset_derivative => scalar_unset_deriv
+      !! Removes any stored information on the derivative value of a
+      !! field. The default implementation is a dummy one which does
+      !! nothing.
     procedure, public :: get_derivative => scalar_get_deriv
       !! Provides the derivative value for this field. This was either
       !! set by the user or calculated using automatic
@@ -378,6 +382,10 @@ module abstract_fields_mod
       !! mode). Field types are not obliged to implement this feature
       !! and, unless overridden, this method causes the program to
       !! stop with an error.
+    procedure, public :: unset_derivative => vector_unset_deriv
+      !! Removes any stored information on the derivative value of a
+      !! field. The default implementation is a dummy one which does
+      !! nothing.
     procedure, public :: get_derivative => vector_get_deriv
       !! Provides the derivative value for this field. This was either
       !! set by the user or calculated using automatic
@@ -1328,6 +1336,18 @@ contains
     call this%clean_temp(); call deriv%clean_temp()
   end subroutine scalar_set_deriv
   
+  subroutine scalar_unset_deriv(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Dummy procedure which does nothing. Must be overridden for any
+    ! field types which implement automatic differentiation.
+    !
+    class(scalar_field), intent(inout) :: this
+    call this%guard_temp()
+    call this%clean_temp()
+  end subroutine scalar_unset_deriv
+  
   function scalar_get_deriv(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2018
@@ -1358,7 +1378,19 @@ contains
     error stop ('Automatic differentiation not implemented for this field type.')
     call this%clean_temp(); call deriv%clean_temp()
   end subroutine vector_set_deriv
-  
+
+  subroutine vector_unset_deriv(this)
+    !* Author: Chris MacMackin
+    !  Date: April 2018
+    !
+    ! Dummy procedure which does nothing. Must be overridden for any
+    ! field types which implement automatic differentiation.
+    !
+    class(vector_field), intent(inout) :: this
+    call this%guard_temp()
+    call this%clean_temp()
+  end subroutine vector_unset_deriv
+
   function vector_get_deriv(this) result(res)
     !* Author: Chris MacMackin
     !  Date: March 2018
