@@ -1986,7 +1986,7 @@ contains
         res%field_data = acosh(this%field_data)
       end if
       if (res%has_deriv) then
-        res%deriv_data = this%deriv_data/sqrt(this%deriv_data**2 - 1._r8)
+        res%deriv_data = this%deriv_data/sqrt(this%field_data**2 - 1._r8)
       end if
     class default
       error stop ('Non-array_scalar_field type allocated by '//&
@@ -2345,7 +2345,7 @@ contains
       do i=1,this%numpoints
         normalization = abs(this%field_data(i))
         if (normalization < get_tol()) normalization = 1.0_r8
-        iseq = iseq .and.( ((this%field_data(i)-rhs%field_data(i)) &
+        iseq = iseq .and.( (abs(this%field_data(i)-rhs%field_data(i)) &
                             /normalization < get_tol()) .or. &
                            (is_nan(this%field_data(i)).and. &
                             is_nan(rhs%field_data(i))) )
