@@ -1121,7 +1121,7 @@ contains
     this%field3 = cheb1d_scalar_field(this%nodes,func)
     @assertTrue(this%field3==this%field1,message='Error calculating d(field)/dx')
     dactual = this%field1%get_derivative()
-    dexp = cheb1d_scalar_field(this%nodes, ones)
+    dexp = cheb1d_scalar_field(this%nodes, zeros)
     @assertTrue(dactual==dexp,message='Error calculating d(field)/dx')
     this%field1 = this%field2%d_dx(1,2)
     this%field3 = cheb1d_scalar_field(this%nodes,func2)

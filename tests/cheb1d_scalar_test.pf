@@ -802,15 +802,15 @@ contains
     integer :: i
     type(cheb1d_scalar_field) :: field
     this%field1 = this%field2%d_dx(1)
-    this%field2 = cheb1d_scalar_field(this%nodes,func)
-    @assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx')
+    field = cheb1d_scalar_field(this%nodes,func)
+    @assertTrue(field==this%field1,message='Error calculating d(field)/dx')
     this%field1 = this%field2%d_dx(1,2)
-    this%field2 = cheb1d_scalar_field(this%nodes,func2)
-    @assertTrue(this%field2==this%field1,message='Error calculating d(field)/dx')
+    field = cheb1d_scalar_field(this%nodes,func2)
+    @assertTrue(field==this%field1,message='Error calculating d(field)/dx')
     do i = 2,4
       field = this%field2%d_dx(i)
-      this%field2 = cheb1d_scalar_field(this%nodes,zeros)
-      @assertTrue(this%field2==field,message='Error calculating d(field)/dx')
+      this%field1 = cheb1d_scalar_field(this%nodes,zeros)
+      @assertTrue(this%field1==field,message='Error calculating d(field)/dx')
     end do
     @assertEqual(this%field2%resolution(),field%resolution(),message='Result has wrong resolution')
     @assertEqual(this%field2%domain(),field%domain(),message='Result has wrong domain')
