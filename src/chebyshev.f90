@@ -254,7 +254,7 @@ contains
   end subroutine differentiate_1d
 
 
-  subroutine integrate_1d(field_data,xvals,boundary_point,boundary_val,estimate_high)
+  subroutine integrate_1d(field_data,xvals,boundary_point,boundary_val,good_bound)
     !* Author: Chris MacMackin
     !  Date: September 2017
     !
@@ -281,10 +281,12 @@ contains
       !! array bounds then this argument is ignored. If
       !! `boundary_point` is provided but this argument is note then
       !! it defaults to 0.
-    logical, intent(in), optional :: estimate_high
-      !! Estimate the power of the highest mode rather than calculate
-      !! it from boundary values. Useful if the boundary values are
-      !! not trusted. Defaults to `.false.`.
+    integer, intent(in), optional :: good_bound
+      !! If present, specifices which boundary value to use when
+      !! calculating the power of the highest frequency mode. 1
+      !! indicates upper boundary and -1 indicates lower
+      !! boundary. Default is upper boundary, unless `boundary_point`
+      !! us present and equals 1.
     integer :: i
     real(r8) :: width, field_centre, bval
     logical :: use_first_eq
@@ -317,6 +319,13 @@ contains
     else
       use_first_eq = .true.
     end if
+    if (present(good_bound)) then
+      if (good_bound == 1) then
+        use_first_eq = .true.
+      else
+        use_first_eq = .false.
+      end if
+    end if
     if (use_first_eq) then
       array1(field_size) = 1._r8/(field_size-1)**2 * &
            (width*field_data(1) - 2*sum(array3(1:field_size-2)))
@@ -324,11 +333,6 @@ contains
       array3(2:field_size:2) = -array3(2:field_size:2)
       array1(field_size) = real((-1)**field_size, r8)/(field_size-1)**2 * &
            (width*field_data(field_size) - 2_r8*sum(array3(1:field_size-2)))
-    end if
-    if (present(estimate_high)) then
-      if (estimate_high) then
-        array1(field_size) = 0._r8
-      end if
     end if
     call fftw_execute_r2r(plan_dct,array1,array2)
     if (present(boundary_point)) then
